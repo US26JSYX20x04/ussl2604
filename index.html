@@ -3026,8 +3026,11 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const msg = unpack(raw); if (!msg) return;
         if (!msg || typeof msg !== 'object') return;
         // Drosselung: höchstens 60 Nachrichten und 12 Züge pro Sekunde je Gerät
-        const now = Date.now(); if (!c._rl || now - c._rl.t > 1000) c._rl = { t: now, n: 0, a: 0 };
-        if (++c._rl.n > 60 && msg.t !== 'hello!') return;
+        const now = Date.now(); if (!c._rl || now - c._rl.t > 1000) c._rl = { t: now, n: 0, a: 0, d: 0 };
+        // Angenommenes Kartenset eines Mitspielers: eigenes, höheres Limit (bis 150 Bilder/s), damit große Sets zügig ankommen
+        const upl = msg.t === 'op' && msg.op && String(msg.op.p || '').indexOf('designs/') === 0 && c._pid && ((metaDoc() || {}).sok || {})[c._pid];
+        if (upl) { if (++c._rl.d > 150) return; }
+        else if (++c._rl.n > 60 && msg.t !== 'hello!') return;
         if (msg.t === 'act' && ++c._rl.a > 10) { sendTo(c, { t: 'actr', id: msg.id, r: { toasts: ['Zu viele Züge auf einmal.'], ok: false } }); return; }
         if (msg.t === 'hello') {
           if (c._hv) { (c._hb = c._hb || []).push(msg); return; }
@@ -6342,7 +6345,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     // Mitspieler: Set nicht direkt schreiben (darf nur die Spielleitung), sondern erst anfragen
     if (S.code && S.meta && !isHost() && S.mode === 'peer') {
       const imgs = Object.keys(o.images || {}).filter(k => IMG_KEY.test(k) && typeof o.images[k] === 'string');
-      const mb = Math.max(0.1, Math.round(imgs.reduce((a, k) => a + o.images[k].length, 0) / 1e5) / 10);
+      const so = o.sources && typeof o.sources === 'object' ? o.sources : {}, mb = Math.max(0.1, Math.round(imgs.reduce((a, k) => a + o.images[k].length + (so[k] && typeof so[k].d === 'string' ? so[k].d.length : 0), 0) / 1e5) / 10);
       UI.offer = { id, o, D, go: false };
       await w(backend.update(gamePath(), { sreq: { [S.pid]: { id, name: String(D.name || 'Kartenset').slice(0, 40), n: imgs.length, mb, t: Date.now() } } }));
       toast('Anfrage an die Spielleitung gesendet. Sobald sie das Kartenset „' + (D.name || 'Kartenset') + '“ annimmt, wird es übertragen.');
@@ -6384,7 +6387,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       else if ((m.sok || {})[S.pid] === of.id && !of.go) {
         of.go = true;
         toast('Die Spielleitung hat zugestimmt. Kartenset wird übertragen – bitte die Seite offen lassen …');
-        writeDesign(of.id, of.o, of.D, 120).then(n => {
+        writeDesign(of.id, of.o, of.D, 25).then(n => {
           w(backend.update(gamePath(), { sreq: { [S.pid]: Object.assign({}, (S.meta.sreq || {})[S.pid] || {}, { id: of.id, done: true }) } }));
           UI.offer = null; toast('Kartenset „' + (of.D.name || 'Kartenset') + '“ übertragen (' + n + (n === 1 ? ' Bild).' : ' Bilder).'));
         }).catch(e => { UI.offer = null; if (typeof __kw === 'function') __kw(e); toast('Das Kartenset konnte nicht übertragen werden.'); });
