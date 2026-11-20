@@ -6603,7 +6603,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       else if (k === 'witches') { const c = wctx(); if (c && c.d) won = c.d.won; }
       else if (k === 'wizard') { const c = ctx(); if (c && c.d) won = c.d.won; }
       else if (k === 'skipbo') { const s = sbState(); if (s) { tot = {}; (m.order || []).forEach(p => { const dc = s.disc && s.disc[p] || {}; tot[p] = (s.hands[p] || []).length + (s.stock[p] || []).length + Object.keys(dc).reduce((a, i) => a + (dc[i] || []).length, 0); }); } }
-      return hands ? { hands: hands, order: m.order || [], key: k + ':' + m.g, fx: fx, won: won ? Object.assign({}, won) : null, tot: tot } : null;
+      const xo = XG[k] ? xState(k) : null;
+      return hands ? { hands: hands, order: (xo && Array.isArray(xo.order) ? xo.order : m.order) || [], key: k + ':' + m.g, fx: fx, won: won ? Object.assign({}, won) : null, tot: tot } : null;
     } catch (e) { return null; }
   }
   
@@ -6652,7 +6653,9 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   }
   function animHook() {
     if ((UI.dealUntil || 0) > Date.now()) dealDeck(true);
-    const own = ownCards().map(cardKey), ownPrev = UI.ownPrev || [];
+    const ownEls = ownCards(), own = ownEls.map(cardKey), ownPrev = UI.ownPrev || [];
+    // Lage der eigenen Karten merken; verschwundene Karten liefern den Startpunkt fürs Ausspielen
+    { const prevR = UI.ownR || [], left = own.slice(); UI.ownGone = prevR.filter(x => { const i = left.indexOf(x.k); if (i >= 0) { left.splice(i, 1); return false; } return true; }).map(x => x.r); UI.ownR = ownEls.map((e, i) => { const r = e.getBoundingClientRect(); return { k: own[i], r: { left: r.left, top: r.top, width: r.width, height: r.height } }; }); }
     UI.ownPrev = own;
     const pool = ownPrev.slice(), ownNew = own.filter(k => { const i = pool.indexOf(k); if (i >= 0) { pool.splice(i, 1); return false; } return true; });
     applyHide();
@@ -6711,8 +6714,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       if (lost.length === 1 && fresh2.length && fresh2.length <= 4) flyPlay(h.order, lost[0], fresh2, st, took ? [] : gone);
     }
     if (k0 === 'passt' && S.meta.status === 'playing') {
-      const ps = xState('passt'), lm = ps && ps.lm, id = lm ? (ps.g || 0) + ':' + (ps.seq || 0) + ':' + lm.p + ':' + lm.to : null;
-      if (id && UI.pnLm !== id) { const first = UI.pnLm === undefined; UI.pnLm = id; if (!first && lm.to !== 'pile' && st.anim !== false && !document.hidden) flyIntoDisp(h.order, lm.p, st); }
+      const ps = xState('passt'), lm = ps && ps.lm, id = lm ? (ps.g || 0) + ':' + (ps.seq || 0) + ':' + lm.p + ':' + lm.to + ':' + (lm.from || '') : null;
+      if (id && UI.pnLm !== id) { const first = UI.pnLm === undefined; UI.pnLm = id; if (!first && st.anim !== false && !document.hidden) { if (lm.to !== 'pile') flyIntoDisp(h.order, lm.p, st); else if (lm.from && lm.from.indexOf('d:') === 0) flyFromDisp(h.order, lm.p, lm.from.slice(2), st); } }
     }
     const fxNew = h.fx && h.fx.id && UI.anFx !== h.fx.id;
     if (h.fx && h.fx.id) UI.anFx = h.fx.id;
@@ -6784,6 +6787,25 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       setTimeout(() => box.remove(), delay + per + 400);
     });
   }
+  // Passt nicht: Karte aus der Auslage auf den Ablagestapel
+  function flyFromDisp(order, p, col, st) {
+    const main = $('main.game'); if (!main) return;
+    const seatEls = main.querySelectorAll('.seats > .seat'), around = aroundMe(order), COLS = ['a', 'b', 'c', 'd', 'e'];
+    const area = p === S.pid ? main.querySelector('.pnmine') : seatEls[around.indexOf(p)], row = area && area.querySelector('.pnrow');
+    const srcEl = row && row.children[COLS.indexOf(col)], tgt = main.querySelector('.center .drawp .card');
+    if (!srcEl || !tgt) return;
+    const a = srcEl.getBoundingClientRect(), b = tgt.getBoundingClientRect(); if (!b.width) return;
+    let layer = $('#flylayer'); if (!layer) { layer = document.createElement('div'); layer.id = 'flylayer'; document.body.appendChild(layer); }
+    layer.className = 'dzT';
+    const per = Math.max(80, Math.min(2000, st.animMs || 350)) * (UI.lite ? 0.6 : 1) * 1.3;
+    const box = document.createElement('div'), cl = tgt.cloneNode(true);
+    box.className = 'flyp gm-passt'; box.style.left = b.left + 'px'; box.style.top = b.top + 'px'; box.style.width = b.width + 'px';
+    cl.style.margin = '0'; cl.style.setProperty('--cw', b.width + 'px'); box.appendChild(cl); layer.appendChild(box);
+    const dx = a.left + a.width / 2 - (b.left + b.width / 2), dy = a.top + a.height / 2 - (b.top + b.height / 2), sc = Math.max(.25, Math.min(1, a.width / b.width));
+    tgt.style.visibility = 'hidden';
+    box.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + sc + ')', opacity: .9 }, { transform: 'translate(0,0) scale(1)', opacity: 1 }], { duration: per, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both' });
+    setTimeout(() => { box.remove(); const t = main.querySelector('.center .drawp .card'); if (t) t.style.visibility = ''; }, per + 20);
+  }
   function flyIntoDisp(order, p, st) {
     const main = $('main.game'); if (!main) return;
     const seatEls = main.querySelectorAll('.seats > .seat'), around = aroundMe(order);
@@ -6808,7 +6830,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     const seatEls = main.querySelectorAll('.seats > .seat'), around = aroundMe(order);
     const srcEl = p === S.pid ? mineEl(main, ['.hand', '.fan']) : seatEls[around.indexOf(p)];
     if (!srcEl) return;
-    const a = srcEl.getBoundingClientRect(), ax = a.left + a.width / 2, ay = p === S.pid ? a.top + Math.min(a.height / 2, 70) : a.top + a.height / 2;
+    const a0 = srcEl.getBoundingClientRect(), og = p === S.pid && UI.ownGone && UI.ownGone.length === items.length ? UI.ownGone : null;
+    const a = a0, ax = a.left + a.width / 2, ay = p === S.pid ? a.top + Math.min(a.height / 2, 70) : a.top + a.height / 2;
     let layer = $('#flylayer');
     if (!layer) { layer = document.createElement('div'); layer.id = 'flylayer'; document.body.appendChild(layer); }
     layer.className = 'dzT';
@@ -6822,7 +6845,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       const box = document.createElement('div'), cl = it.el.cloneNode(true);
       box.className = 'flyp gm-' + g; box.style.left = b.left + 'px'; box.style.top = b.top + 'px'; box.style.width = b.width + 'px';
       cl.style.setProperty('--cw', b.width + 'px'); cl.style.visibility = ''; cl.style.margin = '0'; box.appendChild(cl); layer.appendChild(box);
-      const dx = ax - (b.left + b.width / 2), dy = ay - (b.top + b.height / 2), delay = i * per * 0.25, land = Date.now() + delay + per;
+      const sxp = og ? og[i].left + og[i].width / 2 : ax, syp = og ? og[i].top + og[i].height / 2 : ay;
+      const dx = sxp - (b.left + b.width / 2), dy = syp - (b.top + b.height / 2), delay = i * per * 0.25, land = Date.now() + delay + per;
       
       const cxn = b.left + b.width / 2, cyn = b.top + b.height / 2;
       const under = (gone || []).find(u => u.r && Math.abs(u.r.left + u.r.width / 2 - cxn) < b.width * 0.5 && Math.abs(u.r.top + u.r.height / 2 - cyn) < b.height * 0.5);
@@ -6835,7 +6859,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       }
       (UI.hideCen = UI.hideCen || []).push({ k: it.k, t: land });
       setTimeout(applyHide, delay + per + 2);
-      box.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (p === S.pid ? 0 : -10) + 'deg) scale(.55)', opacity: .9 }, { transform: 'translate(0,0) rotate(0) scale(1)', opacity: 1 }], { duration: per, delay: delay, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both' });
+      box.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (p === S.pid ? 0 : -10) + 'deg) scale(' + (og ? Math.max(.4, Math.min(1.6, og[i].width / b.width)).toFixed(3) : '.55') + ')', opacity: .9 }, { transform: 'translate(0,0) rotate(0) scale(1)', opacity: 1 }], { duration: per, delay: delay, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both' });
       
       setTimeout(() => box.remove(), delay + per + 120);
     });
@@ -6913,10 +6937,14 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       if (S.joined) document.body.classList.add('dealing');
       clearTimeout(UI.dealT); UI.dealT = setTimeout(() => { document.body.classList.remove('dealing'); dealDeck(false); botTick(); }, UI.dealUntil - Date.now());
     }
+    const usedOwn = new Set(), ownList = ownCards().reverse();
+    const ownSpot = k => { const el = ownList.find(e => !usedOwn.has(e) && cardKey(e) === k); if (!el) return null; usedOwn.add(el); const r = el.getBoundingClientRect(); return r.width ? r : null; };
     jobs.forEach((j, n) => {
       const tr = target(j.p);
       if (!tr) return;
-      const tx = tr.left + tr.width / 2 + (j.k % 5 - 2) * 6, ty = tr.top + Math.min(tr.height / 2, 60);
+      const spot = j.p === S.pid && ownNew[j.k] !== undefined ? ownSpot(ownNew[j.k]) : null;
+      const tx = spot ? spot.left + spot.width / 2 : tr.left + tr.width / 2 + (j.k % 5 - 2) * 6, ty = spot ? spot.top + spot.height / 2 : tr.top + Math.min(tr.height / 2, 60);
+      j.sc = spot ? spot.width / bw : null;
       const box = document.createElement('div');
       box.className = 'flyc gm-' + g;
       box.innerHTML = backHTML(X, g);
@@ -6927,7 +6955,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       if (j.p === S.pid) { const k = ownNew[j.k]; if (k !== undefined) (UI.hideMine = UI.hideMine || []).push({ k: k, t: land }); }
       else { UI.hideSeat = UI.hideSeat || {}; (UI.hideSeat[j.p] = UI.hideSeat[j.p] || []).push(land); }
       setTimeout(applyHide, delay + per + 15);
-      const an = box.animate([{ transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 }, { transform: 'translate(' + (tx - sx) + 'px,' + (ty - sy) + 'px) rotate(' + (j.p === S.pid ? 0 : 12) + 'deg) scale(' + (j.p === S.pid ? Math.max(.5 * 96 / bw, cardW() / bw) : .32 * 96 / bw) + ')', opacity: .95 }], { duration: per, delay: delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' });
+      const an = box.animate([{ transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 }, { transform: 'translate(' + (tx - sx) + 'px,' + (ty - sy) + 'px) rotate(' + (j.p === S.pid ? 0 : 12) + 'deg) scale(' + (j.sc ? j.sc.toFixed(3) : j.p === S.pid ? Math.max(.5 * 96 / bw, cardW() / bw) : .32 * 96 / bw) + ')', opacity: .95 }], { duration: per, delay: delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' });
       an.onfinish = () => box.remove();
       setTimeout(() => box.remove(), delay + per + 400);
     });
@@ -8892,7 +8920,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       let c;
       if (src.col) { const st = s.disp[p][src.col]; c = st && st[st.length - 1]; if (c === undefined || !fits(s0, c)) return null; st.pop(); }
       else { c = hand[src.i]; if (c === undefined || !fits(s0, c)) return null; if (isJ(c) && !(wish && (wish.t === 'c' ? COL.indexOf(wish.v) >= 0 : +wish.v >= 0 && +wish.v <= 5))) return null; hand.splice(src.i, 1); }
-      s.pile.push(c); s.lm = { p: p, to: 'pile' };
+      s.pile.push(c); s.lm = { p: p, to: 'pile', from: src.col ? 'd:' + src.col : 'hand' };
       s.wish = isJ(c) ? { t: wish.t, v: wish.t === 'c' ? wish.v : String(wish.v) } : null;
       xLog(s, pname(p) + ': „Passt!“ – ' + tn(c) + (src.col ? ' aus der Auslage' : '') + (isJ(c) ? ', wünscht ' + wishTxt(s.wish, tableX().D) : '') + '.');
       if (!hand.length) { endRound(s, p); return s; }
