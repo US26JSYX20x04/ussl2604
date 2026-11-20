@@ -1085,6 +1085,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 <input id="ed-import" type="file" accept=".json,application/json" hidden>
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
+// Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
+var APP_V = '191ab278';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3003,13 +3005,13 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     // Eigene Änderungen warten, bis die (unterschriebene) Anmeldung raus ist – sonst kämen sie unter alter Kennung an
     function sayHello(c) {
       const pid = myPid, n = c._nonce || '';
-      if (!pid) { sendTo(c, { t: 'hello', pid: '' }); return; }
+      if (!pid) { sendTo(c, { t: 'hello', pid: '', v: APP_V }); return; }
       helloPend++;
       Promise.resolve(typeof hooks.identity === 'function' ? hooks.identity() : null)
         .then(id => id && n ? id.sign(n + '|' + pid).then(sig => ({ dev: id.dev, pk: id.pk, sig })) : {})
         .catch(() => ({}))
         .then(pr => {
-          if (pid === myPid) sendTo(c, Object.assign({ t: 'hello', pid }, pr));
+          if (pid === myPid) sendTo(c, Object.assign({ t: 'hello', pid, v: APP_V }, pr));
           helloPend = Math.max(0, helloPend - 1);
           if (!helloPend && linkUp && conn && conn.open && queue.length) { const q = queue; queue = []; q.forEach(op => sendTo(conn, { t: 'op', op })); }
         });
@@ -3037,7 +3039,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           c._hv = true;
           checkHello(c, msg).then(r => {
             if (r === 'deny') sendTo(c, { t: 'deny', pid: String(msg.pid || '') });
-            else onData({ t: 'hello!', pid: String(msg.pid || '') });
+            else onData({ t: 'hello!', pid: String(msg.pid || ''), v: typeof msg.v === 'string' ? msg.v.slice(0, 20) : '' });
             c._hv = false;
             const b = c._hb || []; c._hb = [];
             b.forEach(onData);
@@ -3046,8 +3048,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         }
         if (c._hv && msg.t !== 'hello!') { (c._hb = c._hb || []).push(msg); return; }
         if (msg.t === 'hello!') {
-          sendTo(c, { t: 'clk', ts: Date.now() });
+          sendTo(c, { t: 'clk', ts: Date.now(), v: APP_V });
           const np = String(msg.pid || ''), changed = c._pid !== np;
+          if (np && typeof hooks.onPeerVer === 'function') hooks.onPeerVer(np, msg.v || '');
           c._pid = np; pushPresence();
           if (!c._synced) { c._synced = true; clearTimeout(c._helloT); syncConn(c); }
           if (RS.wait) sendTo(c, { t: 'bkq', kid: RS.kid });
@@ -3215,7 +3218,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           mem.put(msg.p, nd);
         }
         else if (msg.t === 'pres') { hooks.onPresence(msg.l); if (typeof msg.ts === 'number' && typeof hooks.onClock === 'function') hooks.onClock(msg.ts - Date.now()); }
-        else if (msg.t === 'clk') { if (typeof msg.ts === 'number' && typeof hooks.onClock === 'function') hooks.onClock(msg.ts - Date.now()); }
+        else if (msg.t === 'clk') { if (typeof msg.ts === 'number' && typeof hooks.onClock === 'function') hooks.onClock(msg.ts - Date.now()); if (typeof hooks.onHostVer === 'function') hooks.onHostVer(typeof msg.v === 'string' ? msg.v : ''); }
         else if (msg.t === 'who') { c._nonce = typeof msg.n === 'string' ? msg.n : ''; sayHello(c); }
         else if (msg.t === 'deny') { if (typeof hooks.onDeny === 'function') hooks.onDeny(msg.pid); }
         else if (msg.t === 'bks' && msg.kid && Array.isArray(msg.s)) { bkMine = { kid: msg.kid, s: msg.s.slice(0, 2).map(String), h: !!msg.h }; bkBlob = null; }
@@ -3673,6 +3676,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     viewFor: (p, d, pid, m) => viewDoc(p, d, pid, m),
     mayRead: (pid, m) => mayRead(pid, m),
     allowOp: (op, pid, m, online) => allowOp(op, pid, m, online),
+    onHostVer: v => { const d = v !== APP_V; if (d !== !!UI.verHost) { UI.verHost = d; requestRender(); } },
+    onPeerVer: (pid, v) => { UI.peerV = UI.peerV || {}; if (UI.peerV[pid] !== v) { UI.peerV[pid] = v; requestRender(); } },
     onAct: (m, pid) => hostAct(m, pid),
     // Übergabe abgebrochen (Verbindung zum neuen Host während der Kartenset-Übertragung getrennt): Leitung zurückholen
     onHandoverFail() {
@@ -6349,6 +6354,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       UI.offer = { id, o, D, go: false };
       await w(backend.update(gamePath(), { sreq: { [S.pid]: { id, name: String(D.name || 'Kartenset').slice(0, 40), n: imgs.length, mb, t: Date.now() } } }));
       toast('Anfrage an die Spielleitung gesendet. Sobald sie das Kartenset „' + (D.name || 'Kartenset') + '“ annimmt, wird es übertragen.');
+      setTimeout(() => {
+        const r = S.meta && (S.meta.sreq || {})[S.pid];
+        if (UI.offer && UI.offer.id === id && !UI.offer.go && !(r && r.id === id)) { UI.offer = null; toast('Die Anfrage ist nicht bei der Spielleitung angekommen. Wahrscheinlich hat sie noch eine ältere Version der Seite geladen – bitte bei ihr neu laden und es dann noch einmal versuchen.'); }
+      }, 5000);
       return;
     }
     try {
@@ -6611,6 +6620,12 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     }
     const rq = S.meta && S.code && isHost() ? Object.entries(S.meta.req || {}).filter(e => e[1] && !knownIn(S.meta, e[0])) : [];
     if (rq.length) b += '<div class="banner reqs"><b>Möchte beitreten:</b>' + rq.map(([id, r]) => '<span class="rq">' + avHTML(r.av, r.name, id, id, '') + '<span class="nm">' + esc(r.name || 'Gast') + '</span><button class="btn small primary" data-act="reqOk" data-id="' + esc(id) + '">Erlauben</button><button class="btn small" data-act="reqNo" data-id="' + esc(id) + '">Ablehnen</button></span>').join('') + '</div>';
+    if (S.mode === 'peer' && S.code && S.meta && !isHost() && UI.verHost) b += '<div class="banner warn">Die Spielleitung nutzt eine andere Version der Seite. Bitte bei ihr (und bei dir) die Seite neu laden – sonst funktioniert nicht alles, z. B. Kartenset-Anfragen.</div>';
+    if (S.mode === 'peer' && S.code && S.meta && isHost() && UI.peerV) {
+      const on = S.online || null;
+      const old = Object.keys(UI.peerV).filter(p => UI.peerV[p] !== APP_V && p !== S.pid && (!on || on.has(p)) && knownIn(S.meta, p));
+      if (old.length) b += '<div class="banner warn">' + old.map(p => esc(pname(p))).join(', ') + (old.length === 1 ? ' nutzt' : ' nutzen') + ' eine andere Version der Seite. Bitte neu laden – sonst funktioniert nicht alles.</div>';
+    }
     const srq = S.meta && S.code && isHost() ? Object.entries(S.meta.sreq || {}).filter(e => e[1] && e[1].id && !e[1].done) : [];
     if (srq.length) b += '<div class="banner reqs"><b>Kartenset angeboten:</b>' + srq.map(([id, r]) => { const up = (S.meta.sok || {})[id] === r.id; return '<span class="rq"><span class="nm">' + esc(pname(id)) + ': „' + esc(r.name || 'Kartenset') + '“ (' + (+r.n || 0) + ((+r.n || 0) === 1 ? ' Bild' : ' Bilder') + ', ca. ' + (+r.mb || 0).toLocaleString('de-DE') + ' MB)</span>' + (up ? '<span class="nm">wird übertragen …</span><button class="btn small" data-act="setNo" data-id="' + esc(id) + '">Abbrechen</button>' : '<button class="btn small primary" data-act="setOk" data-id="' + esc(id) + '">Annehmen</button><button class="btn small" data-act="setNo" data-id="' + esc(id) + '">Ablehnen</button>') + '</span>'; }).join('') + '</div>';
     if (S.readonly) b += '<div class="banner warn">Du hast auf dieser Seite nur Leserechte und kannst deshalb nicht mitspielen. Bitte die Person, der die Seite gehört, dich mit Bearbeitungsrechten einzuladen.</div>';
