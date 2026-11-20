@@ -855,6 +855,13 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 @media (max-width: 560px) { .ttimer .ttw { display: none; } }
 .lbpanel .lbtabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
 .lbpanel .lbtabs .btn.on { background: var(--brass); color: var(--night); border-color: var(--brass); }
+.lobcol { display: grid; gap: 16px; min-width: 0; align-content: start; }
+.lobcol > .panel { min-width: 0; }
+.lbpanel .lbcount { margin-top: 0; }
+@media (max-width: 760px) {
+  .lobcol { display: contents; }
+  .lobgrid > .lbpanel, .lobcol > .lbpanel { order: -1; }
+}
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -3147,7 +3154,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   const GAME_KEYS = ['wizard', 'witches', 'skipbo', 'uno', 'phase10'];
   
   const XG = {}, XPRE = {}, XDEF = {}, VAL_KEYS = { animMode: ['seq', 'all'] };
-  const SET_KEYS = { botMin: 1, botMs: 1, overlap: 1, animMax: 1, animMs: 1, unoHand: 1, unoD2: 1, unoD4: 1, unoS: 1, unoR: 1, unoW: 1, sbHand: 1, witGoal: 1, seats: 1, p10Hand: 1, tlSec: 1 }, TOG_KEYS = { unoStay: 1, unoTill: 1, unoDbl: 1, unoAny: 1, p10Free: 1, spec: 1, anim: 1, pub: 1, tlOn: 1, backup: 1 };
+  const SET_KEYS = { botMin: 1, botMs: 1, overlap: 1, animMax: 1, animMs: 1, unoHand: 1, unoD2: 1, unoD4: 1, unoS: 1, unoR: 1, unoW: 1, sbHand: 1, witGoal: 1, seats: 1, p10Hand: 1, tlSec: 1, lbP1: 1, lbP2: 1, lbP3: 1, lbP4: 1, lbP5: 1, lbP6: 1 }, TOG_KEYS = { unoStay: 1, unoTill: 1, unoDbl: 1, unoAny: 1, p10Free: 1, spec: 1, anim: 1, pub: 1, tlOn: 1, backup: 1, lbOwn: 1 };
   const GAME_ORDER = ['wizard', 'witches', 'druids', 'skullking', 'uno', 'nomercy', 'allwild', 'passt', 'phase10', 'cabo', 'texas', 'loveletter', 'skipbo', 'dalmuti', 'werwolf'];
   const gameList = () => GAME_ORDER.filter(k => GAMES[k]).concat(Object.keys(GAMES).filter(k => GAME_ORDER.indexOf(k) < 0));
   const xKey = k => { const m = /^([a-z]{2})_([A-Za-z0-9]+)$/.exec(k || ''), g = m && XPRE[m[1]]; return g ? { g, id: m[2] } : null; };
@@ -3428,7 +3435,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   const isRealBot = id => { const p = S.meta && S.meta.players && S.meta.players[id]; return !!(p && p.bot); };
   const seatCap = () => Math.max(2, Math.min(18, settings().seats || 6));
   const cap0 = seatCap;
-  const settings = () => Object.assign({ seats: 6, botMs: 300, tlOn: false, tlSec: 60, backup: true, p10Hand: 10, p10Free: false, spec: false, overlap: 50, anim: true, animMode: 'seq', animMs: 350, animMax: 6 }, XDEF, { game: 'wizard', sbStock: 0, unoHand: 7, unoD2: 8, unoD4: 4, unoS: 2, unoR: 2, unoW: 4, unoTill: false, unoDbl: true, unoStay: true, sbHand: 5, p10List: null, p10NoPts: false, witGoal: 70, variant: 'standard', blind: false, rounds: 0, start: 1, mono: false }, (S.meta && S.meta.settings) || {});
+  const settings = () => Object.assign({ seats: 6, botMs: 300, tlOn: false, tlSec: 60, backup: true, lbOwn: false, lbP1: 3, lbP2: 2, lbP3: 1, lbP4: 0, lbP5: 0, lbP6: 0, p10Hand: 10, p10Free: false, spec: false, overlap: 50, anim: true, animMode: 'seq', animMs: 350, animMax: 6 }, XDEF, { game: 'wizard', sbStock: 0, unoHand: 7, unoD2: 8, unoD4: 4, unoS: 2, unoR: 2, unoW: 4, unoTill: false, unoDbl: true, unoStay: true, sbHand: 5, p10List: null, p10NoPts: false, witGoal: 70, variant: 'standard', blind: false, rounds: 0, start: 1, mono: false }, (S.meta && S.meta.settings) || {});
   
   function plan(P, st) {
     if (st.mono) return { ok: P === 3 || P === 4, start: 4, max: 12, total: st.rounds ? Math.min(st.rounds, 12) : 12 };
@@ -4153,7 +4160,18 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   }
   // Punkte je Partie (x = Personen am Tisch): Platz 1 bekommt x, Platz 2 x/2, Platz 3 x/4, alle weiteren nichts.
   // Abgebrochene Partien haben kein Ergebnis und zählen daher nicht.
-  const lbPts = (N, rank) => rank >= 1 && rank <= 3 ? N / Math.pow(2, rank - 1) : 0;
+  const LB_PL = 6, lbOwn = () => settings().lbOwn === true;
+  const lbOwnPts = i => { const v = settings()['lbP' + i]; return typeof v === 'number' ? Math.max(0, Math.min(50, v)) : ([3, 2, 1][i - 1] || 0); };
+  const lbPts = (N, rank) => lbOwn() ? (rank >= 1 && rank <= LB_PL ? lbOwnPts(rank) : 0) : rank >= 1 && rank <= 3 ? N / Math.pow(2, rank - 1) : 0;
+  const lbRule = () => lbOwn() ? 'Eigene Punkteverteilung: ' + [1, 2, 3, 4, 5, 6].map(i => 'Platz ' + i + ': ' + lbOwnPts(i)).filter((t, i, a) => i < 3 || lbOwnPts(i + 1) > 0).join(', ') + '.' : 'Punkte je Partie bei x Personen am Tisch: Platz 1 bekommt x, Platz 2 x/2, Platz 3 x/4.';
+  // Linke Spalte der Lobby: Punkteverteilung einstellen (nur die Spielleitung)
+  function lbSetHTML(host, toggle, stepper) {
+    const own = lbOwn();
+    if (!host) return '<div class="subpanel"><h3>Punkteverteilung der Rangliste</h3><p class="fine">' + lbRule() + '</p></div>';
+    let h = '<div class="subpanel"><h3>Punkteverteilung der Rangliste</h3>' + toggle('Individuelle Punkteverteilung', own ? 'Du legst fest, wie viele Punkte jeder Platz bekommt.' : 'Aus: Platz 1 bekommt x Punkte (x = Personen am Tisch), Platz 2 x/2, Platz 3 x/4.', 'lbOwn', own);
+    if (own) h += '<div class="step2">' + [1, 2, 3, 4, 5, 6].map(i => stepper('Platz ' + i, 'lbP' + i, lbOwnPts(i), 1, 0, 50)).join('') + '</div><p class="fine">Gilt für alle Partien, die ab jetzt enden. Bereits gezählte Partien bleiben, wie sie sind.</p>';
+    return h + '</div>';
+  }
   const lbAdd = (o, won, pts) => { o = o && typeof o === 'object' ? o : {}; o.n = (+o.n || 0) + 1; o.w = (+o.w || 0) + (won ? 1 : 0); o.pts = Math.round(((+o.pts || 0) + pts) * 100) / 100; return o; };
   function lbCheck() {
     const m = S.meta;
@@ -4176,19 +4194,21 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   }
   const lbFmt = v => (Math.round((+v || 0) * 100) / 100).toLocaleString('de-DE');
   function lbHTML(full) {
-    const lb = S.meta && S.meta.lb, title = '<h3>Leaderboard der Season';
-    if (!lb || lb.v !== 2 || !lb.p || !lb.n) return '<div class="subpanel lbpanel">' + title + '</h3><p class="fine">Noch keine Partie beendet. Nach jeder beendeten Partie werden hier Siege und Punkte gesammelt.</p></div>';
+    const lb = S.meta && S.meta.lb, sec = full === 'lobby';
+    const open = sec ? '<section class="panel lbpanel"><h2 class="tishead">Rangliste der Sitzung' : '<div class="lbpanel"><p class="fine lbcount">', close = sec ? '</section>' : '</div>';
+    const head = n => open + (sec ? (n ? ' <small>' + n + (n === 1 ? ' Partie' : ' Partien') + '</small>' : '') + '</h2>' : (n ? n + (n === 1 ? ' Partie' : ' Partien') : '') + '</p>');
+    if (!lb || lb.v !== 2 || !lb.p || !lb.n) return head(0) + '<p class="fine">Noch keine Partie beendet. Nach jeder beendeten Partie werden hier Siege und Punkte gesammelt.</p>' + close;
     const games = Object.keys(lb.gn || {}).filter(k => lb.gn[k] > 0 && GAMES[k]);
     const tab = UI.lbTab && UI.lbTab !== 'all' && games.indexOf(UI.lbTab) >= 0 ? UI.lbTab : 'all', cnt = tab === 'all' ? lb.n : lb.gn[tab];
     const rows = Object.keys(lb.p).map(id => { const o = lb.p[id] || {}, st = tab === 'all' ? o.all : o.g && o.g[tab]; return st && st.n ? { id, name: o.name, bot: o.bot, w: +st.w || 0, pts: +st.pts || 0, n: +st.n || 0 } : null; })
       .filter(Boolean).sort((a, b) => (b.pts - a.pts) || (b.w - a.w) || (a.n - b.n));
     const tabs = games.length > 1 || tab !== 'all' ? '<div class="lbtabs" role="tablist">' + ['all'].concat(games).map(k => '<button class="btn small' + (k === tab ? ' on' : '') + '" role="tab" aria-selected="' + (k === tab) + '" data-act="lbTab" data-v="' + k + '">' + (k === 'all' ? 'Alle Spiele' : esc(GAMES[k].name)) + '</button>').join('') + '</div>' : '';
     let pl = 0;
-    return '<div class="subpanel lbpanel">' + title + ' <small>' + cnt + (cnt === 1 ? ' Partie' : ' Partien') + '</small></h3>' + tabs +
+    return head(cnt) + tabs +
       '<div class="tablewrap"><table class="lbt"><thead><tr><th scope="col">Platz</th><th scope="col">Name</th><th scope="col">Punkte</th><th scope="col">Siege</th><th scope="col">Partien</th></tr></thead><tbody>' +
       rows.map((r, i) => { if (!i || r.pts !== rows[i - 1].pts || r.w !== rows[i - 1].w) pl = i + 1; return '<tr class="' + (r.id === S.pid ? 'me' : '') + (pl === 1 ? ' win' : '') + '"><td>' + pl + '</td><td>' + esc(r.name) + (r.bot ? ' <span class="tag dim">Computer</span>' : '') + '</td><td>' + lbFmt(r.pts) + '</td><td>' + r.w + '</td><td>' + r.n + '</td></tr>'; }).join('') +
-      '</tbody></table></div><p class="fine">Punkte je Partie bei x Personen am Tisch: Platz 1 bekommt x, Platz 2 x/2, Platz 3 x/4. Abgebrochene Partien zählen nicht.</p>' +
-      (isHost() ? '<button class="btn small" data-act="lbReset">Neue Season starten</button>' : '') + '</div>';
+      '</tbody></table></div><p class="fine">' + lbRule() + ' Abgebrochene Partien zählen nicht.</p>' +
+      (isHost() ? '<button class="btn small" data-act="lbReset">Rangliste zurücksetzen</button>' : '') + close;
   }
   // ---- Gast: eigener Zug erscheint sofort ----
   const PV_NO = /^(loveletter|werwolf|cabo|texas)$/;
@@ -4564,7 +4584,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     cbLay() { LS.set('wiz.cbcol', LS.get('wiz.cbcol') === '1' ? '0' : '1'); render(); },
     sigTog() { LS.set('wiz.sig', sigOn() ? '0' : '1'); titleMark(myTurnNow() && document.hidden); toast(sigOn() ? 'Ist dein Tab im Hintergrund, zeigt der Titel „● Du bist dran“, sobald du am Zug bist.' : 'Hinweis im Tab-Titel aus.'); renderModal(true); },
     sndTog() { LS.set('wiz.snd', sndOn() ? '0' : '1'); if (sndOn()) { audioCtx(); beep(); } toast(sndOn() ? 'Ton an: Ist dein Tab im Hintergrund, hörst du einen kurzen Ton, wenn du dran bist.' : 'Ton aus.'); renderModal(true); },
-    lbReset() { if (!isHost()) return; confirmBox('Neue Season starten? Das Leaderboard wird für alle geleert.', 'Neue Season', () => w(backend.update(gamePath(), { lb: null }))); },
+    lbReset() { if (!isHost()) return; confirmBox('Rangliste zurücksetzen? Alle Punkte und Siege werden für alle gelöscht.', 'Zurücksetzen', () => w(backend.update(gamePath(), { lb: null }))); },
     lbTab(el) { UI.lbTab = el.dataset.v || 'all'; render(); renderModal(true); },
     liteTog() { UI.lite = !UI.lite; LS.set('wiz.lite', UI.lite ? '1' : '0'); document.body.classList.toggle('lite', UI.lite); toast(UI.lite ? 'Leistungsmodus an: weniger Effekte, kürzere Animationen.' : 'Leistungsmodus aus.'); renderModal(true); },
     tbTog() { LS.set('wiz.tbc', LS.get('wiz.tbc') !== '0' ? '0' : '1'); render(); },
@@ -6137,10 +6157,10 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       (host ? toggle('Lobby öffentlich', st.pub ? 'Jeder mit Code oder Link kommt direkt herein.' : 'Privat: Du erlaubst jeden neuen Beitritt selbst.', 'pub', !!st.pub) : '<p class="fine">Lobby: ' + (st.pub ? 'öffentlich' : 'privat') + '</p>') +
       watchersHTML() + (host ? toggle('Zuschauer sehen alle Handkarten', 'Standardmäßig aus. Zuschauer sehen dann nur den Tisch.', 'spec', st.spec === true) : '') +
       (host && S.mode === 'peer' ? toggle('Ersatz-Leitung', st.backup !== false ? 'An: Ein zweites Gerät hält den Spielstand verschlüsselt bereit. Fällt dein Gerät aus, übernimmt es nach etwa 30 Sekunden, und die Partie geht weiter.' : 'Aus: Fällt dein Gerät während einer Partie aus, ist die Partie verloren.', 'backup', st.backup !== false) : '') +
-      lbHTML() +
+      lbSetHTML(host, toggle, stepper) +
       '<div class="lsep"></div><div class="subpanel"><h3>Gelegte Karten</h3>' + (host ? stepper('Überlappen', 'overlap', Math.max(0, Math.min(80, st.overlap || 0)) + ' %', 5, 0, 80) : '<p class="fine">Gelegte Karten überlappen um ' + Math.max(0, Math.min(80, st.overlap || 0)) + ' %.</p>') + '</div>' +
       '<div class="subpanel"><h3>Ziehanimation</h3>' + (host ? '<button class="opt toggle' + (st.anim === false ? ' on' : '') + '" role="switch" aria-checked="' + (st.anim === false) + '" data-act="animOff"' + hdis + '><b>Ziehanimation deaktivieren</b><span>Sonst fliegen die Karten beim Austeilen und Ziehen vom Stapel zu den Händen.</span></button>' + (st.anim !== false ? '<button class="opt toggle' + (st.animMode === 'all' ? ' on' : '') + '" role="switch" aria-checked="' + (st.animMode === 'all') + '" data-act="setv" data-k="animMode" data-v="' + (st.animMode === 'all' ? 'seq' : 'all') + '"' + hdis + '><b>Gleichzeitig austeilen</b><span>' + (st.animMode === 'all' ? 'An: alle bekommen ihre Karten zur selben Zeit.' : 'Aus: nacheinander, reihum Karte für Karte.') + '</span></button>' + stepper('Dauer je Karte', 'animMs', Math.max(100, Math.min(1500, st.animMs || 350)) + ' ms', 50, 100, 1500) + stepper('Austeilen höchstens', 'animMax', Math.max(1, Math.min(30, st.animMax || 6)) + ' s', 1, 1, 30) : '') : '<p class="fine animinfo">Ziehanimation: ' + (st.anim === false ? 'aus' : 'an, ' + (st.animMode === 'all' ? 'gleichzeitig' : 'nacheinander') + ', ' + Math.max(100, Math.min(1500, st.animMs || 350)) + ' ms je Karte, Austeilen höchstens ' + Math.max(1, Math.min(30, st.animMax || 6)) + ' s') + '</p>') + '</div>' + '<div class="subpanel"><h3>Computergegner</h3>' + (host ? stepper('Computer verzögert', 'botMin', botMinTxt(), 5, 0, 50) + stepper('Rechenzeit starke Computer', 'botMs', (Math.max(100, Math.min(3000, st.botMs || 300)) / 1000).toFixed(1).replace('.', ',') + ' s', 100, 100, 3000) + '<p class="fine">Mehr Rechenzeit = stärkere Züge auf Stufe 3, aber langsamere Geräte können kurz stocken.</p>' : '<p class="fine">Computer verzögert: ' + botMinTxt() + ' · Rechenzeit: ' + (Math.max(100, Math.min(3000, st.botMs || 300)) / 1000).toFixed(1).replace('.', ',') + ' s</p>') + '</div></section>' +
-      '<section class="panel gpanel"><h2 class="tishead">Spiel' + gselBtn + '</h2>' + (host ? '' : '<p class="fine">Nur die Spielleitung (' + esc(pname(m.host)) + ') kann Spiel und Einstellungen ändern.</p>') +
+      '<div class="lobcol">' + lbHTML('lobby') + '<section class="panel gpanel"><h2 class="tishead">Spiel' + gselBtn + '</h2>' + (host ? '' : '<p class="fine">Nur die Spielleitung (' + esc(pname(m.host)) + ') kann Spiel und Einstellungen ändern.</p>') +
       gameSel + countErr + '<h2 class="h2b tishead sepb">Einstellungen für dieses Spiel<button class="btn small ghost" data-act="modal" data-m="rules">Regeln</button></h2>' + (sb ? sbSet : '<h3>Ansagen</h3><div class="opts" role="radiogroup" aria-label="Art der Ansage">' + vars + '</div>' +
       '<h3>Karten und Stiche</h3><div class="opts" role="radiogroup" aria-label="Kartenverteilung"><button class="opt' + (st.mono ? '' : ' on') + '" role="radio" aria-checked="' + !st.mono + '" data-act="mono" data-v="0"' + hd + '><b>Klassisch</b><span>Ein gemeinsamer Stapel mit Trumpf und Bedienpflicht.</span></button>' +
       '<button class="opt' + (st.mono ? ' on' : '') + '" role="radio" aria-checked="' + !!st.mono + '" data-act="mono" data-v="1"' + hd + '><b>Einfarbig</b><span>Für 3 oder 4: Jeder spielt mit den 15 Karten einer Farbe. Kein Trumpf, Farben zählen nicht, die höchste Karte gewinnt. 12 Runden mit 4 bis 15 Karten.</span></button></div>' +
@@ -6151,7 +6171,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       '<div class="opt slim stepper' + (st.rounds ? ' on' : '') + '"><b>Eigene Anzahl</b><span class="steps"><button class="rb" data-act="roundsStep" data-d="-1" aria-label="Eine Runde weniger"' + hd + '>−</button><output>' + rounds + '</output><button class="rb" data-act="roundsStep" data-d="1" aria-label="Eine Runde mehr"' + hd + '>+</button></span></div></div>' +
       '<p class="fine">Gespielt werden ' + rounds + (rounds === 1 ? ' Runde' : ' Runden') + ': Die erste mit ' + pl.start + (pl.start === 1 ? ' Karte' : ' Karten') + ', jede weitere mit einer mehr' + (rounds > 1 ? ', die letzte mit ' + (pl.start + rounds - 1) : '') + '.</p>') +
       '<div class="lsep"></div><h3>Karten</h3><div class="designrow"><div class="sample gm-' + game + '">' + sample + '</div><div class="designctl"><label for="lob-design">Design am Tisch</label><select id="lob-design"' + hd + '>' + dOpts + '</select><button class="btn small" data-act="modal" data-m="editor">' + (host ? 'Karten bearbeiten' : 'Karten ansehen') + '</button></div></div>' +
-      '</section></div>' +
+      '</section></div></div>' +
       '<footer class="lobfoot">' + (host ? '<button class="btn primary big" data-act="start"' + (!canStart ? ' disabled' : '') + '>' + GI.name + ' starten' + '</button>' + (sb ? (!canStart ? '<span class="fine">Für ' + GI.name + ' braucht ihr ' + GI.min + ' bis ' + GI.max + ' am Tisch.</span>' : '') : ps.length < 2 ? '<span class="fine">Ihr braucht mindestens zwei am Tisch. Offiziell spielt man zu dritt bis zu sechst.</span>' : ps.length < 3 ? '<span class="fine">Zu zweit geht es, offiziell spielt man zu dritt bis zu sechst.</span>' : '') : '<span class="waitline">Warte auf ' + esc(pname(m.host)) + ' …</span>') +
       '<button class="btn ghost" data-act="modal" data-m="theme">Farben anpassen</button></footer></main>';
   }
@@ -7166,7 +7186,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     h += '<div class="animctl"><b>Meine Kartenreihenfolge</b>' + Object.keys(HAND_MODES).map(k => '<button class="btn small' + (handMode() === k ? ' on' : '') + '" data-act="hsortSet" data-v="' + k + '">' + HAND_MODES[k] + '</button>').join('') + '<button class="btn small' + (LS.get('wiz.hrev') === '1' ? ' on' : '') + '" data-act="hrevTog">⇄ umgedreht</button><span class="fine">nur auf diesem Gerät</span></div>';
     h += '<button class="btn" data-act="sigTog">„Du bist dran“ im Tab-Titel: ' + (sigOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button><button class="btn" data-act="sndTog">Ton, wenn du dran bist: ' + (sndOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>';
     if (host) h += '<div class="animctl"><b>Zugzeit</b><button class="btn small" data-act="tog" data-k="tlOn">' + (st.tlOn ? 'ausschalten' : 'einschalten') + '</button>' + (st.tlOn ? stepBtns('tlSec', 15, 15, 300, tlSec(), ' s') : '') + '</div>';
-    h += '<button class="btn" data-act="modal" data-m="lb">Leaderboard der Season</button>';
+    h += '<button class="btn" data-act="modal" data-m="lb">Rangliste der Sitzung</button>';
     h += '<button class="btn" data-act="liteTog">Leistungsmodus: ' + (UI.lite ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>';
     h += '<button class="btn" data-act="bidSlTog">Tipp abgeben: ' + (bidSlider() ? 'Schieberegler mit − und + (wechseln)' : 'Zahlenknöpfe (wechseln)') + '</button>';
     if (host) {
@@ -7373,7 +7393,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     let title = '', body = '', cls = 'sheet';
     if (S.modal === 'score') { title = 'Punktetafel'; body = scoreHTML(); }
     else if (S.modal === 'theme') { title = 'Farben anpassen'; body = themeHTML(); }
-    else if (S.modal === 'lb') { title = 'Leaderboard der Season'; body = lbHTML(true); cls += ' mid'; }
+    else if (S.modal === 'lb') { title = 'Rangliste der Sitzung'; body = lbHTML(true); cls += ' mid'; }
     else if (S.modal === 'rules') { title = 'Regeln'; body = '<div class="rules">' + (RULESET[S.meta && S.meta.status === 'playing' ? (S.meta.game || 'wizard') : settings().game] || RULES) + '</div>'; }
     else if (S.modal === 'menu') { title = 'Menü'; body = menuHTML(); cls += ' narrow'; }
     else if (S.modal === 'avatar') { title = 'Dein Bild'; body = avatarModalHTML(); cls += ' mid'; }
