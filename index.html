@@ -1133,7 +1133,20 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     const winning = asc.filter(wins), losing = asc.filter(c => !wins(c));
     if (wants) {
       if (!winning.length) return asc[0];
-      return isLast ? winning[0] : winning[winning.length - 1];
+      if (isLast) return winning[0];
+      // Trümpfe und Zauberer nicht gleich verbrauchen: erst hohe Karten anderer Farben, Trumpf nur, wenn nötig
+      const tr = c => isWiz(c) || (!mono && !!trump && isSuitCard(c) && suitOf(c) === trump);
+      if (!trickCards.length && !mono) {
+        const side = legal.filter(c => isSuitCard(c) && !tr(c)).sort((x, y) => valOf(y) - valOf(x));
+        if (side.length && valOf(side[0]) >= 11) return side[0];
+        const low = asc.filter(c => !tr(c) && !isJes(c));
+        if (low.length) return low[0];
+        return winning[winning.length - 1];
+      }
+      const nonT = winning.filter(c => !tr(c));
+      if (nonT.length) return nonT[nonT.length - 1];
+      const trumps = winning.filter(c => !isWiz(c));
+      return trumps.length ? trumps[0] : winning[0];
     }
     if (losing.length) return losing[losing.length - 1];
     return asc[0];
@@ -4115,10 +4128,14 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   function endGate(html) {
     const m = S.meta; if (!m) return html;
     const key = S.code + ':' + (m.g || 0);
-    if (UI.endSeen === key) return html;
     let lt = null; try { lt = lastTrickData().t; } catch (e) { lt = null; }
-    if (!lt) return html;
-    return '<div class="summary endpeek"><h2>Spielende – der letzte Stich</h2>' + lastTrickHTML() + '<div class="sumfoot"><button class="btn primary" data-act="toStats">Zur Statistik</button></div></div>';
+    const fig = (html.match(/<figure class="ptchart">[\s\S]*?<\/figure>/) || [])[0], fo = '<div class="sumfoot">', fi = html.lastIndexOf(fo);
+    const ltBtn = lt ? '<button class="btn" data-act="lastTrick">Letzter Stich</button>' : '';
+    if (!fig || fi < 0) return lt && fi >= 0 ? html.slice(0, fi + fo.length) + html.slice(fi + fo.length).replace(/<\/div><\/div>$/, ltBtn + '</div></div>') : html;
+    const foot = html.slice(fi + fo.length).replace(/<\/div><\/div>$/, '');
+    // Schritt 1: Endstand (Tabelle) – Schritt 2: Statistik mit dem Punkteverlauf
+    if (UI.endSeen === key) return '<div class="summary endstats"><h2>Statistik</h2>' + fig + fo + foot + '<button class="btn" data-act="toEnd">Endstand</button></div></div>';
+    return html.slice(0, fi).replace(fig, '') + fo + '<button class="btn primary" data-act="toStats">Statistik</button>' + ltBtn + '</div></div>';
   }
   function lastTrickHTML() {
     const r = lastTrickData(), t = r.t;
@@ -5054,6 +5071,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     },
     lastTrick() { S.modal = 'lasttrick'; renderModal(true); },
     toStats() { const m = S.meta; if (m) UI.endSeen = S.code + ':' + (m.g || 0); render(); },
+    toEnd() { UI.endSeen = null; render(); },
     abort() { if (isHost()) confirmBox('Das laufende Spiel abbrechen und zur Lobby zurückkehren?', 'Abbrechen', () => w(backend.update(gamePath(), { status: 'lobby' }))); },
     assign(el) {
       const wid = el.dataset.id, sel = $('#as-' + wid), to = sel && sel.value;
@@ -6938,13 +6956,17 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       clearTimeout(UI.dealT); UI.dealT = setTimeout(() => { document.body.classList.remove('dealing'); dealDeck(false); botTick(); }, UI.dealUntil - Date.now());
     }
     const usedOwn = new Set(), ownList = ownCards().reverse();
-    const ownSpot = k => { const el = ownList.find(e => !usedOwn.has(e) && cardKey(e) === k); if (!el) return null; usedOwn.add(el); const r = el.getBoundingClientRect(); return r.width ? r : null; };
+    const occ = {}, ownSpot = k => { const el = ownList.find(e => !usedOwn.has(e) && cardKey(e) === k); if (!el) return null; usedOwn.add(el); const r = el.getBoundingClientRect(); if (!r.width) return null; const o = occ[k] = (occ[k] || 0) + 1; return { left: r.left, top: r.top, width: r.width, height: r.height, k, o: o - 1 }; };
+    // Zielplatz erst beim Losfliegen noch einmal messen: Am Spielanfang verschiebt sich die Hand oft noch (Stapel, Hinweise, Bilder)
+    const ownAnySpot = () => { const el = ownList.find(e => !usedOwn.has(e)); if (!el) return null; return ownSpot(cardKey(el)); };
+    const spotNow = sp => { const l = ownCards().reverse().filter(e => cardKey(e) === sp.k), el = l[sp.o]; if (!el) return null; const r = el.getBoundingClientRect(); return r.width ? r : null; };
     jobs.forEach((j, n) => {
       const tr = target(j.p);
       if (!tr) return;
-      const spot = j.p === S.pid && ownNew[j.k] !== undefined ? ownSpot(ownNew[j.k]) : null;
+      // Ohne passenden Schlüssel (z. B. neue Runde mit gleichen Karten wie vorher) irgendeinen noch freien Platz in der Hand nehmen
+      const spot = j.p === S.pid ? (ownNew[j.k] !== undefined && ownSpot(ownNew[j.k])) || ownAnySpot() : null;
       const tx = spot ? spot.left + spot.width / 2 : tr.left + tr.width / 2 + (j.k % 5 - 2) * 6, ty = spot ? spot.top + spot.height / 2 : tr.top + Math.min(tr.height / 2, 60);
-      j.sc = spot ? spot.width / bw : null;
+      j.sc = spot ? spot.width / bw : null; j.spot = spot;
       const box = document.createElement('div');
       box.className = 'flyc gm-' + g;
       box.innerHTML = backHTML(X, g);
@@ -6955,7 +6977,12 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       if (j.p === S.pid) { const k = ownNew[j.k]; if (k !== undefined) (UI.hideMine = UI.hideMine || []).push({ k: k, t: land }); }
       else { UI.hideSeat = UI.hideSeat || {}; (UI.hideSeat[j.p] = UI.hideSeat[j.p] || []).push(land); }
       setTimeout(applyHide, delay + per + 15);
-      const an = box.animate([{ transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 }, { transform: 'translate(' + (tx - sx) + 'px,' + (ty - sy) + 'px) rotate(' + (j.p === S.pid ? 0 : 12) + 'deg) scale(' + (j.sc ? j.sc.toFixed(3) : j.p === S.pid ? Math.max(.5 * 96 / bw, cardW() / bw) : .32 * 96 / bw) + ')', opacity: .95 }], { duration: per, delay: delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' });
+      const kf = (x, y, sc) => [{ transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 }, { transform: 'translate(' + (x - sx) + 'px,' + (y - sy) + 'px) rotate(' + (j.p === S.pid ? 0 : 12) + 'deg) scale(' + sc + ')', opacity: .95 }];
+      const an = box.animate(kf(tx, ty, j.sc ? j.sc.toFixed(3) : j.p === S.pid ? Math.max(.5 * 96 / bw, cardW() / bw) : .32 * 96 / bw), { duration: per, delay: delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' });
+      if (j.spot && an.effect && an.effect.setKeyframes) {
+        const fix = () => { const r = spotNow(j.spot); if (r && (Math.abs(r.left - j.spot.left) > 1 || Math.abs(r.top - j.spot.top) > 1 || Math.abs(r.width - j.spot.width) > 1)) { j.spot = Object.assign({}, j.spot, { left: r.left, top: r.top, width: r.width }); an.effect.setKeyframes(kf(r.left + r.width / 2, r.top + r.height / 2, (r.width / bw).toFixed(3))); } };
+        setTimeout(fix, Math.max(0, delay - 10)); setTimeout(fix, delay + per * 0.6);
+      }
       an.onfinish = () => box.remove();
       setTimeout(() => box.remove(), delay + per + 400);
     });
@@ -7261,6 +7288,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     if (s.over) {
       const head = s.winner ? (s.winner === me ? 'Du gewinnst' : esc(pname(s.winner)) + ' gewinnt') : s.nopts && s.order.every(q => s.over.res[q] && s.over.res[q].done) ? 'Runde ' + s.round + ': Alle haben ihre Phase geschafft' : 'Runde ' + s.round + ' ist vorbei: ' + nm(s.over.out) + (s.over.out === me ? ' hast' : ' hat') + ' keine Karten mehr';
       center = '<div class="summary"><h2>' + head + '</h2>' + p10Table(s, !!s.winner) + (s.winner && !s.nopts ? ptChart(s.order, s.hist, 'Strafpunkte im Verlauf') : '') + '<div class="sumfoot">' + (s.winner ? lobbyFoot() : canDeal('p' + s.round) ? '<button class="btn primary" data-act="p10Next">Nächste Runde austeilen</button>' : dealWaitHTML()) + '</div></div>';
+      if (s.winner) center = endGate(center);
     } else if (choosing) {
       const mineOpen = seated && !s.phase[me];
       center = mineOpen ? '<div class="pickbox"><p>Welche Phase versuchst du in dieser Runde? Sieh dir erst deine Karten an.</p><ol class="phl">' + PT.open(s, me).map(n => '<li><span class="pht">' + n + '. ' + PT.text(s, n) + '</span><span class="phb"><button class="btn small primary" data-act="p10Pick" data-n="' + n + '">Wählen</button></span></li>').join('') + '</ol></div>' : '';
@@ -7309,7 +7337,13 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       center = '<div class="summary"><h2>' + (c.over ? 'Endstand: ' + esc(pname(rank[0])) + ' gewinnt' : 'Runde ' + c.rd.n + ' ist gespielt') + '</h2>' + (res.spell ? '<p>' + esc(pname(res.spell.p)) + ' gelingt ein Feuerzauber: Alle anderen bekommen ' + res.spell.pts + ' Punkte.</p>' : '') +
         '<div class="tablewrap"><table><thead><tr><th scope="col">Platz</th><th scope="col">Runde</th><th scope="col">Gesamt</th></tr></thead><tbody>' + rank.map((p, i) => '<tr class="' + (p === me ? 'me' : '') + (c.over && i === 0 ? ' win' : '') + '"><th scope="row">' + (i + 1) + '. ' + esc(pname(p)) + (note(p) ? ' <small>' + note(p) + '</small>' : '') + '</th><td class="' + (res.pts[p] > 0 ? 'neg' : 'pos') + '">' + sign(res.pts[p]) + '</td><td><b>' + c.tot.total[p] + '</b></td></tr>').join('') + '</tbody></table></div><div class="sumfoot">' +
         (c.over ? lobbyFoot() : canDeal('w' + c.rd.n) ? '<button class="btn primary" data-act="witNext">Runde ' + (c.rd.n + 1) + ' austeilen</button>' : dealWaitHTML()) + '<button class="btn" data-act="modal" data-m="score">Punktetafel</button></div></div>';
-      if (c.over) center = endGate(center);
+      if (c.over) {
+        // Feuerpunkte im Verlauf (wie in der Wertung nie unter 0)
+        const acc = {}, rows = c.tot.rows.filter(r => r.done).map(r => { const t = {}; m.order.forEach(p => { acc[p] = Math.max(0, (acc[p] || 0) + (+r.pts[p] || 0)); t[p] = acc[p]; }); return { n: r.n, tot: t }; });
+        const fi = center.lastIndexOf('<div class="sumfoot">');
+        if (fi >= 0) center = center.slice(0, fi) + ptChart(m.order, rows, 'Feuerpunkte im Verlauf (wenige sind gut)') + center.slice(fi);
+        center = endGate(center);
+      }
     } else {
       const showTrick = lt || d.cur;
       const tw = Math.min(cardW(), Math.floor((Math.min(window.innerWidth - 24, 760) - (P - 1) * 8) / P));
@@ -9701,7 +9735,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       if (s.todo.length) { s.phase = s.todo[0].k; return; }
       const w = winCheck(s);
       if (w) { s.winner = w; s.phase = 'end'; news(s, w === 'dorf' ? 'Alle Werwölfe sind besiegt: Das Dorf gewinnt!' : w === 'wolf' ? 'Die Werwölfe haben das Dorf ausgelöscht und gewinnen!' : 'Die Verliebten sind als Letzte übrig und gewinnen!'); return; }
-      if (s.after === 'day') { s.revote = false; const el = s.has.hauptmann && !s.elected; if (el) s.elected = true; enter(s, el ? 'elect' : 'vote'); }
+      if (s.after === 'day') { s.revote = false; s.tieC = null; const el = s.has.hauptmann && !s.elected; if (el) s.elected = true; enter(s, el ? 'elect' : 'vote'); }
       else { s.night++; startNight(s); }
     }
     function dawn(s) {
@@ -9710,16 +9744,19 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       news(s, 'Nacht ' + s.night + ': ' + (names.length ? 'Gestorben ' + (names.length > 1 ? 'sind ' : 'ist ') + names.join(' und ') + '.' : 'Niemand ist gestorben.'));
       s.after = 'day'; proceed(s);
     }
-    function tally(s) { const v = votes(s), cnt = {}; voters(s).forEach(p => { const t = v[p]; if (t && s.alive[t]) cnt[t] = (cnt[t] || 0) + (s.phase === 'vote' && s.captain === p ? 2 : 1); }); return cnt; }
+    function tally(s) { const v = votes(s), cnt = {}, only = (s.phase === 'vote' || s.phase === 'elect') && Array.isArray(s.tieC) ? s.tieC : null; voters(s).forEach(p => { const t = v[p]; if (t && s.alive[t] && (!only || only.indexOf(t) >= 0)) cnt[t] = (cnt[t] || 0) + (s.phase === 'vote' && s.captain === p ? 2 : 1); }); return cnt; }
     function resolveVote(s0) {
       const s = xClone(s0), cnt = tally(s), v = votes(s), ks = Object.keys(cnt), top = ks.length ? Math.max.apply(null, ks.map(k => cnt[k])) : 0, tied = ks.filter(k => cnt[k] === top);
       const pick = tied.length ? tied[Math.floor(rnd() * tied.length)] : null;
       if (s.phase === 'wolf') { s.nd.victim = pick; nightNext(s); return s; }
       const txt = ks.sort((a, b) => cnt[b] - cnt[a]).map(k => pname(k) + ' ' + cnt[k]).join(', ') || 'keine Stimmen';
-      if (s.phase === 'elect') { s.captain = pick; news(s, 'Wahl des Hauptmanns: ' + txt + '. ' + (pick ? pname(pick) + ' ist Hauptmann.' : '')); enter(s, 'vote'); return s; }
+      if (s.phase === 'elect' && tied.length > 1 && !s.revote) { s.revote = true; s.tieC = tied.slice(); s.vid++; news(s, 'Wahl des Hauptmanns: ' + txt + '. Gleichstand – Stichwahl zwischen ' + tied.map(pname).join(' und ') + '.'); return s; }
+      if (s.phase === 'elect') { s.revote = false; s.tieC = null; s.captain = pick; news(s, 'Wahl des Hauptmanns: ' + txt + '. ' + (pick ? pname(pick) + ' ist Hauptmann.' : '')); enter(s, 'vote'); return s; }
       let out = tied.length === 1 ? tied[0] : null;
       if (tied.length > 1 && s.captain && tied.indexOf(v[s.captain]) >= 0) out = v[s.captain];
-      if (!out && tied.length > 1 && !s.revote) { s.revote = true; s.vid++; news(s, 'Abstimmung: ' + txt + '. Gleichstand – es wird noch einmal abgestimmt.'); return s; }
+      // Gleichstand: Stichwahl nur zwischen den Gleichplatzierten – oder (Einstellung) niemand scheidet aus
+      if (!out && tied.length > 1 && !s.revote && !s.tieNone) { s.revote = true; s.tieC = tied.slice(); s.vid++; news(s, 'Abstimmung: ' + txt + '. Gleichstand – Stichwahl zwischen ' + tied.map(pname).join(' und ') + '.'); return s; }
+      s.tieC = null;
       const names = [];
       if (out) kill(s, [out], names);
       news(s, 'Abstimmung: ' + txt + '. ' + (names.length ? 'Es ' + (names.length > 1 ? 'scheiden ' : 'scheidet ') + names.join(' und ') + ' aus.' : 'Niemand scheidet aus.'));
@@ -9759,10 +9796,11 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     function botVote(s, b) {
       const v = votes(s), al = alive(s);
       if (s.phase === 'wolf') { const other = voters(s).map(q => v[q]).filter(Boolean)[0]; return other || pickOf(al.filter(q => !isW(s, q))); }
-      if (s.phase === 'elect') return pickOf(al);
+      if (s.phase === 'elect') return pickOf(Array.isArray(s.tieC) ? al.filter(q => s.tieC.indexOf(q) >= 0) : al);
       const known = s.role[b] === 'seher' ? (s.see || []).filter(x => x.r === 'wolf' && s.alive[x.p]).map(x => x.p) : [];
-      const c = al.filter(q => q !== b && !(s.lovers && s.lovers.indexOf(b) >= 0 && s.lovers.indexOf(q) >= 0) && !(isW(s, b) && isW(s, q)));
-      return known[0] || pickOf(c.length ? c : al);
+      const pool = Array.isArray(s.tieC) ? al.filter(q => s.tieC.indexOf(q) >= 0) : al;
+      const c = pool.filter(q => q !== b && !(s.lovers && s.lovers.indexOf(b) >= 0 && s.lovers.indexOf(q) >= 0) && !(isW(s, b) && isW(s, q)));
+      return known.filter(q => pool.indexOf(q) >= 0)[0] || pickOf(c.length ? c : pool);
     }
     function botAct(s, p) {
       const a = s.phase, al = alive(s), oth = al.filter(q => q !== p);
@@ -9786,8 +9824,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       name: 'Werwolf', text: 'Die Werwölfe von Düsterwald für viele Personen: Die App leitet durch Nacht und Tag.', min: 4, max: 18, rec: '8 bis 18', pre: 'ww',
       cols: [['Werwölfe', '#7a1f1f', ''], ['Dorf', '#3d6b4a', ''], ['Sonderrollen', '#3f5f8f', ''], ['Hauptmann', '#b07a2a', '']],
       cards: Object.keys(R), sample: ['wolf', 'dorf', 'seher', 'hexe', 'jaeger'], colOf: id => R[id][2], label: id => R[id][0], card: card,
-      def: { wwWolves: 0, wwSeher: true, wwHexe: true, wwJaeger: true, wwAmor: false, wwDieb: false, wwMaedchen: false, wwHaupt: true }, nums: ['wwWolves'], togs: OPT.map(o => o[0]).concat(['wwHaupt']),
-      lobby: (st, h) => { const P = h.ps.length, W = st.wwWolves || autoW(P); return '<h3>Werwölfe</h3>' + h.stepper('Anzahl der Werwölfe', 'wwWolves', st.wwWolves ? st.wwWolves : 'auto: ' + autoW(P), 1, 0, 6) + '<p class="fine">0 bedeutet automatisch: bis 5 Personen 1, bis 11 Personen 2, bis 17 Personen 3, bei 18 Personen 4.</p><h3>Rollen im Spiel</h3>' + OPT.map(o => h.toggle(R[o[1]][0], R[o[1]][3], o[0], st[o[0]])).join('') + h.toggle('Hauptmann', R.hauptmann[3], 'wwHaupt', st.wwHaupt) + '<p class="fine">Bei ' + P + ' Personen: ' + Math.min(W, Math.max(1, P - 2)) + ' Werwölfe, die gewählten Sonderrollen, der Rest sind Dorfbewohner. Die Anleitung empfiehlt 8 bis 18 Personen; die Plätze am Tisch stellst du links ein. Zum Diskutieren braucht ihr einen gemeinsamen Sprach- oder Videoanruf.</p>'; },
+      def: { wwWolves: 0, wwSeher: true, wwHexe: true, wwJaeger: true, wwAmor: false, wwDieb: false, wwMaedchen: false, wwHaupt: true, wwTieNone: false }, nums: ['wwWolves'], togs: OPT.map(o => o[0]).concat(['wwHaupt', 'wwTieNone']),
+      lobby: (st, h) => { const P = h.ps.length, W = st.wwWolves || autoW(P); return '<h3>Werwölfe</h3>' + h.stepper('Anzahl der Werwölfe', 'wwWolves', st.wwWolves ? st.wwWolves : 'auto: ' + autoW(P), 1, 0, 6) + '<p class="fine">0 bedeutet automatisch: bis 5 Personen 1, bis 11 Personen 2, bis 17 Personen 3, bei 18 Personen 4.</p><h3>Rollen im Spiel</h3>' + OPT.map(o => h.toggle(R[o[1]][0], R[o[1]][3], o[0], st[o[0]])).join('') + h.toggle('Hauptmann', R.hauptmann[3], 'wwHaupt', st.wwHaupt) + '<h3>Abstimmung im Dorf</h3>' + h.toggle('Bei Gleichstand scheidet niemand aus', st.wwTieNone ? 'An: Haben mehrere gleich viele Stimmen, scheidet an diesem Tag niemand aus.' : 'Aus: Bei Gleichstand gibt es eine Stichwahl zwischen den Personen mit gleich vielen Stimmen. Steht es wieder gleich, scheidet niemand aus.', 'wwTieNone', !!st.wwTieNone) + '<p class="fine">Bei ' + P + ' Personen: ' + Math.min(W, Math.max(1, P - 2)) + ' Werwölfe, die gewählten Sonderrollen, der Rest sind Dorfbewohner. Die Anleitung empfiehlt 8 bis 18 Personen; die Plätze am Tisch stellst du links ein. Zum Diskutieren braucht ihr einen gemeinsamen Sprach- oder Videoanruf.</p>'; },
       create(seats, st) {
         const P = seats.length, W = Math.max(1, Math.min(st.wwWolves || autoW(P), P - 2)), has = { hauptmann: st.wwHaupt !== false };
         let roles = [];
@@ -9796,7 +9834,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         const total = P + (has.dieb ? 2 : 0);
         while (roles.length < total) roles.push('dorf');
         roles = xShuffle(roles);
-        const s = { order: seats.slice(), role: {}, alive: {}, pool: roles.slice(P), has: has, night: 1, phase: '', vid: 0, v: {}, todo: [], lovers: null, captain: null, elected: false, potion: { heal: true, poison: true }, see: [], spy: {}, news: [], winner: null, seq: 0, after: 'day' };
+        const s = { order: seats.slice(), role: {}, alive: {}, pool: roles.slice(P), has: has, night: 1, phase: '', vid: 0, v: {}, todo: [], lovers: null, captain: null, elected: false, potion: { heal: true, poison: true }, see: [], spy: {}, news: [], winner: null, seq: 0, after: 'day', tieNone: !!st.wwTieNone, tieC: null };
         seats.forEach((p, i) => { s.role[p] = roles[i]; s.alive[p] = true; });
         startNight(s);
         return s;
@@ -9805,7 +9843,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         const U = UI.x, ph = s.phase;
         if (a === 'force') return isHost() && !s.winner ? skip(s) : undefined;
         if (s.winner || s.order.indexOf(me) < 0) return;
-        if (a === 'v') { if (!VOTE[ph] || voters(s).indexOf(me) < 0 || !s.alive[d.p]) return; return { $upd: { v: { ['v' + s.vid]: { [me]: d.p } } } }; }
+        if (a === 'v') { if (!VOTE[ph] || voters(s).indexOf(me) < 0 || !s.alive[d.p] || ((ph === 'vote' || ph === 'elect') && Array.isArray(s.tieC) && s.tieC.indexOf(d.p) < 0)) return; return { $upd: { v: { ['v' + s.vid]: { [me]: d.p } } } }; }
         if (a === 'spy') { if (ph !== 'wolf' || s.role[me] !== 'maedchen' || !s.alive[me] || (s.spy || {})['n' + s.night]) return; const ws = alive(s).filter(p => isW(s, p)); return { $upd: { spy: { ['n' + s.night]: { c: rnd() < 1 / 3, w: pickOf(ws) || '' } } } }; }
         if (actor(s) !== me) return;
         if (a === 'pick') {
@@ -9818,7 +9856,17 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       },
       bot(s, isB) {
         if (s.winner) return null;
-        if (VOTE[s.phase]) { const v = votes(s), vs = voters(s), b = vs.find(q => isB(q) && !v[q]); if (b) return { $upd: { v: { ['v' + s.vid]: { [b]: botVote(s, b) } } } }; return vs.every(q => v[q]) ? resolveVote(s) : null; }
+        if (VOTE[s.phase]) {
+          const v = votes(s), vs = voters(s), b = vs.find(q => isB(q) && !v[q]);
+          if (b) return { $upd: { v: { ['v' + s.vid]: { [b]: botVote(s, b) } } } };
+          if (!vs.every(q => v[q])) return null;
+          if (s.phase !== 'wolf') return resolveVote(s);
+          // Werwölfe: erst vorbei, wenn sich alle einig sind. Computer-Wölfe schließen sich einem menschlichen Wolf an.
+          const t = vs.map(q => v[q]);
+          if (t.every(x => x === t[0])) return resolveVote(s);
+          const hum = vs.find(q => !isB(q)), want = hum ? v[hum] : t[0], b2 = vs.find(q => isB(q) && v[q] !== want);
+          return b2 ? { $upd: { v: { ['v' + s.vid]: { [b2]: want } } } } : null;
+        }
         const p = actor(s);
         return !p ? skip(s) : isB(p) ? botAct(s, p) : null;
       },
@@ -9826,7 +9874,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       score: s => '<p class="fine">Nacht ' + s.night + '. Am Leben: ' + alive(s).length + ' von ' + s.order.length + '.</p>' + xTable(['Person', 'Status'], s.order.map(p => ({ p: p, cells: [esc(pname(p)), s.alive[p] ? 'lebt' : 'ausgeschieden: ' + R[s.role[p]][0]] }))),
       html(X, s, me) {
         const U = UI.x, ph = s.phase, seated = s.order.indexOf(me) >= 0, amAlive = seated && s.alive[me], role = s.role[me], al = alive(s), v = votes(s), act = actor(s), meAct = act === me;
-        const all = !!s.winner || (seated && !amAlive), wolf = amAlive && role === 'wolf', lover = seated && s.lovers && s.lovers.indexOf(me) >= 0, cnt = VOTE[ph] && (ph !== 'wolf' || wolf || all) ? tally(s) : {};
+        const all = !!s.winner || (seated && !amAlive), wolf = amAlive && role === 'wolf', lover = seated && s.lovers && s.lovers.indexOf(me) >= 0, cnt = VOTE[ph] && (ph === 'wolf' ? wolf || all : all) ? tally(s) : {};
         const night = ['dieb', 'amor', 'seher', 'wolf', 'hexe'].indexOf(ph) >= 0, vs = VOTE[ph] ? voters(s) : [];
         
         const seen = role === 'seher' && seated ? (s.see || []).map(x => x.p) : [];
@@ -9847,9 +9895,9 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
           else if (meAct && ph === 'seher') center = xPick('Du bist die Seherin. Wessen Identität willst du erfahren?', targets(al.filter(q => q !== me), 'pick'));
           else if (meAct && ph === 'hexe') center = xPick((s.potion.heal ? (s.nd.victim ? 'Opfer der Werwölfe: <b>' + esc(pname(s.nd.victim)) + '</b>. ' : 'Die Werwölfe haben niemanden erwischt. ') : '') + 'Du bist die Hexe.', (s.potion.heal && s.nd.victim ? xBtn('heal', U.heal ? 'Heiltrank: wird eingesetzt' : 'Heiltrank einsetzen', '', U.heal ? 'primary' : '') : '') + xBtn('ok', 'Fertig', '', 'primary')) + (s.potion.poison ? xPick('Gift: Wähle bei Bedarf eine Person.', targets(al.filter(q => q !== me), 'pick', [U.poison])) : '');
           else if (meAct && (ph === 'jaeger' || ph === 'heir')) center = xPick(ph === 'jaeger' ? 'Wer scheidet mit dir aus?' : 'Wer wird Hauptmann?', targets(al, 'pick'));
-          else if (ph === 'wolf' && wolf) center = xPick('Ihr seid die Werwölfe. Wen holt ihr euch? Bei Gleichstand entscheidet das Los.' + (((s.spy || {})['n' + s.night] || {}).c ? ' <b>Das Mädchen wurde beim Spionieren erwischt: ' + esc(pname(holder(s, 'maedchen') || '')) + '.</b>' : ''), targets(al.filter(q => !isW(s, q)), 'v', [v[me]]));
+          else if (ph === 'wolf' && wolf) center = xPick('Ihr seid die Werwölfe. Wen holt ihr euch? Die Wahl endet erst, wenn ihr euch alle einig seid.' + (((s.spy || {})['n' + s.night] || {}).c ? ' <b>Das Mädchen wurde beim Spionieren erwischt: ' + esc(pname(holder(s, 'maedchen') || '')) + '.</b>' : ''), targets(al.filter(q => !isW(s, q)), 'v', [v[me]]));
           else if (ph === 'wolf' && amAlive && role === 'maedchen') { const sp = (s.spy || {})['n' + s.night]; center = sp ? '<p class="xlog">' + (sp.c ? 'Du wurdest erwischt! Die Werwölfe wissen jetzt, wer du bist.' : sp.w ? 'Du hast gesehen: ' + esc(pname(sp.w)) + ' ist ein Werwolf.' : 'Du hast nichts erkannt.') + '</p>' : xPick('Du bist das Mädchen. Willst du die Werwölfe ausspionieren? In einem von drei Fällen wirst du erwischt.', xBtn('spy', 'Spionieren')); }
-          else if ((ph === 'vote' || ph === 'elect') && amAlive) center = xPick(ph === 'elect' ? 'Wer soll Hauptmann werden?' : 'Wer soll ausscheiden?' + (s.revote ? ' Zweite Abstimmung: Bei erneutem Gleichstand scheidet niemand aus.' : ''), targets(al.filter(q => ph === 'elect' || (q !== me && !(lover && s.lovers.indexOf(q) >= 0))), 'v', [v[me]]));
+          else if ((ph === 'vote' || ph === 'elect') && amAlive) center = xPick((ph === 'elect' ? (s.revote ? '<b>Stichwahl:</b> Wer soll Hauptmann werden? Steht es wieder gleich, entscheidet das Los.' : 'Wer soll Hauptmann werden?') : s.revote ? '<b>Stichwahl:</b> Wer soll ausscheiden? Bei erneutem Gleichstand scheidet niemand aus.' : 'Wer soll ausscheiden?') + ' <small>Alle stimmen gleichzeitig ab; die Stimmen werden erst gezeigt, wenn alle gewählt haben.</small>', targets(al.filter(q => !(Array.isArray(s.tieC) && s.tieC.indexOf(q) < 0) && (ph === 'elect' || (q !== me && !(lover && s.lovers.indexOf(q) >= 0)))), 'v', [v[me]]));
           center += (s.news || []).length ? '<p class="xlog">' + s.news.slice(-4).map(esc).join('<br>') + '</p>' : '';
           
           const pkMap = {}, re = /data-a="(pick|v)" data-p="([^"]+)"/g; let mm;
