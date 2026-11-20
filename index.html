@@ -3813,7 +3813,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   // Aktionen, die nie über den Host laufen (Menüs, Editor, Beitritt, Bestätigungsdialoge …)
   // Nur diese Aktionen sind Spielzüge: Bei Mitspielern laufen sie über die Spielleitung, und nur diese führt die Spielleitung für andere aus.
   const FWD_YES = /^(xg|bid|pick|card|next|unoCard|unoDbl|unoGo|unoColor|unoDraw|unoPass|p10Pick|p10Draw|p10Pile|p10Sel|p10Lay|p10Hit|p10Next|witToggle|witPass|witCard|witNext|sbSrc|sbBuild|sbDisc|sbPass)$/;
-  const FWD_NO = /^(modal|closeModal|confirmYes|confTog|leave|leaveReq|copy|emo|emoToggle|optInfo|viewTog|specView|rename|renameSave|zoom|create|join|watch|sit|seat|selfPlay|takeHost|giveHost|kick|assign|unwatchOther|reqOk|reqNo|turnSave|theme.*|crop.*|persp.*|ed[A-Z].*|av[A-Z].*|num.*)$/;
+  const FWD_NO = /^(modal|closeModal|confirmYes|confTog|leave|leaveReq|copy|emo|emoToggle|optInfo|viewTog|specView|rename|renameSave|zoom|create|join|watch|sit|seat|selfPlay|takeHost|giveHost|kick|assign|unwatchOther|reqOk|reqNo|setOk|setNo|turnSave|theme.*|crop.*|persp.*|ed[A-Z].*|av[A-Z].*|num.*)$/;
   const UI_S = ['sel', 'sbSel', 'unoPick', 'unoAsk', 'unoTwo', 'p10Sel', 'witSel'], UI_U = ['x', 'bidV'];
   function uiSnap() { const o = { s: {}, u: {} }; UI_S.forEach(k => { o.s[k] = S[k] === undefined ? null : clone(S[k]); }); UI_U.forEach(k => { o.u[k] = UI[k] === undefined ? null : clone(UI[k]); }); return o; }
   function uiLoad(o) {
@@ -4009,7 +4009,12 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   function allowOp(op, pid, m, online) {
     if (!op || typeof op.p !== 'string' || ['set', 'upd', 'del'].indexOf(op.k) < 0 || !S.code) return false;
     const gp = gamePath(), lead = !!m && m.host === pid;
-    if (op.p.indexOf('designs/') === 0) return lead;
+    if (op.p.indexOf('designs/') === 0) {
+      if (lead) return true;
+      // Mitspieler darf nur das Set hochladen, das die Spielleitung angenommen hat
+      const sid = m && (m.sok || {})[pid];
+      return !!sid && typeof sid === 'string' && (op.k === 'set' || op.k === 'upd') && (op.p === 'designs/' + sid || op.p.indexOf('designs/' + sid + '/img/') === 0 || op.p.indexOf('designs/' + sid + '/src/') === 0);
+    }
     if (op.p !== gp) return false;                      // Spielstände schreibt nur der Host (Züge laufen als Anfrage)
     if (!m) return false;
     if (lead) return true;
@@ -4028,6 +4033,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         if (e && typeof e === 'object' && (e.bot === true || e.lvl !== undefined || (e.auto === true))) return false;
       }
       else if (k === 'watchers') { if (!known || !own(k, v, q => q === asg) || !okAll(v)) return false; }
+      else if (k === 'sreq') { if (!known || !own(k, v)) return false; const e = v[pid]; if (e !== null && !(e && typeof e === 'object' && typeof e.id === 'string' && /^[a-z0-9]{4,12}$/.test(e.id) && JSON.stringify(e).length <= 300)) return false; }
       else if (k === 'emo') { if (!known || !own(k, v) || !Object.keys(v).every(q => v[q] === null || (v[q] && typeof v[q] === 'object' && typeof v[q].e === 'string' && v[q].e.length <= 8 && typeof v[q].t === 'number'))) return false; }
       else if (k === 'assign') { if (!asg || !own(k, v, q => q === asg) || v[pid] !== undefined) return false; }
       else if (k === 'host') {
@@ -4358,6 +4364,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     hostSched();
     syncWake();
     tlSync();
+    try { offerTick(); } catch (e) { if (typeof __kw === 'function') __kw(e); }
     try { histTick(); } catch (e) { if (typeof __kw === 'function') __kw(e); }
   }
   // ---- Punkteverlauf als Diagramm (Ende von Wizard, Skull King, Phase 10, Cabo) ----
@@ -5062,6 +5069,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       });
     },
     reqOk(el) { const id = el.dataset.id; if (isHost() && id) w(backend.update(gamePath(), { ok: { [id]: 1 }, req: { [id]: null } })); },
+    setOk(el) { const p = el.dataset.id, r = S.meta && (S.meta.sreq || {})[p]; if (!isHost() || !r || !r.id) return; if ((S.designs || []).some(d => d.id === r.id)) { w(backend.update(gamePath(), { sreq: { [p]: null }, sno: { [p]: r.id } })); return; } w(backend.update(gamePath(), { sok: { [p]: r.id } })); },
+    setNo(el) { const p = el.dataset.id, r = S.meta && (S.meta.sreq || {})[p]; if (isHost() && r) w(backend.update(gamePath(), { sreq: { [p]: null }, sok: { [p]: null }, sno: { [p]: r.id } })); },
     reqNo(el) { const id = el.dataset.id; if (isHost() && id) w(backend.update(gamePath(), { no: { [id]: Date.now() }, req: { [id]: null } })); },
     leaveReq() { S.leaving = true; if (S.meta && (S.meta.req || {})[S.pid]) w(backend.update(gamePath(), { req: { [S.pid]: null } })); setTimeout(() => exitRoom(''), 150); },
     toWatcher(el) {
@@ -6330,25 +6339,68 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     try { if (file.size > 30e6) throw 0; o = JSON.parse(await file.text()); } catch (e) { o = null; }
     if (!o || o.format !== 'wizard-kartenset' || typeof o.design !== 'object' || !o.design) { toast('Das ist keine Kartenset-Datei aus diesem Spiel.'); return; }
     const id = genId(), D = normDesign(o.design);
+    // Mitspieler: Set nicht direkt schreiben (darf nur die Spielleitung), sondern erst anfragen
+    if (S.code && S.meta && !isHost() && S.mode === 'peer') {
+      const imgs = Object.keys(o.images || {}).filter(k => IMG_KEY.test(k) && typeof o.images[k] === 'string');
+      const mb = Math.max(0.1, Math.round(imgs.reduce((a, k) => a + o.images[k].length, 0) / 1e5) / 10);
+      UI.offer = { id, o, D, go: false };
+      await w(backend.update(gamePath(), { sreq: { [S.pid]: { id, name: String(D.name || 'Kartenset').slice(0, 40), n: imgs.length, mb, t: Date.now() } } }));
+      toast('Anfrage an die Spielleitung gesendet. Sobald sie das Kartenset „' + (D.name || 'Kartenset') + '“ annimmt, wird es übertragen.');
+      return;
+    }
     try {
-      await backend.set('designs/' + id, Object.assign(D, { at: Date.now() }));
-      let n = 0;
-      for (const k of Object.keys(o.images || {})) {
-        const d = o.images[k];
-        if (!IMG_KEY.test(k) || typeof d !== 'string' || d.length > 240000 || !DATA_RE.test(d)) continue;
-        const mg = o.margins && +o.margins[k] > 0 ? Math.min(0.3, +o.margins[k]) : 0;
-        await backend.set('designs/' + id + '/img/' + k, mg ? { d, m: mg } : { d }); n++;
-      }
-      const so = o.sources && typeof o.sources === 'object' ? o.sources : {};
-      for (const k of Object.keys(so)) {
-        const v = so[k];
-        if (!IMG_KEY.test(k) || !o.images || !o.images[k] || !v || typeof v.d !== 'string' || v.d.length > 240000 || !DATA_RE.test(v.d)) continue;
-        await backend.set('designs/' + id + '/src/' + k, { d: v.d, br: clampN(+v.br || 100, 40, 180), ct: clampN(+v.ct || 100, 40, 180), sa: clampN(+v.sa || 100, 0, 250), m: clampN(+v.m || SRC_M, 0, 1) });
-      }
+      const n = await writeDesign(id, o, D, 0);
       ED.id = id; ED.pick = null; ensureImgs(id); refreshDyn();
       if (S.modal === 'editor') renderModal(true);
       toast('Kartenset „' + D.name + '“ geladen' + (n ? ' (' + n + (n === 1 ? ' Bild).' : ' Bilder).') : '.'));
     } catch (e) { toast('Das Kartenset konnte nicht gespeichert werden.'); }
+  }
+  // Schreibt ein Kartenset; pause > 0 bremst (Mitspieler senden an die Spielleitung, die zu viele Nachrichten pro Sekunde verwirft)
+  async function writeDesign(id, o, D, pause) {
+    const nap = () => pause ? new Promise(r => setTimeout(r, pause)) : null;
+    await backend.set('designs/' + id, Object.assign(D, { at: Date.now() }));
+    let n = 0;
+    for (const k of Object.keys(o.images || {})) {
+      const d = o.images[k];
+      if (!IMG_KEY.test(k) || typeof d !== 'string' || d.length > 240000 || !DATA_RE.test(d)) continue;
+      const mg = o.margins && +o.margins[k] > 0 ? Math.min(0.3, +o.margins[k]) : 0;
+      await backend.set('designs/' + id + '/img/' + k, mg ? { d, m: mg } : { d }); n++; await nap();
+    }
+    const so = o.sources && typeof o.sources === 'object' ? o.sources : {};
+    for (const k of Object.keys(so)) {
+      const v = so[k];
+      if (!IMG_KEY.test(k) || !o.images || !o.images[k] || !v || typeof v.d !== 'string' || v.d.length > 240000 || !DATA_RE.test(v.d)) continue;
+      await backend.set('designs/' + id + '/src/' + k, { d: v.d, br: clampN(+v.br || 100, 40, 180), ct: clampN(+v.ct || 100, 40, 180), sa: clampN(+v.sa || 100, 0, 250), m: clampN(+v.m || SRC_M, 0, 1) }); await nap();
+    }
+    return n;
+  }
+  // Angebotene Kartensets: Mitspieler lädt nach Zusage hoch, Spielleitung räumt nach dem Eingang auf
+  function offerTick() {
+    const m = S.meta;
+    if (!m || !S.code) return;
+    const of = UI.offer;
+    if (of && !isHost()) {
+      if ((m.sno || {})[S.pid] === of.id) { UI.offer = null; toast('Die Spielleitung hat dein Kartenset „' + (of.D.name || 'Kartenset') + '“ abgelehnt.'); }
+      else if ((m.sok || {})[S.pid] === of.id && !of.go) {
+        of.go = true;
+        toast('Die Spielleitung hat zugestimmt. Kartenset wird übertragen – bitte die Seite offen lassen …');
+        writeDesign(of.id, of.o, of.D, 120).then(n => {
+          w(backend.update(gamePath(), { sreq: { [S.pid]: Object.assign({}, (S.meta.sreq || {})[S.pid] || {}, { id: of.id, done: true }) } }));
+          UI.offer = null; toast('Kartenset „' + (of.D.name || 'Kartenset') + '“ übertragen (' + n + (n === 1 ? ' Bild).' : ' Bilder).'));
+        }).catch(e => { UI.offer = null; if (typeof __kw === 'function') __kw(e); toast('Das Kartenset konnte nicht übertragen werden.'); });
+      }
+    }
+    if (isHost()) {
+      const rq = m.sreq || {};
+      Object.keys(rq).forEach(p => {
+        const r = rq[p];
+        if (!r || !r.done || (m.sok || {})[p] !== r.id) return;
+        UI.setSeen = UI.setSeen || {};
+        if (UI.setSeen[r.id]) return; UI.setSeen[r.id] = 1;
+        w(backend.update(gamePath(), { sreq: { [p]: null }, sok: { [p]: null } }));
+        toast('Kartenset „' + (r.name || 'Kartenset') + '“ von ' + pname(p) + ' ist da. Du findest es unter Kartenset (Lobby oder Menü).');
+      });
+    }
   }
   function slotFromFilename(name, D) {
     const n = name.toLowerCase().replace(/\.[a-z0-9]+$/, '').replace(/ü/g, 'ue').replace(/ö/g, 'oe').replace(/ä/g, 'ae').replace(/ß/g, 'ss');
@@ -6556,6 +6608,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     }
     const rq = S.meta && S.code && isHost() ? Object.entries(S.meta.req || {}).filter(e => e[1] && !knownIn(S.meta, e[0])) : [];
     if (rq.length) b += '<div class="banner reqs"><b>Möchte beitreten:</b>' + rq.map(([id, r]) => '<span class="rq">' + avHTML(r.av, r.name, id, id, '') + '<span class="nm">' + esc(r.name || 'Gast') + '</span><button class="btn small primary" data-act="reqOk" data-id="' + esc(id) + '">Erlauben</button><button class="btn small" data-act="reqNo" data-id="' + esc(id) + '">Ablehnen</button></span>').join('') + '</div>';
+    const srq = S.meta && S.code && isHost() ? Object.entries(S.meta.sreq || {}).filter(e => e[1] && e[1].id && !e[1].done) : [];
+    if (srq.length) b += '<div class="banner reqs"><b>Kartenset angeboten:</b>' + srq.map(([id, r]) => { const up = (S.meta.sok || {})[id] === r.id; return '<span class="rq"><span class="nm">' + esc(pname(id)) + ': „' + esc(r.name || 'Kartenset') + '“ (' + (+r.n || 0) + ((+r.n || 0) === 1 ? ' Bild' : ' Bilder') + ', ca. ' + (+r.mb || 0).toLocaleString('de-DE') + ' MB)</span>' + (up ? '<span class="nm">wird übertragen …</span><button class="btn small" data-act="setNo" data-id="' + esc(id) + '">Abbrechen</button>' : '<button class="btn small primary" data-act="setOk" data-id="' + esc(id) + '">Annehmen</button><button class="btn small" data-act="setNo" data-id="' + esc(id) + '">Ablehnen</button>') + '</span>'; }).join('') + '</div>';
     if (S.readonly) b += '<div class="banner warn">Du hast auf dieser Seite nur Leserechte und kannst deshalb nicht mitspielen. Bitte die Person, der die Seite gehört, dich mit Bearbeitungsrechten einzuladen.</div>';
     return b;
   }
@@ -7920,7 +7974,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       '<div class="edpbox">' + (custom && !ro ? '<div class="edinfo"><div class="field text ednm"><label for="ed-name">Name des Designs</label><input id="ed-name" type="text" data-ed="name" value="' + esc(D.name) + '" maxlength="24"></div>' + edSizeChip(X) + '</div>' : '') +
       '<div id="ed-prev" class="edprev gm-' + tab + '">' + edPreviewHTML(X) + '</div></div>' +
       (custom && !ro ? edSizeHTML(X) : '');
-    if (ro) return h + '<p class="fine">Nur ansehen: Ändern kann die Spielleitung. Mit „Kartenset hochladen“ stellst du ihr ein eigenes Set zur Verfügung.</p>' +
+    if (ro) return h + '<p class="fine">Nur ansehen: Ändern kann die Spielleitung. Mit „Kartenset hochladen“ bietest du ihr ein eigenes Set an – sobald sie annimmt, wird es übertragen.</p>' +
       '<section class="wide"><h3>Karten von ' + GN + '</h3>' + edGrid(tab, k => '<span class="gc' + (X.imgs[k] ? ' has' : '') + '" aria-label="' + esc(slotLabel(k, D)) + '">' + slotCard(k, X, '') + '</span>') + '</section>';
     if (!custom) return h + '<p class="ednote">Das Standard-Design bleibt unverändert. Lege ein eigenes Design an, dann kannst du für jedes Spiel Farben, Schrift, Rückseite und die Anzeige des Kartenwerts einstellen und jeder Karte ein eigenes Bild geben. Änderungen sehen alle am Tisch sofort. Ein heruntergeladenes Kartenset kannst du hier wieder hochladen.</p>';
     const has = k => !!X.imgs[k];
