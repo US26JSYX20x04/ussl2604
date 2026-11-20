@@ -30,7 +30,9 @@ body {
   background-color: var(--night);
   color: var(--parch);
   font: 400 17px/1.45 var(--body);
-  -webkit-text-size-adjust: 100%;}
+  -webkit-text-size-adjust: 100%;
+  font-variant-numeric: lining-nums;
+}
 #app { min-height: 100%; display: flex; flex-direction: column; }
 h1, h2, h3 { font-family: var(--display); font-weight: 700; margin: 0; text-wrap: balance; line-height: 1.1; }
 h2 { font-size: 1.5rem; }
@@ -118,8 +120,11 @@ label { font-size: .88rem; color: var(--mist); font-weight: 500; }
 .pt-punkte { background-image: radial-gradient(circle, color-mix(in srgb, var(--bk2) 60%, transparent) 1.2px, transparent 1.6px); background-size: 9px 9px; }
 .card.tiny { --cw: 30px; }
 .card.tiny .ci, .card.tiny .cn { display: none; }
-.card.tiny .cm { padding: 0;}
-.card.tiny .cm { display: grid !important; font-size: calc(var(--cw, 72px) * .62); }
+.card.tiny .cm {
+  padding: 0;
+  display: grid !important;
+  font-size: calc(var(--cw, 72px) * .62);
+}
 .card.slot { background: transparent; border: 1px dashed var(--line); box-shadow: none; }
 .card.slot::after { display: none; }
 
@@ -179,7 +184,17 @@ label { font-size: .88rem; color: var(--mist); font-weight: 500; }
 
 /* Spieltisch */
 .game { flex: 1; display: flex; flex-direction: column; min-height: 100%; }
-.topbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: rgba(18, 16, 39, .6);}
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(18, 16, 39, .6);
+  position: relative;
+}
 .tb1, .tb3 { display: flex; align-items: center; gap: 8px; }
 .rnd { font: 500 1.25rem var(--display); }
 .rnd b { font-size: 1.5rem; color: var(--brass-2); }
@@ -187,7 +202,20 @@ label { font-size: .88rem; color: var(--mist); font-weight: 500; }
 .tl2 { font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
 .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; border: 1px solid rgba(255, 255, 255, .5); }
 .seats { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 10px 12px 4px; }
-.seat { display: flex; flex-direction: column; justify-content: center; gap: 3px; min-width: 150px; max-width: 230px; flex: 1 1 150px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 12px; background: rgba(18, 16, 39, .5);}
+.seat {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 150px;
+  max-width: 230px;
+  flex: 1 1 150px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(18, 16, 39, .5);
+  position: relative;
+}
 .seat.turn, .mebar.turn { border-color: var(--brass); box-shadow: 0 0 0 1px var(--brass), 0 0 20px rgba(217, 164, 65, .3); }
 .seat.off { opacity: .55; }
 .st { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -196,8 +224,6 @@ label { font-size: .88rem; color: var(--mist); font-weight: 500; }
 .pts { color: var(--brass-2); font-weight: 700; }
 .minis, .seatcard { margin-left: auto; flex: none; padding-left: 4px; }
 .minis { display: flex; align-items: center; }
-.minis i { border-radius: 3px;}
-.minis small { font-weight: 700;}
 .center { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 10px 12px; min-height: 170px; }
 .trick { display: flex; gap: 8px; align-items: flex-start; justify-content: center; }
 .tc { display: flex; flex-direction: column; align-items: center; gap: 4px; }
@@ -319,7 +345,6 @@ table.score thead th { position: sticky; top: 0; background: var(--velvet); text
 
 /* Zuschneiden, Schrift, Rückseitenbild */
 #crop.open { z-index: 30; }
-.cropstage { place-items: center; padding: 8px; background: repeating-conic-gradient(rgba(255, 255, 255, .06) 0 25%, transparent 0 50%) 0 0 / 18px 18px; border: 1px solid var(--line); border-radius: 12px;}
 #crop-cv { display: block; width: auto; height: auto; max-width: 100%; max-height: min(74vh, 900px); border-radius: 10px; cursor: grab; touch-action: none; }
 #crop-cv:active { cursor: grabbing; }
 #crop-cv.round { border-radius: 50%; width: min(60vw, 220px); }
@@ -395,7 +420,6 @@ table.score thead th { position: sticky; top: 0; background: var(--velvet); text
 
 /* neu bekommene Karten, Uno-Meldung, Phasenliste, Feuerzähler */
 .hc.got .card { outline: 3px dashed var(--good); outline-offset: 1px;}
-.hc.got::after { content: "neu"; position: absolute; top: -9px; left: 50%; transform: translateX(-50%); color: var(--ink); font: 700 .68rem var(--body); padding: 0 6px; border-radius: 99px; pointer-events: none;}
 .unoflash { position: fixed; left: 50%; top: 34%; transform: translate(-50%, -50%); z-index: 15; display: grid; justify-items: center; gap: 2px; padding: 18px 34px; background: var(--brass); color: var(--ink); border: 3px solid var(--parch); border-radius: 22px; box-shadow: 0 18px 60px rgba(0, 0, 0, .65); pointer-events: none; animation: unoin .28s cubic-bezier(.2, 1.4, .4, 1); text-align: center; }
 .unoflash b { font: 700 clamp(3rem, 14vw, 5.5rem)/1 var(--display); letter-spacing: .04em; }
 .unoflash span { font-weight: 700; font-size: 1.1rem; }
@@ -406,7 +430,6 @@ table.score thead th { position: sticky; top: 0; background: var(--velvet); text
 .phl li::marker { color: var(--brass-2); font-weight: 700; }
 .pht { font-weight: 500; }
 .phb { display: inline-flex; gap: 2px; margin-left: 8px; vertical-align: middle; }
-.phb button { all: unset; cursor: pointer; color: var(--mist); border-radius: 5px;}
 .phb button:hover:not(:disabled) { color: var(--brass-2); background: rgba(255, 255, 255, .08); }
 .phb button:disabled { opacity: .25; cursor: default; }
 .phb button:focus-visible { outline: 2px solid var(--brass-2); }
@@ -415,7 +438,14 @@ table.score thead th { position: sticky; top: 0; background: var(--velvet); text
 .card .cn.lg { font-size: calc(var(--cw, 72px) * .1); letter-spacing: 0; bottom: 20%; }
 .summary th, .summary td { white-space: normal; }
 .summary td:last-child, .summary thead th { white-space: nowrap; }
-.phb button { font-size: .9rem; padding: 2px 8px; }
+.phb button {
+  all: unset;
+  cursor: pointer;
+  color: var(--mist);
+  border-radius: 5px;
+  font-size: .9rem;
+  padding: 2px 8px;
+}
 
 /* Einstellungen je Spiel */
 .game.sb .minis i { background: var(--bk1); border-color: var(--bk2); }
@@ -434,7 +464,12 @@ table.score thead th { position: sticky; top: 0; background: var(--velvet); text
 .cbrow { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: center; }
 .cbc { all: unset; cursor: pointer; border-radius: 8px; }
 .cbc.sel { outline: 3px solid var(--brass-2); outline-offset: 2px; }
-.cbmine { display: flex; justify-content: center; padding: 10px 8px;}
+.cbmine {
+  display: flex;
+  justify-content: center;
+  padding: 10px 8px;
+  align-items: flex-end;
+}
 .cbmine .cbrow { gap: 10px; }
 .pgs .cbrow .card.tiny { --cw: 30px; }
 .wwgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px; width: 100%; }
@@ -484,8 +519,6 @@ table.score thead th { position: sticky; top: 0; background: var(--velvet); text
 /* Ansicht um den Tisch */
 .game.round { position: relative; }
 .game.round .seats { position: static; padding: 0; min-height: 0; }
-.game.round .seats > .seat { position: absolute; z-index: 3;}
-.game.round .center { padding-left: 220px; padding-right: 220px; padding-top: 90px;}
 .seathand { margin-top: 4px; display: flex; flex-direction: column; gap: 3px; }
 .seathand .shrow { display: flex; gap: 0; margin: 0; padding: 0; }
 .seathand .card.shc { flex: none; box-shadow: -2px 1px 4px rgba(0, 0, 0, .45); }
@@ -506,7 +539,15 @@ table.score thead th { position: sticky; top: 0; background: var(--velvet); text
 /* Bild zuschneiden: mehr Werkzeuge */
 .cropsheet { max-width: 560px; }
 .cropwrap { display: flex; gap: 12px; align-items: center; justify-content: center; flex-wrap: wrap; }
-.cropstage { position: relative; display: inline-block; }
+.cropstage {
+  place-items: center;
+  padding: 8px;
+  background: repeating-conic-gradient(rgba(255, 255, 255, .06) 0 25%, transparent 0 50%) 0 0 / 18px 18px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  position: relative;
+  display: inline-block;
+}
 .cropstage .gl { position: absolute; inset: 0; pointer-events: none; border-radius: 14px; display: none;
   background: linear-gradient(to right, transparent calc(33.33% - .5px), rgba(255,255,255,.55) calc(33.33% - .5px), rgba(255,255,255,.55) calc(33.33% + .5px), transparent calc(33.33% + .5px), transparent calc(66.66% - .5px), rgba(255,255,255,.55) calc(66.66% - .5px), rgba(255,255,255,.55) calc(66.66% + .5px), transparent calc(66.66% + .5px)),
     linear-gradient(to bottom, transparent calc(33.33% - .5px), rgba(255,255,255,.55) calc(33.33% - .5px), rgba(255,255,255,.55) calc(33.33% + .5px), transparent calc(33.33% + .5px), transparent calc(66.66% - .5px), rgba(255,255,255,.55) calc(66.66% - .5px), rgba(255,255,255,.55) calc(66.66% + .5px), transparent calc(66.66% + .5px)); }
@@ -517,7 +558,13 @@ table.score thead th { position: sticky; top: 0; background: var(--velvet); text
 .crpad output { grid-column: 1 / -1; font-size: .8rem; color: var(--mist); white-space: nowrap; }
 .crrow { display: grid; grid-template-columns: 6.5em 30px 1fr 30px 4.6em; align-items: center; gap: 6px; margin: 6px 0; }
 .crrow input[type=range] { width: 100%; }
-.crrow output { font-variant-numeric: tabular-nums; text-align: right; color: var(--mist); font-size: .9rem;}
+.crrow output {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--mist);
+  font-size: .9rem;
+  white-space: nowrap;
+}
 .crmore { margin: 6px 0; }
 .crmore summary { cursor: pointer; color: var(--brass-2); }
 .btn.small.on { border-color: var(--brass-2); color: var(--brass-2); }
@@ -560,14 +607,25 @@ body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-even
 .opts.compact .opt { padding: 7px 10px; }
 .opts.compact .opt span { display: none; }
 /* Rückseiten bei den Mitspielern */
-.minis i { width: auto; height: auto; background: none; border: 0; margin-left: -20px; display: block; }
+.minis i {
+  border-radius: 3px;
+  width: auto;
+  height: auto;
+  background: none;
+  border: 0;
+  margin-left: -20px;
+  display: block;
+}
 .minis i:first-child { margin-left: 0; }
 .minis .card.mback { --cw: 27px; box-shadow: -1px 1px 3px rgba(0, 0, 0, .45); }
 .minis .card.mback .bs { font-size: 11px; }
-.minis small { margin-left: 7px; font-size: 1.15rem; }
+.minis small {
+  font-weight: 700;
+  margin-left: 7px;
+  font-size: 1.15rem;
+}
 .game .minis i { background: none; border: 0; }
 /* Rückseiten rechts über beide Zeilen der Platzkarte */
-.seat { position: relative; }
 .seat > .st > .minis { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); }
 .seat:has(> .st > .minis) { padding-right: 96px; max-width: 270px; }
 @media (max-width: 420px) { .seat:has(> .st > .minis) { padding-right: 62px; } }
@@ -595,7 +653,6 @@ body.dealing main.game > :not(.topbar) { pointer-events: none; }
 .pgs .cbhold .card { --cw: 30px; }
 .cbhold.big { margin: 0 18px 0 0; }
 .cbhold.big .card { outline: 3px solid var(--brass-2); outline-offset: 2px; }
-.cbmine { align-items: flex-end; }
 .card.cbnew { animation: cbnew 1.2s ease-in-out 3; outline: 3px solid var(--brass-2); outline-offset: 2px; }
 @keyframes cbnew { 50% { outline-color: transparent; transform: translateY(-4px); } }
 /* Namen bei den Plätzen nie ganz verdrängen */
@@ -617,30 +674,31 @@ button.pnst { cursor: pointer; }
 /* Passt nicht!: Plätze mit Auslage kompakt halten */
 .gm-passt .seat > .st > .minis { position: static; transform: none; }
 .gm-passt .seat:has(> .st > .minis) { padding-right: 10px; }
-.gm-passt .seat .pnrow { flex-wrap: nowrap;}
-.crrow .rbb { font-size: .8rem; letter-spacing: -1px; min-width: 34px;}
 .banner.reqs{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem .8rem;background:var(--panel2,#2a2f45);border:1px solid var(--gold,#d8b45a)}
 .banner.reqs .rq{display:inline-flex;align-items:center;gap:.4rem}
 .banner.reqs .rq .av{width:28px;height:28px;font-size:.8rem}
 .turnbox{margin:.6rem 0;font-size:.9rem}
 .turnbox summary{cursor:pointer;color:var(--muted,#aab)}
 .turnbox input{display:block;width:100%;max-width:340px;margin:.3rem 0}
-.crrow output { white-space: nowrap; }
-.crrow .rbb { padding: 0; }
+.crrow .rbb {
+  font-size: .8rem;
+  letter-spacing: -1px;
+  min-width: 34px;
+  padding: 0;
+}
 @media (max-width: 520px) { .crrow.crbig { grid-template-columns: 34px 30px minmax(60px, 1fr) 30px 34px 4.4em; } .crrow.crbig > label { grid-column: 1 / -1; } }
 .crrow.crbig { grid-template-columns: 4.3em 28px 28px minmax(60px, 1fr) 28px 28px 3.9em; gap: 4px; }
 .crrow.crbig .rb { width: 28px; min-width: 28px; height: 28px; padding: 0; }
 .crrow.crbig output { font-size: .82rem; }
-.plist li .acts { flex: 1 0 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px;}
-.tishead { display: flex; align-items: center; gap: 8px;}
-.tishead .btn { margin-left: auto; font-family: var(--body); font-weight: 600;}
-.panel .addbot { margin: 4px 0 2px;}
+.tishead .btn {
+  margin-left: auto;
+  font-family: var(--body);
+  font-weight: 600;
+  flex: none;
+}
 .plist li:not(.free) { border: 1px solid var(--line); background: rgba(255, 255, 255, .06); }
-.tishead { margin-bottom: 12px; row-gap: 6px;}
 .lobgrid .panel > .roundsrow { margin-top: 4px; }
-.tishead { flex-wrap: nowrap;}
 .tishead small { white-space: nowrap; }
-.tishead .btn { flex: none; }
 .lobgrid .panel > .roundsrow:first-child { margin-top: 0; }
 .lobgrid .panel > .addbot + .tishead, .lobgrid .panel > .roundsrow + .tishead { margin-top: 14px; }
 .opt.infoc > span:not(.steps) { display: none; }
@@ -649,11 +707,25 @@ button.pnst { cursor: pointer; }
 .subpanel > .opt, .panel > .opt { width: 100%; margin: 8px 0; }
 .subpanel > .roundsrow, .panel > .roundsrow { margin: 8px 0; }
 .subpanel > .opts { margin: 8px 0; }
-.tishead { white-space: nowrap; }
-.gpanel h3 .infot { font-family: var(--body);}
+.tishead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+  row-gap: 6px;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
 h3 .infot { font-style: normal; display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; margin-left: 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--mist); font-size: .8rem; line-height: 1; vertical-align: middle; cursor: pointer; font-weight: 700; }
 h3 .infot:hover { color: var(--brass-2); border-color: var(--brass); }
-.plist li .acts { padding-left: 0; }
+.plist li .acts {
+  flex: 1 0 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding-left: 0;
+}
 .plist li .acts .mine-av { flex: 1 1 0; min-width: 0; padding-left: 4px; padding-right: 4px; text-align: center; }
 .plist li > .nm { flex: 1 1 0; min-width: 3ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .plist li > .tag { flex: none; }
@@ -662,13 +734,23 @@ h3 .infot:hover { color: var(--brass-2); border-color: var(--brass); }
 .wlist li > .nm { flex: 1 1 0; min-width: 3ch; }
 .tishead.sepb { border-top: 1px solid var(--line); padding-top: 12px; }
 .lsep { border-top: 1px solid var(--line); margin: 14px 0 0; }
-.panel .addbot { display: block; width: 100%; }
+.panel .addbot {
+  margin: 4px 0 2px;
+  display: block;
+  width: 100%;
+}
 .panel .addbot:disabled { opacity: .45; cursor: default; }
 .ss .geb { font-size: .7rem; padding: 1px 6px; align-self: center; }
 .mebar .trm { margin: 0 auto; display: inline-flex; align-items: center; gap: 5px; font-size: .88rem; color: var(--parch); white-space: nowrap; }
 .mebar .trm .dot { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
 .mebar .trm + .ss { margin-left: 0; }
-.game.round .seats > .seat { width: auto; min-width: 200px; max-width: 300px; }
+.game.round .seats > .seat {
+  position: absolute;
+  z-index: 3;
+  width: auto;
+  min-width: 200px;
+  max-width: 300px;
+}
 /* Zeilen der Spielerliste: Kreuz immer ganz rechts, Menschen-Zeile der Spielleitung füllt die Breite */
 .plist li .acts .x { margin-left: auto; }
 .plist li .acts.fill .rn { flex: 1 1 0; min-width: 0; text-align: center; padding-left: 4px; padding-right: 4px; }
@@ -679,7 +761,10 @@ h3 .infot:hover { color: var(--brass-2); border-color: var(--brass); }
 .opt.hasinfo > b { display: flex; align-items: center; gap: 4px; }
 .opt.hasinfo > b .infot { margin-left: auto; flex: none; }
 .gpanel h3 { display: flex; align-items: center; }
-.gpanel h3 .infot { margin-left: auto; }
+.gpanel h3 .infot {
+  font-family: var(--body);
+  margin-left: auto;
+}
 .tishead.h2b { display: flex; align-items: center; }
 .tishead.h2b .btn { margin-left: auto; }
 .step2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 6px 0; }
@@ -699,11 +784,15 @@ h3 .infot:hover { color: var(--brass-2); border-color: var(--brass); }
 .ss .tag.geb:not(.gold) { color: var(--parch); border-color: var(--line); background: rgba(255, 255, 255, .06); }
 .bidbar { width: calc(100% - 24px); max-width: 520px; margin: 0 auto 6px; padding: 6px 10px; gap: 6px; box-sizing: border-box; border-radius: 12px; }
 .bidbar .bl { font-size: .95rem; }
-.bidmode { font-size: .75rem; padding: 2px 8px; opacity: .85; }
 .ss b, .pts b { font-variant-numeric: lining-nums tabular-nums; }
 .st .tag.geb { font-size: .68rem; padding: 1px 5px; flex: none; }
 .mebar > .tag.geb { font-size: .7rem; padding: 1px 6px; }
-.game.round .center { padding-bottom: 36px; }
+.game.round .center {
+  padding-left: 220px;
+  padding-right: 220px;
+  padding-top: 90px;
+  padding-bottom: 36px;
+}
 .tag.geb:not(.gold) { color: var(--parch); border-color: var(--line); background: rgba(255, 255, 255, .06); }
 /* obere Leiste: Klapp-Pfeil; eingeklappt nur Runde, Stiche X/Y, Trumpf und Menü */
 .tbtog { flex: none; width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; border-radius: 7px; border: 1px solid var(--line); background: none; color: var(--mist); font: inherit; font-size: .85rem; cursor: pointer; padding: 0; }
@@ -715,7 +804,6 @@ h3 .infot:hover { color: var(--brass-2); border-color: var(--brass); }
 .topbar.tbc .trump .card, .topbar.tbc .trump small { display: none; }
 .topbar.tbc .trump { white-space: nowrap; }
 /* Trumpf in der oberen Leiste genau mittig, wenn genug Platz ist */
-.topbar { position: relative; }
 @media (min-width: 560px) { .topbar.tbc > .trump { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); } }
 @media (min-width: 1100px) { .topbar:not(.tbc) > .trump { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); } }
 /* Rückseiten rechts neben Tipp/Punkte, mittig zu deren Zeilen */
@@ -727,7 +815,19 @@ h3 .infot:hover { color: var(--brass-2); border-color: var(--brass); }
 .hc.passsel .card { filter: none; outline: none; box-shadow: 0 0 0 3px var(--brass-2), 0 8px 18px rgba(0, 0, 0, .45); border-radius: 8px; }
 /* neu bekommene Karten in der Farbe der „ist dran“-Umrandung */
 .hc.got .card { outline-color: var(--brass); }
-.hc.got::after { background: var(--brass); }
+.hc.got::after {
+  content: "neu";
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--ink);
+  font: 700 .68rem var(--body);
+  padding: 0 6px;
+  border-radius: 99px;
+  pointer-events: none;
+  background: var(--brass);
+}
 .gotnote { color: var(--brass-2); }
 .tag .tgs { display: none; }
 @media (max-width: 600px) { .tag .tgl { display: none; } .tag .tgs { display: inline; } }
@@ -739,7 +839,6 @@ h3 .infot:hover { color: var(--brass-2); border-color: var(--brass); }
 body.ingame #emobar { top: 54px; bottom: auto; }
 body.ingame #emobar .emotog { display: none; }
 /* Ziffern überall auf Höhe der Großbuchstaben (auch in Namen) */
-body { font-variant-numeric: lining-nums; }
 body.tricklock section.mine .hand, body.tricklock section.mine .fan { pointer-events: none; }
 /* Druids: Farbfelder groß, Runde und Gesamt gemeinsam in der Zeile darunter */
 .gm-druids .seat .ssin, .gm-druids .seat .ss:not(.hasmin) { display: flex; flex-wrap: wrap; gap: 4px 10px; }
@@ -747,7 +846,13 @@ body.tricklock section.mine .hand, body.tricklock section.mine .fan { pointer-ev
 .gm-druids .seat .dpiles i { flex: 1 1 0; min-width: 0; height: 1.9em; font-size: .95rem; border-radius: 6px; }
 .gm-druids .seat .dline { flex: 1 1 100%; display: flex; gap: 10px; justify-content: space-between; }
 /* Passt nicht!: Auslage der anderen füllt den Rahmen, letzte Aktion mit Rahmen hervorgehoben */
-.gm-passt .seat .pnrow { --cw: var(--pcw, 28px) !important; width: 100%; gap: 4px; justify-content: space-between; }
+.gm-passt .seat .pnrow {
+  flex-wrap: nowrap;
+  --cw: var(--pcw, 28px) !important;
+  width: 100%;
+  gap: 4px;
+  justify-content: space-between;
+}
 .gm-passt .seat .pnst .card.tiny { --cw: var(--pcw, 28px); }
 .lastmv .card, .bp.lastmv .card { outline: 3px solid var(--brass); outline-offset: 2px; box-shadow: 0 0 14px rgba(217, 164, 65, .45); }
 @media (max-width: 600px) { .gm-phase10 .seats > .p10seat { flex: 1 1 46%; max-width: calc(50% - 4px); min-width: 0; } }
@@ -876,7 +981,6 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 .ltwin { text-align: center; margin: 8px 0 0; }
 .ptchart { margin: 12px 0 4px; }
 .ptchart figcaption { font-weight: 700; margin-bottom: 4px; }
-.ptchart svg { width: 100%; height: auto; display: block; }
 .ptchart polyline { fill: none; stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; opacity: .9; }
 .ptchart polyline.me { stroke-width: 4; opacity: 1; }
 .ptchart line.g { stroke: var(--line); stroke-width: 1; }
@@ -884,7 +988,14 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 .ptchart text { fill: var(--mist); font-size: 11px; font-family: var(--body); }
 .ptleg { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; margin-top: 4px; }
 .ptleg i { display: inline-block; width: 12px; height: 4px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
-.ptchart svg { max-height: 220px; max-width: 560px; margin: 0 auto; }
+.ptchart svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  max-height: 220px;
+  max-width: 560px;
+  margin: 0 auto;
+}
 .thpick { flex-wrap: wrap; gap: 6px; }
 .thpick .btn.on { background: var(--brass); color: var(--night); border-color: var(--brass); }
 .menu .mhead { margin: 10px 0 0; font-size: 15px; color: var(--brass); display: flex; align-items: baseline; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
@@ -892,12 +1003,19 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 .menu .mhead small { font-family: var(--body); font-size: 12px; color: var(--mist); font-weight: 400; }
 .menu .mhead.sep { padding-top: 0; margin-top: 4px; }
 .menu .btn.danger { border-color: var(--bad); color: var(--bad); }
-.menu details.mlead > summary.mhead { cursor: pointer; list-style: none; }
 .menu details.mlead > summary.mhead::-webkit-details-marker { display: none; }
 .menu details.mlead > summary.mhead::before { content: '▸'; font-size: 12px; display: inline-block; transition: transform .15s; }
 .menu details.mlead[open] > summary.mhead::before { transform: rotate(90deg); }
 .menu .mleadin { display: grid; gap: 8px; margin-top: 8px; }
-.menu details.mlead > summary.mhead { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; font-family: var(--display); font-weight: 700; }
+.menu details.mlead > summary.mhead {
+  cursor: pointer;
+  list-style: none;
+  margin-top: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+  font-family: var(--display);
+  font-weight: 700;
+}
 
 .histlist li.hs { color: var(--mist); font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 8px 2px 2px; border-bottom: 0; }
 .menu details.mfold > summary.mhead { cursor: pointer; list-style: none; margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; font-family: var(--display); font-weight: 700; }
@@ -907,22 +1025,37 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 .tc.new .card.flown, .flyp .card { animation: none !important; }
 .trick.lasttrick .tc + .tc { margin-left: 0 !important; }
 .endpeek .ltwrap { margin: 4px 0 8px; }
-.bidbar { padding: 4px 8px; gap: 4px; margin-bottom: 4px; }
 .bidbar .bb { min-width: 36px; height: 34px; font-size: 1.1rem; }
 .bidbar .bbs, .bidsl { align-items: center; gap: 5px; }
 .bidbar .rb, .xpick .bidsl .rb { width: 28px; height: 28px; font-size: 1rem; }
 .bidbar .bidsl output { font-size: 1.15rem; }
-.bidbar .bidsl .btn.primary { padding: 4px 10px; }
-.bidmode { font-size: .68rem; padding: 1px 7px; opacity: .8; min-height: 0; line-height: 1.5; align-self: center; }
+.bidmode {
+  font-size: .68rem;
+  padding: 1px 7px;
+  opacity: .8;
+  min-height: 0;
+  line-height: 1.5;
+  align-self: center;
+}
 .bidbar .btn.bidmode, .xpick .btn.bidmode { font-size: .66rem; padding: 2px 7px; min-height: 0; height: auto; line-height: 1.3; border-radius: 999px; white-space: nowrap; }
 .bidbar .bidsl { flex-wrap: nowrap; }
-.bidbar .bidsl input[type=range] { flex: 1 1 60px; min-width: 50px; }
-.bidbar .bidsl .btn.primary { white-space: nowrap; }
+.bidbar .bidsl .btn.primary {
+  padding: 4px 10px;
+  white-space: nowrap;
+}
 .bidbar .bbs > .bidsl { width: 100%; min-width: 0; justify-content: center; }
-.bidbar .bidsl input[type=range] { min-width: 36px; }
-.bidbar { grid-template-columns: minmax(0, 1fr); }
+.bidbar {
+  padding: 4px 8px;
+  gap: 4px;
+  margin-bottom: 4px;
+  grid-template-columns: minmax(0, 1fr);
+}
 .bidbar .bbs { min-width: 0; max-width: 100%; }
-.bidbar .bidsl input[type=range] { width: 60px; }
+.bidbar .bidsl input[type=range] {
+  flex: 1 1 60px;
+  min-width: 36px;
+  width: 60px;
+}
 /* Ansage: Zahlen bzw. Regler mittig, der Umschalter ⇄ steht nur daneben */
 .center .bidbar { margin: 4px auto 0; }
 .bidgrp { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 5px; position: relative; }
@@ -930,6 +1063,11 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   .bidbar .bbs > .bidsl { width: auto; position: relative; }
   .bidbar .bidsl input[type=range] { width: 150px; flex: 0 0 150px; }
   .bidbar .bidgrp > .bidmode, .bidbar .bidsl > .bidmode { position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%); }
+}
+/* Eigene Handkarten heben sich beim Überfahren mit der Maus immer leicht an (wie bei Witches), auch außerhalb des eigenen Zugs */
+@media (hover: hover) and (pointer: fine) {
+  .hc:not(.no):not(.sel):not(.arriving):hover, .cbmine .cbc:not(.sel):hover { transform: translateY(-8px); }
+  .cbc { transition: transform .12s; }
 }
 </style>
 <style id="dynT"></style>
@@ -7033,10 +7171,32 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (!cen) return;
     let dk = cen.querySelector('.dealdeck');
     if (!on || (UI.dealUntil || 0) <= Date.now() && !on) { if (dk) dk.remove(); return; }
-    if (dk || cen.querySelector('.card.back')) return;
+    if (dk) { placeDeck(main, cen, dk); return; }
+    if (cen.querySelector('.card.back')) return;
     dk = document.createElement('div'); dk.className = 'dealdeck gm-' + ((S.meta && S.meta.game) || 'wizard');
     dk.innerHTML = backHTML(tableX(), (S.meta && S.meta.game) || 'wizard');
     cen.insertBefore(dk, cen.firstChild);
+    placeDeck(main, cen, dk);
+  }
+  // Stapel beim Austeilen außerhalb des Textflusses in die freie Fläche zwischen obere Spieler und Tischmitte setzen
+  function placeDeck(main, cen, dk) {
+    dk.style.position = 'absolute'; dk.style.margin = '0';
+    const op = dk.offsetParent || document.body, o = op.getBoundingClientRect(), c = cen.getBoundingClientRect();
+    const cx = c.left + c.width / 2, half = 60;
+    let top = c.top + 4, first = null, last = null;
+    for (const e of cen.children) { if (e === dk || !e.getClientRects().length) continue; const r = e.getBoundingClientRect(); if (r.height > 0) { if (first === null || r.top < first) first = r.top; if (last === null || r.bottom > last) last = r.bottom; } }
+    main.querySelectorAll('.seats > .seat').forEach(e => { const r = e.getBoundingClientRect(); if (r.right > cx - half && r.left < cx + half && r.bottom < (first === null ? c.bottom : first) && r.bottom > top - 8) top = r.bottom + 8; });
+    // Fläche A: über dem Inhalt der Tischmitte; Fläche B: darunter bis zur eigenen Hand – die größere nehmen
+    const me = main.querySelector('section.mine'), meTop = me && me.getClientRects().length ? me.getBoundingClientRect().top : c.bottom;
+    const A = [top, first === null ? meTop - 8 : first - 8], B = [last === null ? top : last + 8, meTop - 8];
+    let [t0, b0] = (A[1] - A[0] >= B[1] - B[0]) ? A : B;
+    const R = 1.5625;
+    top = t0; const bot = b0;
+    const cw = Math.max(46, Math.min(96, Math.floor((bot - top) / R))), h = cw * R;
+    dk.style.setProperty('--cw', cw + 'px');
+    dk.style.left = (cx - cw / 2 - o.left + op.scrollLeft) + 'px';
+    dk.style.top = (top + Math.max(0, (bot - top - h) / 2) - o.top + op.scrollTop) + 'px';
+    dk.style.zIndex = '3';
   }
   const mineEl = (main, sub) => { for (const x of sub) { const e = main.querySelector('section.mine ' + x); if (e && e.getClientRects().length) return e; } return main.querySelector('section.mine'); };
   function flyMoves(order, moves, st) {
@@ -7072,7 +7232,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     
     const src = pile || main.querySelector('.center .dealdeck') || main.querySelector('.center'), sr = src && src.getBoundingClientRect();
     if (!sr) return;
-    const bw = pile && sr.width ? sr.width : 96;
+    const pl = pile || (src.matches && src.matches('.dealdeck') ? src : null), bw = pl && sr.width ? sr.width : 96;
     const seatEls = main.querySelectorAll('.seats > .seat'), around = aroundMe(order), X = tableX(), g = (S.meta && S.meta.game) || 'wizard';
     const target = p => {
       let el = null;
@@ -7114,7 +7274,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const box = document.createElement('div');
       box.className = 'flyc gm-' + g;
       box.innerHTML = backHTML(X, g);
-      if (pile) { box.style.width = bw + 'px'; box.style.setProperty('--cw', bw + 'px'); box.style.left = sr.left + 'px'; box.style.top = sr.top + 'px'; const c0 = box.firstChild; if (c0 && c0.style) { c0.style.setProperty('--cw', bw + 'px'); c0.style.boxShadow = 'none'; } }
+      if (pl) { box.style.width = bw + 'px'; box.style.setProperty('--cw', bw + 'px'); box.style.left = sr.left + 'px'; box.style.top = sr.top + 'px'; const c0 = box.firstChild; if (c0 && c0.style) { c0.style.setProperty('--cw', bw + 'px'); c0.style.boxShadow = 'none'; } }
       else { box.classList.add('big'); box.style.left = (sx - 48) + 'px'; box.style.top = (sy - 75) + 'px'; }
       layer.appendChild(box);
       const delay = seq ? n * gap : j.k * gap, land = Date.now() + delay + per;
