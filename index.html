@@ -907,6 +907,22 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 .tc.new .card.flown, .flyp .card { animation: none !important; }
 .trick.lasttrick .tc + .tc { margin-left: 0 !important; }
 .endpeek .ltwrap { margin: 4px 0 8px; }
+.bidbar { padding: 4px 8px; gap: 4px; margin-bottom: 4px; }
+.bidbar .bb { min-width: 36px; height: 34px; font-size: 1.1rem; }
+.bidbar .bbs, .bidsl { align-items: center; gap: 5px; }
+.bidbar .rb, .xpick .bidsl .rb { width: 28px; height: 28px; font-size: 1rem; }
+.bidbar .bidsl output { font-size: 1.15rem; }
+.bidbar .bidsl .btn.primary { padding: 4px 10px; }
+.bidmode { font-size: .68rem; padding: 1px 7px; opacity: .8; min-height: 0; line-height: 1.5; align-self: center; }
+.bidbar .btn.bidmode, .xpick .btn.bidmode { font-size: .66rem; padding: 2px 7px; min-height: 0; height: auto; line-height: 1.3; border-radius: 999px; white-space: nowrap; }
+.bidbar .bidsl { flex-wrap: nowrap; }
+.bidbar .bidsl input[type=range] { flex: 1 1 60px; min-width: 50px; }
+.bidbar .bidsl .btn.primary { white-space: nowrap; }
+.bidbar .bbs > .bidsl { width: 100%; min-width: 0; justify-content: center; }
+.bidbar .bidsl input[type=range] { min-width: 36px; }
+.bidbar { grid-template-columns: minmax(0, 1fr); }
+.bidbar .bbs { min-width: 0; max-width: 100%; }
+.bidbar .bidsl input[type=range] { width: 60px; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -2564,7 +2580,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     const mem = new MemStore();
     let role = null, peer = null, code = null, myPid = null;
     const conns = new Set();           // Host: offene Verbindungen
-    let conn = null, queue = [], linkUp = false, retryT = null, closed = false, saveT = null, quotaWarned = false, lastWant = null, hoBusy = false, actId = 0, bkMine = null, bkBlob = null;
+    let helloPend = 0, conn = null, queue = [], linkUp = false, retryT = null, closed = false, saveT = null, quotaWarned = false, lastWant = null, hoBusy = false, actId = 0, bkMine = null, bkBlob = null;
     const actP = new Map();
     
     const TAKE_MS = 60000;
@@ -2735,6 +2751,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     const xor32 = (a, b) => { const o = new Uint8Array(32); for (let i = 0; i < 32; i++) o[i] = a[i] ^ b[i]; return o; };
     const aesKey = (raw, use) => crypto.subtle.importKey('raw', raw, 'AES-GCM', false, [use]);
     const bkOk = () => typeof crypto !== 'undefined' && !!crypto.subtle && typeof btoa === 'function';
+    const devOf = h => { let s = ''; for (let i = 0; i < 16; i++) s += String.fromCharCode(h[i]); return 'd_' + btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
     const BK = { kid: 0, raw: null, key: null, bpid: null, hpid: null, t: null, n: 0 };
     function bkPlan() {
       if (role !== 'host' || !bkOk()) return;
@@ -2811,22 +2828,72 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         persist(op.p);
       } else {
         mem.apply(op);
-        if (linkUp && conn && conn.open) sendTo(conn, { t: 'op', op }); else queue.push(op);
+        if (linkUp && conn && conn.open && !helloPend) sendTo(conn, { t: 'op', op }); else queue.push(op);
       }
       return Promise.resolve();
     }
 
+    // Kennung prüfen: Unterschrift passt zum Schlüssel, Schlüssel passt zur Gerätekennung, Gerät darf diese Platz-Kennung nutzen
+    async function checkHello(c, msg) {
+      const pid = String(msg.pid || '').slice(0, 64);
+      let dev = null;
+      try {
+        if (msg.pk && msg.sig && msg.dev && crypto && crypto.subtle && c._nonce) {
+          const raw = b64d(String(msg.pk)), h = new Uint8Array(await crypto.subtle.digest('SHA-256', raw));
+          if (devOf(h) === msg.dev) {
+            const key = await crypto.subtle.importKey('spki', raw, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+            if (await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, b64d(String(msg.sig)), new TextEncoder().encode(c._nonce + '|' + pid))) dev = msg.dev;
+          }
+        }
+      } catch (e) { dev = null; }
+      c._dev = dev;
+      const r = typeof hooks.allowPid === 'function' ? hooks.allowPid(pid, dev, metaDoc()) : 'ok';
+      if (r === 'bind' && dev && typeof hooks.bindPid === 'function') hooks.bindPid(pid, dev);
+      return r === 'deny' ? 'deny' : 'ok';
+    }
+    // Eigene Änderungen warten, bis die (unterschriebene) Anmeldung raus ist – sonst kämen sie unter alter Kennung an
+    function sayHello(c) {
+      const pid = myPid, n = c._nonce || '';
+      if (!pid) { sendTo(c, { t: 'hello', pid: '' }); return; }
+      helloPend++;
+      Promise.resolve(typeof hooks.identity === 'function' ? hooks.identity() : null)
+        .then(id => id && n ? id.sign(n + '|' + pid).then(sig => ({ dev: id.dev, pk: id.pk, sig })) : {})
+        .catch(() => ({}))
+        .then(pr => {
+          if (pid === myPid) sendTo(c, Object.assign({ t: 'hello', pid }, pr));
+          helloPend = Math.max(0, helloPend - 1);
+          if (!helloPend && linkUp && conn && conn.open && queue.length) { const q = queue; queue = []; q.forEach(op => sendTo(conn, { t: 'op', op })); }
+        });
+    }
     function hostWire(c) {
       c.on('open', () => {
         conns.add(c);
         // Erst die Kennung des Geräts abwarten (wird erfragt), damit es von Anfang an nur seine Sicht bekommt
-        sendTo(c, { t: 'who' });
+        c._nonce = b64e(rnd32()).slice(0, 24);
+        sendTo(c, { t: 'who', n: c._nonce });
         c._helloT = setTimeout(() => { if (!c._synced) { c._synced = true; syncConn(c); } }, 3000);
       });
-      c.on('data', raw => {
+      const onData = raw => {
         const msg = unpack(raw); if (!msg) return;
         if (!msg || typeof msg !== 'object') return;
+        // Drosselung: höchstens 60 Nachrichten und 12 Züge pro Sekunde je Gerät
+        const now = Date.now(); if (!c._rl || now - c._rl.t > 1000) c._rl = { t: now, n: 0, a: 0 };
+        if (++c._rl.n > 60 && msg.t !== 'hello!') return;
+        if (msg.t === 'act' && ++c._rl.a > 12) { sendTo(c, { t: 'actr', id: msg.id, r: { toasts: ['Zu viele Züge auf einmal.'], ok: false } }); return; }
         if (msg.t === 'hello') {
+          if (c._hv) { (c._hb = c._hb || []).push(msg); return; }
+          c._hv = true;
+          checkHello(c, msg).then(r => {
+            if (r === 'deny') sendTo(c, { t: 'deny', pid: String(msg.pid || '') });
+            else onData({ t: 'hello!', pid: String(msg.pid || '') });
+            c._hv = false;
+            const b = c._hb || []; c._hb = [];
+            b.forEach(onData);
+          });
+          return;
+        }
+        if (c._hv && msg.t !== 'hello!') { (c._hb = c._hb || []).push(msg); return; }
+        if (msg.t === 'hello!') {
           const np = String(msg.pid || ''), changed = c._pid !== np;
           c._pid = np; pushPresence();
           if (!c._synced) { c._synced = true; clearTimeout(c._helloT); syncConn(c); }
@@ -2856,7 +2923,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
           sendDoc(op.p, mem.get(op.p));
           persist(op.p);
         }
-      });
+      };
+      c.on('data', onData);
       const drop = () => {
         clearTimeout(c._helloT);
         if (conns.delete(c)) pushPresence();
@@ -2970,7 +3038,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         retryT = setTimeout(() => clientConnect(first), 3000);
       };
       c._fail = fail;
-      c.on('open', () => sendTo(c, { t: 'hello', pid: myPid }));
+      c.on('open', () => {});
       c.on('data', raw => {
         if (!gotReady) arm(20000);
         const msg = unpack(raw); if (!msg) return;
@@ -2994,7 +3062,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
           mem.put(msg.p, nd);
         }
         else if (msg.t === 'pres') hooks.onPresence(msg.l);
-        else if (msg.t === 'who') sendTo(c, { t: 'hello', pid: myPid });
+        else if (msg.t === 'who') { c._nonce = typeof msg.n === 'string' ? msg.n : ''; sayHello(c); }
+        else if (msg.t === 'deny') { if (typeof hooks.onDeny === 'function') hooks.onDeny(msg.pid); }
         else if (msg.t === 'bks' && msg.kid && Array.isArray(msg.s)) { bkMine = { kid: msg.kid, s: msg.s.slice(0, 2).map(String), h: !!msg.h }; bkBlob = null; }
         else if (msg.t === 'bk' && msg.kid && typeof msg.iv === 'string' && typeof msg.ct === 'string') { if (bkMine && !bkMine.h && bkMine.kid === msg.kid) bkBlob = { kid: msg.kid, iv: msg.iv, ct: msg.ct }; }
         else if (msg.t === 'bkx') { bkMine = null; bkBlob = null; }
@@ -3042,7 +3111,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       del: p => write({ k: 'del', p }),
       watchDoc: (p, cb) => mem.watchDoc(p, cb),
       watchCol: (c, cb) => mem.watchCol(c, cb),
-      enter(roomCode, pid) { myPid = pid; if (role === 'host') pushPresence(); else if (conn) sendTo(conn, { t: 'hello', pid }); },
+      enter(roomCode, pid) { myPid = pid; if (role === 'host') pushPresence(); else if (conn) sayHello(conn); },
       setPid(pid) { this.enter(code, pid); },
       isHost: () => role === 'host',
       want(list) { lastWant = list; if (role === 'client' && linkUp && conn && conn.open) sendTo(conn, { t: 'want', l: list }); },
@@ -3384,11 +3453,11 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   
   const botMinTxt = () => (Math.max(0, Math.min(50, +settings().botMin || 0)) / 10).toLocaleString('de-DE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' s';
   const bidSlider = () => LS.get('wiz.bidsl') !== '0';
-  const bidModeBtn = () => '<button class="btn small ghost bidmode" data-act="bidSlTog">' + (bidSlider() ? 'Lieber Zahlen-Tasten' : 'Lieber Schieberegler') + '</button>';
-  function bidSliderHTML(max, forb, btn) {
+  const bidModeBtn = () => '<button class="btn small ghost bidmode" data-act="bidSlTog" title="' + (bidSlider() ? 'Lieber Zahlen-Tasten' : 'Lieber Schieberegler') + '" aria-label="' + (bidSlider() ? 'Lieber Zahlen-Tasten' : 'Lieber Schieberegler') + '">⇄</button>';
+  function bidSliderHTML(max, forb, btn, extra) {
     const v = Math.max(0, Math.min(max, UI.bidV | 0));
     UI.bidV = v; UI.bidMax = max; UI.bidForb = forb; UI.bidBtn = btn;
-    return '<div class="bidsl"><button class="rb" data-act="bidSl" data-d="-1" aria-label="Weniger">−</button><input id="bid-r" type="range" min="0" max="' + max + '" step="1" value="' + v + '" aria-label="Tipp"><button class="rb" data-act="bidSl" data-d="1" aria-label="Mehr">+</button><output id="bid-o">' + v + '</output><span id="bid-b">' + btn(v, v === forb) + '</span></div>';
+    return '<div class="bidsl"><button class="rb" data-act="bidSl" data-d="-1" aria-label="Weniger">−</button><input id="bid-r" type="range" min="0" max="' + max + '" step="1" value="' + v + '" aria-label="Tipp"><button class="rb" data-act="bidSl" data-d="1" aria-label="Mehr">+</button><output id="bid-o">' + v + '</output><span id="bid-b">' + btn(v, v === forb) + '</span>' + (extra || '') + '</div>';
   }
   function bidSlUpd() {
     const v = UI.bidV, o = $('#bid-o'), r = $('#bid-r'), b = $('#bid-b');
@@ -3427,7 +3496,23 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     },
     onListenError() { toast('Die Verbindung zu den Spieldaten ist abgebrochen. Bitte die Seite neu laden.'); },
     onPresence(list) { S.online = list ? new Set(list) : null; requestRender(); },
-    onLink(up) { S.connected = up; requestRender(); syncWake(); if (up && S.code) setTimeout(() => { if (runsGame()) { botTick(); hostSched(); } }, 80); },
+    onLink(up) { S.connected = up; requestRender(); syncWake(); if (up) setTimeout(bindSelf, 300); if (up && S.code) setTimeout(() => { if (runsGame()) { botTick(); hostSched(); } }, 80); },
+    identity: () => identity(),
+    // Darf dieses Gerät die Platz-Kennung nutzen? Gebundene Kennungen nur vom eigenen Gerät; Computerplätze und die Spielleitung nie von außen
+    allowPid(pid, dev, m) {
+      if (!m || !pid) return 'ok';
+      const o = (m.own || {})[pid];
+      if (o) return o === dev ? 'ok' : 'deny';
+      if (pid === m.host || (m.players && m.players[pid] && m.players[pid].bot)) return 'deny';
+      return dev ? 'bind' : 'ok';
+    },
+    bindPid(pid, dev) { if (S.code && runsGame() !== null) w(backend.update(gamePath(), { own: { [pid]: dev } })); },
+    onDeny(pid) {
+      if (!S.code || pid !== S.pid) return;
+      const np = 'w' + genId();
+      pidLS(np); LS.del('wiz.claim.' + S.code); S.pid = np; S.joined = false; S.watch = true; backend.setPid(np);
+      toast('Dieser Platz gehört einem anderen Gerät. Du bist als Zuschauer im Raum – die Spielleitung kann dich einem Platz zuordnen.'); render();
+    },
     backupPlan: () => ({ on: settings().backup !== false && !!S.meta && S.meta.status === 'playing', order: takeCand() }),
     onNotice(t) { toast(t); },
     imgFor: (k, g) => imgFor(k, g),
@@ -3462,6 +3547,34 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     }
   };
   // Unerwartete Übernahme abschließen (rest = Spielstand der Ersatz-Leitung wurde wiederhergestellt)
+  function bindSelf() {
+    if (!S.code || !S.meta || !S.pid || S.mode !== 'peer' || !backend.isHost || !backend.isHost()) return;
+    Promise.resolve(identity()).then(id => { if (id && S.meta && (S.meta.own || {})[S.pid] !== id.dev) w(backend.update(gamePath(), { own: { [S.pid]: id.dev } })); });
+  }
+  // Geräteschlüssel (ECDSA P-256): Die Kennung ist der Fingerabdruck des öffentlichen Schlüssels, der geheime bleibt auf dem Gerät
+  const IDK = { p: null };
+  function identity() {
+    if (IDK.p) return IDK.p;
+    const C = typeof crypto !== 'undefined' && crypto.subtle;
+    if (!C) return (IDK.p = Promise.resolve(null));
+    const be = u => { let s = ''; for (let i = 0; i < u.length; i++) s += String.fromCharCode(u[i]); return btoa(s); };
+    const bd = s => { const b = atob(s), u = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) u[i] = b.charCodeAt(i); return u; };
+    IDK.p = (async () => {
+      const alg = { name: 'ECDSA', namedCurve: 'P-256' };
+      let st = null; try { st = JSON.parse(LS.get('wiz.dk') || 'null'); } catch (e) { st = null; }
+      let priv, pub;
+      if (st && st.priv && st.pub) { priv = await C.importKey('jwk', st.priv, alg, false, ['sign']); pub = bd(st.pub); }
+      else {
+        const kp = await C.generateKey(alg, true, ['sign', 'verify']);
+        pub = new Uint8Array(await C.exportKey('spki', kp.publicKey));
+        LS.set('wiz.dk', JSON.stringify({ priv: await C.exportKey('jwk', kp.privateKey), pub: be(pub) }));
+        priv = kp.privateKey;
+      }
+      const h = new Uint8Array(await C.digest('SHA-256', pub)), dev = 'd_' + be(h.slice(0, 16)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      return { dev, pk: be(pub), sign: async n => be(new Uint8Array(await C.sign({ name: 'ECDSA', hash: 'SHA-256' }, priv, new TextEncoder().encode(n)))) };
+    })().catch(() => null);
+    return IDK.p;
+  }
   function takeOver(rest) {
     if (!S.code || !backend.isHost || !backend.isHost()) return;
     {
@@ -3748,16 +3861,19 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     if (op.k !== 'upd' || !op.d || typeof op.d !== 'object' || Array.isArray(op.d)) return false;
     const known = mayRead(pid, m), asg = Object.keys(m.assign || {}).find(o => m.assign[o] && m.assign[o].to === pid);
     const own = (k, v, extra) => v && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(q => q === pid || (extra && extra(q)));
+    // Grenzen: Name höchstens 24 Zeichen, Bild höchstens 40 000 Zeichen, Emoji höchstens 8 Zeichen
+    const okEntry = e => e === null || (e && typeof e === 'object' && !Array.isArray(e) && JSON.stringify(e).length <= 41000 && (e.name === undefined || (typeof e.name === 'string' && e.name.length <= 24)) && (e.av === undefined || (typeof e.av === 'string' && e.av.length <= 40000)));
+    const okAll = v => Object.keys(v).every(q => okEntry(v[q]));
     for (const k of Object.keys(op.d)) {
       const v = op.d[k];
-      if (k === 'req') { if (!own(k, v)) return false; }
+      if (k === 'req') { if (!own(k, v) || !okAll(v)) return false; if (v[pid] && !(m.req || {})[pid] && Object.keys(m.req || {}).filter(q => m.req[q]).length >= 10) return false; }
       else if (k === 'players') {
-        if (!known || !own(k, v)) return false;
+        if (!known || !own(k, v) || !okAll(v)) return false;
         const e = v[pid];
         if (e && typeof e === 'object' && (e.bot === true || e.lvl !== undefined || (e.auto === true))) return false;
       }
-      else if (k === 'watchers') { if (!known || !own(k, v, q => q === asg)) return false; }
-      else if (k === 'emo') { if (!known || !own(k, v)) return false; }
+      else if (k === 'watchers') { if (!known || !own(k, v, q => q === asg) || !okAll(v)) return false; }
+      else if (k === 'emo') { if (!known || !own(k, v) || !Object.keys(v).every(q => v[q] === null || (v[q] && typeof v[q] === 'object' && typeof v[q].e === 'string' && v[q].e.length <= 8 && typeof v[q].t === 'number'))) return false; }
       else if (k === 'assign') { if (!asg || !own(k, v, q => q === asg) || v[pid] !== undefined) return false; }
       else if (k === 'host') {
         const away = !(online || []).includes(m.host);
@@ -5077,8 +5193,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       const wid = el.dataset.id, sel = $('#as-' + wid), to = sel && sel.value;
       if (!isHost() || !to || !S.meta.players[to]) return;
       const wn = ((S.meta.watchers || {})[wid] || {}).name || 'Jemand';
-      if (wid === S.pid) { confirmBox('Du übernimmst den Platz von ' + pname(to) + (S.meta.players[to].bot ? '. Der Computer spielt dort dann nicht mehr.' : '. Das Gerät, das bisher dort saß, schaut danach zu.') + ' Die Spielleitung bleibt bei dir.', 'Übernehmen', () => w(backend.update(gamePath(), { assign: { [wid]: { to: to, t: Date.now() } } }))); return; }
-      confirmBox(wn + ' übernimmt den Platz von ' + pname(to) + (S.meta.players[to].bot ? '. Der Computergegner wird dadurch zu einer echten Person.' : to === S.meta.host ? '. Mit dem Platz geht auch die Spielleitung über; das bisherige Gerät schaut danach nur noch zu.' : '. Das Gerät, das bisher auf diesem Platz war, schaut danach nur noch zu.'), 'Zuordnen', () => w(backend.update(gamePath(), { assign: { [wid]: { to: to, t: Date.now() } } })));
+      if (wid === S.pid) { confirmBox('Du übernimmst den Platz von ' + pname(to) + (S.meta.players[to].bot ? '. Der Computer spielt dort dann nicht mehr.' : '. Das Gerät, das bisher dort saß, schaut danach zu.') + ' Die Spielleitung bleibt bei dir.', 'Übernehmen', () => w(backend.update(gamePath(), Object.assign({ assign: { [wid]: { to: to, t: Date.now() } } }, (S.meta.own || {})[wid] ? { own: { [to]: S.meta.own[wid] } } : {})))); return; }
+      confirmBox(wn + ' übernimmt den Platz von ' + pname(to) + (S.meta.players[to].bot ? '. Der Computergegner wird dadurch zu einer echten Person.' : to === S.meta.host ? '. Mit dem Platz geht auch die Spielleitung über; das bisherige Gerät schaut danach nur noch zu.' : '. Das Gerät, das bisher auf diesem Platz war, schaut danach nur noch zu.'), 'Zuordnen', () => w(backend.update(gamePath(), Object.assign({ assign: { [wid]: { to: to, t: Date.now() } } }, (S.meta.own || {})[wid] ? { own: { [to]: S.meta.own[wid] } } : {}))));
     },
     seat(el) {
       const id = el.dataset.id;
@@ -6499,9 +6615,9 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     const canBid = c.seated && d.phase === 'bid' && !d.hasBid(me) && (d.simultaneous || d.bidTurn === me);
     if (canBid) {
       let btns = '';
-      if (bidSlider()) btns = bidSliderHTML(d.n, d.forbidden, (v, dis) => '<button class="btn primary" data-act="bid" data-k="' + v + '"' + (dis ? ' disabled title="Gesperrt"' : '') + '>' + v + (v === 1 ? ' Stich' : ' Stiche') + ' tippen</button>');
-      else for (let k = 0; k <= d.n; k++) btns += '<button class="bb" data-act="bid" data-k="' + k + '"' + (k === d.forbidden ? ' disabled title="Gesperrt: Die Summe darf nicht ' + d.n + ' ergeben."' : '') + '>' + k + '</button>';
-      bidbar = '<div class="bidbar"><span class="bl">Wie viele Stiche machst du?</span><div class="bbs">' + btns + '</div>' + bidModeBtn() + (d.forbidden !== null ? '<small>Plus/Minus Eins: ' + d.forbidden + ' ist gesperrt, weil die Summe sonst ' + d.n + ' ergäbe.</small>' : '') + '</div>';
+      if (bidSlider()) btns = bidSliderHTML(d.n, d.forbidden, (v, dis) => '<button class="btn primary" data-act="bid" data-k="' + v + '"' + (dis ? ' disabled title="Gesperrt"' : '') + '>' + v + (v === 1 ? ' Stich' : ' Stiche') + ' tippen</button>', bidModeBtn());
+      else { for (let k = 0; k <= d.n; k++) btns += '<button class="bb" data-act="bid" data-k="' + k + '"' + (k === d.forbidden ? ' disabled title="Gesperrt: Die Summe darf nicht ' + d.n + ' ergeben."' : '') + '>' + k + '</button>'; btns += bidModeBtn(); }
+      bidbar = '<div class="bidbar" aria-label="Wie viele Stiche machst du?"><div class="bbs">' + btns + '</div>' + (d.forbidden !== null ? '<small>Plus/Minus Eins: ' + d.forbidden + ' ist gesperrt, weil die Summe sonst ' + d.n + ' ergäbe.</small>' : '') + '</div>';
     }
 
     
@@ -6552,6 +6668,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   const witName = (c, D) => HX.isWiz(c) ? D.games.witches.wiz.name : D.games.witches.suits[SUITS.indexOf(c[0])].name + ' ' + c.slice(1) + (c.slice(1) === '11' ? ' (' + WIT_EL[c[0]] + 'hexe)' : c === HX.PQ ? ' (Pygmäen-Königin)' : '');
   const suitName = (X, c, g) => X.D.games[g || 'wizard'].suits[SUITS.indexOf(c)].name;
   function unoCardHTML(c, X, o) {
+    // Verdeckte oder unbekannte Karte (z. B. kurz nach einem Platzwechsel): Rückseite statt Absturz
+    if (typeof c !== 'string' || !(c === 'W' || c === 'F' || SUITS.indexOf(c[0]) >= 0)) return backHTML(X, 'uno');
     o = Object.assign({}, o || {});
     o.key = 'u_' + c; o.title = unoName(c, X.D); o.game = 'uno';
     if (c === 'W') { o.label = 'Farbwahl'; return plainCard('Z', '★\uFE0E', X, o); }
@@ -6562,6 +6680,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     return plainCard(c[0], k === 'S' ? '⊘' : k === 'R' ? '⇄' : k === 'D' ? '+2' : k, X, o);
   }
   function p10CardHTML(c, X, o) {
+    // Verdeckte oder unbekannte Karte (z. B. kurz nach einem Platzwechsel): Rückseite statt Absturz
+    if (typeof c !== 'string' || !(c === 'W' || c === 'S' || SUITS.indexOf(c[0]) >= 0)) return backHTML(X, 'phase10');
     o = Object.assign({}, o || {});
     o.key = 'p_' + c; o.title = p10Name(c, X.D); o.game = 'phase10';
     if (c === 'W') { o.label = 'Joker'; return plainCard('Z', '★\uFE0E', X, o); }
@@ -6570,6 +6690,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     return plainCard(c[0], c.slice(1), X, o);
   }
   function witCardHTML(c, X, o) {
+    // Verdeckte oder unbekannte Karte (z. B. kurz nach einem Platzwechsel): Rückseite statt Absturz
+    if (typeof c !== 'string' || !(HX.isWiz(c) || SUITS.indexOf(c[0]) >= 0)) return backHTML(X, 'witches');
     o = Object.assign({}, o || {});
     if (HX.isWiz(c)) { const wz = X.D.games.witches.wiz; o.key = 'w_' + c; o.title = wz.name; o.label = wz.name; o.game = 'witches'; return plainCard('Z', sym(wz.sym), X, o); }
     const v = c.slice(1);
@@ -7108,6 +7230,9 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       if (!moved) break;
     }
     const minY = top - mr.top + 4;
+    // Lücke zwischen oberer Leiste und dem obersten Platz halbieren: alle Plätze um die halbe Lücke nach oben
+    const gap = Math.min.apply(null, bs.map(b => b.y)) - minY;
+    if (gap > 0) bs.forEach(b => { b.y -= gap / 2; });
     bs.forEach(b => { if (b.y < minY) b.y = minY; b.el.style.top = b.y + 'px'; });
     
     const ce = main.querySelector('.center');
@@ -9280,9 +9405,9 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         else if (bidding) {
           const mineOpen = seated && typeof bids[me] !== 'number';
           let btns = '';
-          if (bidSlider()) btns = bidSliderHTML(s.cards, null, (v, dis) => xBtn('bid', v + ' ansagen', ' data-v="' + v + '"' + (dis ? ' disabled' : ''), 'primary'));
+          if (bidSlider()) btns = bidSliderHTML(s.cards, null, (v, dis) => xBtn('bid', v + ' ansagen', ' data-v="' + v + '"' + (dis ? ' disabled' : ''), 'primary'), bidModeBtn());
           else for (let v = 0; v <= s.cards; v++) btns += xBtn('bid', String(v), ' data-v="' + v + '"');
-          center = mineOpen ? xPick('Wie viele Stiche machst du in diesem Durchgang? Alle sagen gleichzeitig an.', btns + bidModeBtn()) : '';
+          center = mineOpen ? xPick('Wie viele Stiche machst du in diesem Durchgang? Alle sagen gleichzeitig an.', btns + (bidSlider() ? '' : bidModeBtn())) : '';
           status = (mineOpen ? '<b>Sag deine Stiche an.</b> ' : '') + 'Es fehlen noch: ' + s.order.filter(q => typeof bids[q] !== 'number').map(xNm).join(', ');
         } else {
           center = xTrick(s, (c, e) => card(c, X, null, e), P) + (myTurn && U.tig ? xPick('Als was spielst du die Tigress?', xBtn('tig', 'Als Piratin', ' data-v="P"', 'primary') + xBtn('tig', 'Als Flucht', ' data-v="F"')) : '');
