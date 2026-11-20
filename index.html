@@ -887,6 +887,17 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 .ptchart svg { max-height: 220px; max-width: 560px; margin: 0 auto; }
 .thpick { flex-wrap: wrap; gap: 6px; }
 .thpick .btn.on { background: var(--brass); color: var(--night); border-color: var(--brass); }
+.menu .mhead { margin: 10px 0 0; font-size: 15px; color: var(--brass); display: flex; align-items: baseline; gap: 8px; border-top: 1px solid var(--line); padding-top: 10px; }
+.menu .mhead:first-child { margin-top: 0; border-top: 0; padding-top: 0; }
+.menu .mhead small { font-family: var(--body); font-size: 12px; color: var(--mist); font-weight: 400; }
+.menu .mhead.sep { padding-top: 0; margin-top: 4px; }
+.menu .btn.danger { border-color: var(--bad); color: var(--bad); }
+.menu details.mlead > summary.mhead { cursor: pointer; list-style: none; }
+.menu details.mlead > summary.mhead::-webkit-details-marker { display: none; }
+.menu details.mlead > summary.mhead::before { content: '▸'; font-size: 12px; display: inline-block; transition: transform .15s; }
+.menu details.mlead[open] > summary.mhead::before { transform: rotate(90deg); }
+.menu .mleadin { display: grid; gap: 8px; margin-top: 8px; }
+.menu details.mlead > summary.mhead { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; font-family: var(--display); font-weight: 700; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -5228,7 +5239,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     else if (t.dataset.ed && (t.type === 'color' || t.type === 'range')) edChange(t, true);
     else if (t.dataset.theme) { const th = themeGet(); th[t.dataset.theme] = t.value; LS.set('wiz.theme', JSON.stringify(th)); themeKeep(th); applyTheme(); }
   });
-  document.addEventListener('toggle', ev => { const t = ev.target; if (t && t.classList && t.classList.contains('edgrp')) UI.edGrpOpen = t.open; }, true);
+  document.addEventListener('toggle', ev => { const t = ev.target; if (t && t.classList && t.classList.contains('edgrp')) UI.edGrpOpen = t.open; if (t && t.classList && t.classList.contains('mlead')) UI.leadOpen = t.open; }, true);
   document.addEventListener('change', ev => {
     const t = ev.target;
     if (t.id === 'ed-sel') { ED.id = t.value; ED.pick = null; ensureImgs(ED.id); refreshDyn(); renderModal(true); }
@@ -7345,39 +7356,53 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     '<p><b>Blinde erste Runde:</b> In Runde 1 siehst du nur die Karten der anderen und tippst, ohne deine eigene zu kennen.</p>';
 
   function menuHTML() {
-    const playing = S.meta && S.meta.status === 'playing', host = isHost(), st = settings();
+    const playing = S.meta && S.meta.status === 'playing', host = isHost(), st = settings(), game = (playing ? S.meta.game : st.game) || 'wizard';
     const stepBtns = (k, d, lo, hi, val, unit, lab) => '<span class="steps">' + (lab || '') + '<button class="rb" data-act="num" data-k="' + k + '" data-d="-' + d + '" data-lo="' + lo + '" data-hi="' + hi + '" aria-label="Weniger">−</button><output>' + val + unit + '</output><button class="rb" data-act="num" data-k="' + k + '" data-d="' + d + '" data-lo="' + lo + '" data-hi="' + hi + '" aria-label="Mehr">+</button></span>';
+    const loc = (k, lab, v, d) => '<div class="animctl"><b>' + lab + '</b><span class="steps"><button class="rb" data-act="locStep" data-k="' + k + '" data-d="-' + d + '" aria-label="' + lab + ' kleiner">−</button><output>' + v + ' %</output><button class="rb" data-act="locStep" data-k="' + k + '" data-d="' + d + '" aria-label="' + lab + ' größer">+</button></span>' + (v !== 100 ? '<button class="btn small ghost" data-act="locStep" data-k="' + k + '" data-d="0">100 %</button>' : '') + '</div>';
+    const sec = (title, body, cls) => body ? '<h3 class="mhead' + (cls ? ' ' + cls : '') + '">' + title + '</h3>' + body : '';
     let h = '<p class="menuinfo">Raumcode <b>' + esc(S.code) + '</b> · Spielleitung: <b>' + esc(pname(S.meta.host)) + '</b></p>' + (playing ? watchersHTML() : '') + '<div class="menu">';
-    if (host) h += '<button class="btn" data-act="tog" data-k="spec">Kartenansicht für Zuschauer ' + (st.spec !== true ? 'einschalten' : 'ausschalten') + '</button>';
-    if (playing) h += '<button class="btn" data-act="viewTog">Ansicht: ' + (viewRound() ? 'um den Tisch' : 'alle oben') + ' (wechseln)</button>';
-    if (playing && !S.joined && st.spec === true) h += '<button class="btn" data-act="specView">Handkarten der Spieler: ' + (specAtSeat() ? 'beim Spieler' : 'unten') + ' (wechseln)</button>';
-    h += '<button class="btn" data-act="confTog">Kartenbestätigung: ' + (confOn() ? 'an (Karte zweimal antippen)' : 'aus (einmal tippen spielt sofort)') + '</button>';
-    h += '<button class="btn" data-act="modal" data-m="score">Punktetafel</button><button class="btn" data-act="modal" data-m="rules">Regeln</button>';
-    
-    if (playing) { if (host) h += '<div class="animctl"><b>Kartenset</b><select id="lob-design">' + '<option value="default">Standard</option>' + S.designs.map(d => '<option value="' + esc(d.id) + '"' + (S.meta.designId === d.id ? ' selected' : '') + '>' + esc(normDesign(d.data).name) + '</option>').join('') + '</select></div>'; }
-    else h += '<button class="btn" data-act="modal" data-m="editor">' + (S.code && !host ? 'Karten ansehen' : 'Karten bearbeiten') + '</button>';
-    if (S.joined) h += '<button class="btn" data-act="modal" data-m="avatar">Mein Bild ändern</button>';
-    const loc = (k, lab, v, d) => '<div class="animctl"><b>' + lab + '</b><span class="steps"><button class="rb" data-act="locStep" data-k="' + k + '" data-d="-' + d + '" aria-label="' + lab + ' kleiner">−</button><output>' + v + ' %</output><button class="rb" data-act="locStep" data-k="' + k + '" data-d="' + d + '" aria-label="' + lab + ' größer">+</button></span>' + (v !== 100 ? '<button class="btn small ghost" data-act="locStep" data-k="' + k + '" data-d="0">100 %</button>' : '') + '<span class="fine">nur auf diesem Gerät</span></div>';
-    h += loc('cscale', 'Kartengröße', cardScale(), 5) + loc('zoom', 'Zoom gesamt', zoomLvl(), 5);
-    h += themePickHTML();
-    if (host) h += '<div class="animctl"><b>Computer überlegt mindestens</b>' + stepBtns('botMin', 5, 0, 50, botMinTxt(), '') + '</div>';
-    h += '<div class="animctl"><b>Meine Kartenreihenfolge</b>' + Object.keys(HAND_MODES).map(k => '<button class="btn small' + (handMode() === k ? ' on' : '') + '" data-act="hsortSet" data-v="' + k + '">' + HAND_MODES[k] + '</button>').join('') + '<button class="btn small' + (LS.get('wiz.hrev') === '1' ? ' on' : '') + '" data-act="hrevTog">⇄ umgedreht</button><span class="fine">nur auf diesem Gerät</span></div>';
-    h += '<button class="btn" data-act="sigTog">„Du bist dran“ im Tab-Titel: ' + (sigOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button><button class="btn" data-act="sndTog">Ton, wenn du dran bist: ' + (sndOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>';
-    if (host) h += '<div class="animctl"><b>Zugzeit</b><button class="btn small" data-act="tog" data-k="tlOn">' + (st.tlOn ? 'ausschalten' : 'einschalten') + '</button>' + (st.tlOn ? stepBtns('tlSec', 15, 15, 300, tlSec(), ' s') : '') + '</div>';
-    h += '<button class="btn" data-act="modal" data-m="lb">Rangliste der Sitzung</button>';
-    if (playing) h += '<button class="btn" data-act="modal" data-m="hist">Spielverlauf</button>';
-    h += '<button class="btn" data-act="liteTog">Leistungsmodus: ' + (UI.lite ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>';
-    h += '<button class="btn" data-act="bidSlTog">Tipp abgeben: ' + (bidSlider() ? 'Schieberegler mit − und + (wechseln)' : 'Zahlenknöpfe (wechseln)') + '</button>';
+    // 1. Spiel: nachlesen und nachschlagen
+    let g = '<button class="btn" data-act="modal" data-m="score">Punktetafel</button>';
+    if (playing) g += '<button class="btn" data-act="modal" data-m="hist">Spielverlauf</button>';
+    g += '<button class="btn" data-act="modal" data-m="lb">Rangliste der Sitzung</button><button class="btn" data-act="modal" data-m="rules">Regeln</button>';
+    if (!playing && !host) g += '<button class="btn" data-act="modal" data-m="editor">Karten ansehen</button>';
+    h += sec('Spiel', g);
+    // 2. Spielleitung: Ablauf, Computer, Tisch, Übergabe
     if (host) {
-      h += '<div class="animctl"><b>Ziehanimation</b><button class="btn small" data-act="tog" data-k="anim">' + (st.anim === false ? 'einschalten' : 'ausschalten') + '</button>' + (st.anim === false ? '' : '<button class="btn small" data-act="setv" data-k="animMode" data-v="' + (st.animMode === 'all' ? 'seq' : 'all') + '">' + (st.animMode === 'all' ? 'gleichzeitig → nacheinander' : 'nacheinander → gleichzeitig') + '</button>' + stepBtns('animMs', 50, 100, 1500, Math.max(100, Math.min(1500, st.animMs || 350)), ' ms') + stepBtns('animMax', 1, 1, 30, Math.max(1, Math.min(30, st.animMax || 6)), ' s', 'höchstens ')) + '</div>';
-      h += '<div class="animctl"><b>Gelegte Karten überlappen</b>' + stepBtns('overlap', 5, 0, 80, Math.max(0, Math.min(80, st.overlap || 0)), ' %') + '</div>';
-    }
-    if (host && playing) h += S.meta.order.filter(p => p !== S.pid && !isRealBot(p)).map(p => '<button class="btn" data-act="auto" data-id="' + esc(p) + '">' + (S.meta.players[p] && S.meta.players[p].auto ? esc(pname(p)) + ' spielt wieder selbst' : 'Computer spielt für ' + esc(pname(p))) + '</button>').join('');
-    if (host) h += players().filter(p => p.bot).map(p => (playing ? '' : '<button class="btn" data-act="rename" data-id="' + esc(p.id) + '">' + esc(p.name) + ' umbenennen</button>') + '<button class="btn" data-act="lvl" data-id="' + esc(p.id) + '">' + esc(p.name) + ': Stufe ' + LEVELS[botLevel(p.id)] + ' (wechseln)</button>').join('');
-    if (host) h += players().filter(p => !p.bot && p.id !== S.pid).map(p => '<button class="btn" data-act="giveHost" data-id="' + esc(p.id) + '">Spielleitung an ' + esc(p.name) + ' übertragen</button>').join('');
-    if (host && playing) h += '<button class="btn" data-act="abort">Spiel abbrechen</button>';
-    return h + '<button class="btn ghost" data-act="leave">Raum verlassen</button></div>';
+      let l = '';
+      if (playing) l += S.meta.order.filter(p => p !== S.pid && !isRealBot(p)).map(p => '<button class="btn" data-act="auto" data-id="' + esc(p) + '">' + (S.meta.players[p] && S.meta.players[p].auto ? esc(pname(p)) + ' spielt wieder selbst' : 'Computer spielt für ' + esc(pname(p))) + '</button>').join('');
+      l += '<div class="animctl"><b>Zugzeit</b><button class="btn small" data-act="tog" data-k="tlOn">' + (st.tlOn ? 'ausschalten' : 'einschalten') + '</button>' + (st.tlOn ? stepBtns('tlSec', 15, 15, 300, tlSec(), ' s') : '') + '</div>';
+      l += '<div class="animctl"><b>Computer überlegt mindestens</b>' + stepBtns('botMin', 5, 0, 50, botMinTxt(), '') + '</div>';
+      l += players().filter(p => p.bot).map(p => (playing ? '' : '<button class="btn" data-act="rename" data-id="' + esc(p.id) + '">' + esc(p.name) + ' umbenennen</button>') + '<button class="btn" data-act="lvl" data-id="' + esc(p.id) + '">' + esc(p.name) + ': Stufe ' + LEVELS[botLevel(p.id)] + ' (wechseln)</button>').join('');
+      if (playing) l += '<div class="animctl"><b>Kartenset</b><select id="lob-design"><option value="default">Standard</option>' + S.designs.map(d => '<option value="' + esc(d.id) + '"' + (S.meta.designId === d.id ? ' selected' : '') + '>' + esc(normDesign(d.data).name) + '</option>').join('') + '</select></div>';
+      else l += '<button class="btn" data-act="modal" data-m="editor">Karten bearbeiten</button>';
+      l += '<button class="btn" data-act="tog" data-k="spec">Kartenansicht für Zuschauer ' + (st.spec !== true ? 'einschalten' : 'ausschalten') + '</button>';
+      l += '<div class="animctl"><b>Ziehanimation</b><button class="btn small" data-act="tog" data-k="anim">' + (st.anim === false ? 'einschalten' : 'ausschalten') + '</button>' + (st.anim === false ? '' : '<button class="btn small" data-act="setv" data-k="animMode" data-v="' + (st.animMode === 'all' ? 'seq' : 'all') + '">' + (st.animMode === 'all' ? 'gleichzeitig → nacheinander' : 'nacheinander → gleichzeitig') + '</button>' + stepBtns('animMs', 50, 100, 1500, Math.max(100, Math.min(1500, st.animMs || 350)), ' ms') + stepBtns('animMax', 1, 1, 30, Math.max(1, Math.min(30, st.animMax || 6)), ' s', 'höchstens ')) + '</div>';
+      l += '<div class="animctl"><b>Gelegte Karten überlappen</b>' + stepBtns('overlap', 5, 0, 80, Math.max(0, Math.min(80, st.overlap || 0)), ' %') + '</div>';
+      l += players().filter(p => !p.bot && p.id !== S.pid).map(p => '<button class="btn" data-act="giveHost" data-id="' + esc(p.id) + '">Spielleitung an ' + esc(p.name) + ' übertragen</button>').join('');
+      if (playing) l += '<button class="btn danger" data-act="abort">Spiel abbrechen</button>';
+      // Eingeklappt, bis die Spielleitung ihn aufklappt (bleibt dann offen)
+      UI.menuLead = '<details class="mlead"' + (UI.leadOpen ? ' open' : '') + '><summary class="mhead">Spielleitung <small>gilt für alle</small></summary><div class="mleadin">' + l + '</div></details>';
+    } else UI.menuLead = '';
+    // 3. Bedienung: wie ich spiele (nur dieses Gerät)
+    let u = '<button class="btn" data-act="confTog">Kartenbestätigung: ' + (confOn() ? 'an (Karte zweimal antippen)' : 'aus (einmal tippen spielt sofort)') + '</button>';
+    if (game === 'wizard' || game === 'skullking') u += '<button class="btn" data-act="bidSlTog">Tipp abgeben: ' + (bidSlider() ? 'Schieberegler mit − und + (wechseln)' : 'Zahlenknöpfe (wechseln)') + '</button>';
+    u += '<div class="animctl"><b>Meine Kartenreihenfolge</b>' + Object.keys(HAND_MODES).map(k => '<button class="btn small' + (handMode() === k ? ' on' : '') + '" data-act="hsortSet" data-v="' + k + '">' + HAND_MODES[k] + '</button>').join('') + '<button class="btn small' + (LS.get('wiz.hrev') === '1' ? ' on' : '') + '" data-act="hrevTog">⇄ umgedreht</button></div>';
+    if (playing) u += '<button class="btn" data-act="viewTog">Ansicht: ' + (viewRound() ? 'um den Tisch' : 'alle oben') + ' (wechseln)</button>';
+    if (playing && !S.joined && st.spec === true) u += '<button class="btn" data-act="specView">Handkarten der Spieler: ' + (specAtSeat() ? 'beim Spieler' : 'unten') + ' (wechseln)</button>';
+    h += sec('Bedienung <small>nur auf diesem Gerät</small>', u);
+    // 4. Darstellung (nur dieses Gerät)
+    let d = themePickHTML().replace('<span class="fine">nur auf diesem Gerät</span>', '') + loc('cscale', 'Kartengröße', cardScale(), 5) + loc('zoom', 'Zoom gesamt', zoomLvl(), 5);
+    d += '<button class="btn" data-act="liteTog">Leistungsmodus: ' + (UI.lite ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>';
+    if (S.joined) d += '<button class="btn" data-act="modal" data-m="avatar">Mein Bild ändern</button>';
+    h += sec('Darstellung <small>nur auf diesem Gerät</small>', d);
+    // 5. Hinweise, wenn man dran ist
+    h += sec('Wenn du dran bist', '<button class="btn" data-act="sigTog">„Du bist dran“ im Tab-Titel: ' + (sigOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button><button class="btn" data-act="sndTog">Ton, wenn du dran bist: ' + (sndOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>');
+    // Spielleitung zuletzt, direkt vor „Raum verlassen“
+    h += UI.menuLead || '';
+    return h + '<div class="mhead sep"></div><button class="btn ghost" data-act="leave">Raum verlassen</button></div>';
   }
+
 
 
   function slotLabel(k, D) {
