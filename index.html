@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="robots" content="noindex, nofollow">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wizard Kartenrunde</title>
+<title>230Rund3</title>
 <link rel="preload" href="fonts/alegreya-sans-v28-latin-regular.woff2" as="font" type="font/woff2" crossorigin>
 <style>
 :root {
@@ -569,13 +569,8 @@ table.score thead th { position: sticky; top: 0; background: var(--velvet); text
 .crmore summary { cursor: pointer; color: var(--brass-2); }
 .btn.small.on { border-color: var(--brass-2); color: var(--brass-2); }
 
-/* Sternenhimmel als feste Ebene statt background-attachment: fixed (sonst wird beim Scrollen alles neu gemalt) */
-body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none; transform: translateZ(0); background:
-    radial-gradient(1px 1px at 12% 18%, rgba(242, 205, 114, .5) 50%, transparent 51%),
-    radial-gradient(1px 1px at 68% 9%, rgba(242, 205, 114, .4) 50%, transparent 51%),
-    radial-gradient(1px 1px at 86% 32%, rgba(255, 255, 255, .35) 50%, transparent 51%),
-    radial-gradient(1px 1px at 33% 41%, rgba(255, 255, 255, .25) 50%, transparent 51%),
-    radial-gradient(120% 70% at 50% 0%, var(--felt) 0%, var(--velvet) 45%, var(--night) 100%); }
+/* Hintergrundverlauf als feste Ebene statt background-attachment: fixed (sonst wird beim Scrollen alles neu gemalt) */
+body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none; transform: translateZ(0); background: radial-gradient(120% 70% at 50% 0%, var(--felt) 0%, var(--velvet) 45%, var(--night) 100%); }
 /* großer Bildbearbeiten-Dialog: Bild links, Werkzeuge rechts */
 #crop .sheet.cropsheet { max-width: min(1280px, 98vw); width: 98vw; max-height: 98vh; }
 #crop .cropsheet .sheetbody { display: grid; grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); gap: 4px 18px; align-items: start; }
@@ -1069,6 +1064,12 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   .hc:not(.no):not(.sel):not(.arriving):hover, .cbmine .cbc:not(.sel):hover { transform: translateY(-8px); }
   .cbc { transition: transform .12s; }
 }
+/* Wizard: Stichansage direkt über dem eigenen Platz, mit etwas Abstand */
+section.mine > .bidbar { margin: 0 auto 10px; }
+/* Gespielte Karten im Kreis übereinander (Darstellung, nur dieses Gerät) */
+.trick.pile { position: relative; display: block; width: calc(var(--cw, 72px) * 2.3); height: calc(var(--cw, 72px) * 2.6); margin: 0 auto; }
+.trick.pile > .tc { position: absolute; left: 50%; top: 50%; margin: 0 !important; transform: translate(-50%, -50%) translate(var(--px, 0px), var(--py, 0px)) rotate(var(--pr, 0deg)); }
+.trick.pile > .tc .who { display: none; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1086,7 +1087,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '191ab278';
+var APP_V = '5ece190e';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3358,17 +3359,6 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const rnd = () => { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] / 4294967296; };
   const pickStr = (abc, n) => Array.from({ length: n }, () => abc[Math.floor(rnd() * abc.length)]).join('');
   const genCode = () => pickStr('ABCDEFGHJKLMNPQRSTUVWXYZ2346789', 5);
-  // Raum erstellen nur mit Passwort (ins Feld „Raumcode“ eingeben). Hier steht nur der PBKDF2-Hash, nicht das Passwort.
-  const CREATE_SALT = 'kartenrunde-v1', CREATE_ITER = 150000, CREATE_HASH = 'baf7ba81c5327fe9f79b4fc12f2fd42d09392f54d60bdb2bc0d387815f0d2069';
-  async function createPwOk(pw) {
-    pw = String(pw || '').trim().toUpperCase();
-    if (!pw || !(window.crypto && crypto.subtle)) return false;
-    try {
-      const te = new TextEncoder(), key = await crypto.subtle.importKey('raw', te.encode(pw), 'PBKDF2', false, ['deriveBits']);
-      const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', hash: 'SHA-256', salt: te.encode(CREATE_SALT), iterations: CREATE_ITER }, key, 256);
-      return Array.from(new Uint8Array(bits), b => b.toString(16).padStart(2, '0')).join('') === CREATE_HASH;
-    } catch (e) { return false; }
-  }
   const genId = () => pickStr('abcdefghijkmnpqrstuvwxyz23456789', 8);
   const rid = (g, n) => 'g' + g + 'r' + String(n).padStart(2, '0');
   const hueOf = id => { let h = 0; for (const ch of String(id)) h = (h * 31 + ch.charCodeAt(0)) % 360; return h; };
@@ -3638,6 +3628,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     joined: false, leaving: false, readonly: false, online: null, connected: true, modal: null, sel: null, toast: null
   };
   const UI = { linger: {}, seen: {}, toastT: null, renderQ: false, botT: null, colT: null };
+  UI.pile = LS.get('wiz.pile') === '1';
   UI.lite = LS.get('wiz.lite') === '1'; try { document.body.classList.toggle('lite', UI.lite); } catch (e) { if (typeof __kw === 'function') __kw(e); }
   const ED = { id: 'default', pick: null };
   const CR = { on: false, drag: null };
@@ -4171,7 +4162,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
 
   
   function newMeta(code) {
-    return { code, host: S.pid, status: 'lobby', g: 0, at: Date.now(), rid: genId(), designId: 'default', settings: { variant: 'hidden', blind: true, rounds: 0, botMin: 5 }, players: { [S.pid]: { name: S.name, av: S.av, at: Date.now() } } };
+    return { code, host: S.pid, status: 'lobby', g: 0, at: Date.now(), rid: genId(), designId: 'default', settings: { variant: 'hidden', blind: true, rounds: 0, botMin: 15 }, players: { [S.pid]: { name: S.name, av: S.av, at: Date.now() } } };
   }
   function needName() {
     S.name = S.name.trim().slice(0, 6);
@@ -4200,7 +4191,6 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     S.busy = true; S.err = ''; render();
     try {
       let code;
-      if (!(await createPwOk(S.joinCode))) throw new Error('Der Raum konnte nicht erstellt werden. Bitte versuche es später noch einmal.');
       if (S.mode === 'peer') {
         for (let i = 0; ; i++) {
           code = genCode();
@@ -4373,6 +4363,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     syncWake();
     tlSync();
     try { offerTick(); } catch (e) { if (typeof __kw === 'function') __kw(e); }
+    try { xAutoSkip(); } catch (e) { if (typeof __kw === 'function') __kw(e); }
     try { histTick(); } catch (e) { if (typeof __kw === 'function') __kw(e); }
   }
   // ---- Punkteverlauf als Diagramm (Ende von Wizard, Skull King, Phase 10, Cabo) ----
@@ -4838,6 +4829,22 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     await w(backend.update(gamePath(), meta));
     S.busy = false;
   }
+  // Automatisches Überspringen (z. B. Dalmuti: wer nicht legen kann) – nur die Spielleitung, zufällige Wartezeit 5–8 s
+  function xAutoSkip() {
+    const m = S.meta, kind = m && m.game, G = kind && XG[kind];
+    const stop = () => { if (UI.xas) { clearTimeout(UI.xas.t); UI.xas = null; } };
+    if (!G || !G.autoSkip || m.status !== 'playing' || !runsGame()) return stop();
+    const s = xState(kind), a = s && G.autoSkip(s);
+    if (!a || isBot(a.p)) return stop();
+    if (UI.xas && UI.xas.k === a.k) return;
+    stop();
+    UI.xas = { k: a.k, t: setTimeout(() => {
+      UI.xas = null;
+      const s2 = xState(kind), b = s2 && G.autoSkip(s2);
+      if (!b || b.k !== a.k || !runsGame()) return;
+      const n = G.skip(s2, b.p); if (n) xgWrite(kind, n);
+    }, 5000 + Math.floor(rnd() * 3000)) };
+  }
   function xgWrite(kind, r) { if (!r || typeof r !== 'object') return; if (r.$upd) w(backend.update(xPath(kind), r.$upd)); else w(backend.set(xPath(kind), r)); }
   function xgHTML(X) {
     const k = S.meta.game, s = xState(k);
@@ -5095,6 +5102,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     sndTog() { LS.set('wiz.snd', sndOn() ? '0' : '1'); if (sndOn()) { audioCtx(); beep(); } toast(sndOn() ? 'Ton an: Ist dein Tab im Hintergrund, hörst du einen kurzen Ton, wenn du dran bist.' : 'Ton aus.'); renderModal(true); },
     lbReset() { if (!isHost()) return; confirmBox('Rangliste zurücksetzen? Alle Punkte und Siege werden für alle gelöscht.', 'Zurücksetzen', () => w(backend.update(gamePath(), { lb: null }))); },
     lbTab(el) { UI.lbTab = el.dataset.v || 'all'; render(); renderModal(true); },
+    pileTog() { UI.pile = !UI.pile; LS.set('wiz.pile', UI.pile ? '1' : '0'); layoutPile(); renderModal(true); },
     liteTog() { UI.lite = !UI.lite; LS.set('wiz.lite', UI.lite ? '1' : '0'); document.body.classList.toggle('lite', UI.lite); toast(UI.lite ? 'Leistungsmodus an: weniger Effekte, kürzere Animationen.' : 'Leistungsmodus aus.'); renderModal(true); },
     tbTog() { LS.set('wiz.tbc', LS.get('wiz.tbc') !== '0' ? '0' : '1'); render(); },
     gCompact() { LS.set('wiz.gcompact', LS.get('wiz.gcompact') !== '0' ? '0' : '1'); render(); },
@@ -6542,6 +6550,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     morph(root, html);
     seatMinis(root);
     layoutRound();
+    layoutPile();
     specSeatCards();
     animHook();
     autoNext();
@@ -6766,9 +6775,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (d.blind && d.phase !== 'done' && c.seated && left.length) cards = '<span class="seatcard">' + cardHTML(left[0], X, { cls: 'seatc' }) + '</span>';
     else if (left.length) cards = minisHTML(left.length);
     const showWon = d.phase === 'play' || d.phase === 'done';
-    return '<div class="seat' + (turn ? ' turn' : '') + (offline(p) ? ' off' : '') + '">' +
+    return '<div class="seat' + (turn ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '">' +
       '<div class="st">' + ordNum(p) + avatar(p) + suitDot(d, p) + '<span class="nm">' + esc(pname(p)) + '</span>' + dealTags(d, p) + (S.meta.players[p] && S.meta.players[p].auto ? '<span class="tag dim">PC spielt</span>' : offline(p) ? '<span class="tag dim">offline</span>' : '') + cards + '</div>' +
-      '<div class="ss"><span>Tipp: <b>' + bv.text + '</b></span>' + (showWon ? '<span>Stiche: <b>' + d.won[p] + '</b></span>' : '') + '<span class="pts">Gesamt: <b>' + (c.table.total[p] || 0) + ' P</b></span></div></div>';
+      '<div class="ss"><span>Angesagt: <b>' + bv.text + '</b></span>' + (showWon ? '<span>Stiche: <b>' + d.won[p] + '</b></span>' : '') + '<span class="pts">Gesamt: <b>' + (c.table.total[p] || 0) + ' P</b></span></div></div>';
   }
   const cardScale = () => { const v = +LS.get('wiz.cscale'); return v >= 50 && v <= 200 ? v : 100; };
   const zoomLvl = () => { const v = +LS.get('wiz.zoom'); return v >= 50 && v <= 200 ? v : 100; };
@@ -6802,7 +6811,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     let foot;
     if (c.over) foot = (isHost() ? '<button class="btn primary rematch" data-act="rematch">Nochmal</button><button class="btn" data-act="toLobby">Zurück zur Lobby</button>' : '<span class="waitline">' + esc(pname(c.m.host)) + ' kann eine neue Partie starten.</span>') + '<button class="btn" data-act="modal" data-m="score">Punktetafel</button>';
     else foot = (canDeal('r' + c.rd.n) ? '<button class="btn primary" data-act="next">Runde ' + (c.rd.n + 1) + ' austeilen</button>' : dealWaitHTML()) + '<button class="btn" data-act="modal" data-m="score">Punktetafel</button>';
-    const out = '<div class="summary"><h2>' + (c.over ? 'Endstand: ' + esc(pname(rank[0])) + ' gewinnt' : 'Runde ' + c.rd.n + ' ist gespielt') + '</h2><div class="tablewrap"><table><thead><tr><th scope="col">' + 'Platz' + '</th><th scope="col">Tipp</th><th scope="col">Stiche</th><th scope="col">Runde</th><th scope="col">Gesamt</th></tr></thead><tbody>' + rows + '</tbody></table></div>' + (c.over ? ptChart(order, c.table.rows.filter(r => r.done).map(r => { const t = {}; order.forEach(p => { t[p] = r.cells[p].total; }); return { n: r.n, tot: t }; }), 'Punkteverlauf') : '') + '<div class="sumfoot">' + foot + '</div></div>';
+    const out = '<div class="summary"><h2>' + (c.over ? 'Endstand: ' + esc(pname(rank[0])) + ' gewinnt' : 'Runde ' + c.rd.n + ' ist gespielt') + '</h2><div class="tablewrap"><table><thead><tr><th scope="col">' + 'Platz' + '</th><th scope="col">Angesagt</th><th scope="col">Stiche</th><th scope="col">Runde</th><th scope="col">Gesamt</th></tr></thead><tbody>' + rows + '</tbody></table></div>' + (c.over ? ptChart(order, c.table.rows.filter(r => r.done).map(r => { const t = {}; order.forEach(p => { t[p] = r.cells[p].total; }); return { n: r.n, tot: t }; }), 'Punkteverlauf') : '') + '<div class="sumfoot">' + foot + '</div></div>';
     return c.over ? endGate(out) : out;
   }
 
@@ -6834,7 +6843,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     }
     if (showTrick && !(d.phase === 'done' && !lt)) {
       const tw = Math.min(cardW(), Math.floor((Math.min(window.innerWidth - 24, 760) - (P - 1) * 8) / P));
-      center = '<div class="trick tap" data-act="lastTrick" title="Antippen: letzten Stich ansehen" style="--cw:' + tw + 'px">' + showTrick.cards.map((pl, i) => '<div class="tc' + (showTrick.winner === pl.p ? ' win' : '') + (isNewPlay(c, showTrick, i) ? ' new' : '') + '">' + cardHTML(pl.c, X) + '<span class="who">' + nm(pl.p) + '</span></div>').join('') + (showTrick.cards.length ? '' : '<div class="tc ph"><span class="card slot"></span><span class="who">&nbsp;</span></div>') + '</div>';
+      center = '<div class="trick tap" data-act="lastTrick" title="Antippen: letzten Stich ansehen" style="--cw:' + tw + 'px">' + showTrick.cards.map((pl, i) => '<div class="tc' + (showTrick.winner === pl.p ? ' win' : '') + (isNewPlay(c, showTrick, i) ? ' new' : '') + '" data-p="' + esc(pl.p) + '">' + cardHTML(pl.c, X) + '<span class="who">' + nm(pl.p) + '</span></div>').join('') + (showTrick.cards.length ? '' : '<div class="tc ph"><span class="card slot"></span><span class="who">&nbsp;</span></div>') + '</div>';
       if (lt) status = '<b>' + nm(lt.winner) + '</b> ' + (lt.winner === me ? 'bekommst' : 'bekommt') + ' den Stich.';
       else if (d.turn === me) status = d.cur.cards.length ? '<b>Du bist am Zug.</b>' : '<b>Du spielst aus.</b>';
       else status = esc(pname(d.turn)) + (d.cur.cards.length ? ' ist am Zug …' : ' spielt aus …');
@@ -6857,7 +6866,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const bv = bidView(c, me);
       mine = '<div class="mebar' + ((d.phase === 'play' && d.turn === me && !lt) || canBid ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + suitDot(d, me) + '<span class="nm">' + esc(pname(me)) + '</span>' + dealTags(d, me) +
         (d.trump && d.trump !== 'none' && SUITS.indexOf(d.trump) >= 0 ? '<span class="trm"><i class="dot" style="background:var(--s' + d.trump + ')"></i>Trumpf ' + esc(X.D.suits[SUITS.indexOf(d.trump)].name) + '</span>' : '') +
-        '<span class="ss"><span>Tipp: <b>' + bv.text + '</b></span>' + (d.phase === 'play' || d.phase === 'done' ? '<span>Stiche: <b>' + d.won[me] + '</b></span>' : '') + '<span class="pts">Gesamt: <b>' + (c.table.total[me] || 0) + ' P</b></span></span>' +
+        '<span class="ss"><span>Angesagt: <b>' + bv.text + '</b></span>' + (d.phase === 'play' || d.phase === 'done' ? '<span>Stiche: <b>' + d.won[me] + '</b></span>' : '') + '<span class="pts">Gesamt: <b>' + (c.table.total[me] || 0) + ' P</b></span></span>' +
         (d.blind && d.phase !== 'done' && (d.left[me] || []).length ? '<small class="blindnote">Blinde Runde: Deine Karte kennen nur die anderen.</small>' : '') +
         (m.players[me] && m.players[me].auto ? '<span class="blindnote">Der Computer spielt gerade für dich. <button class="btn small" data-act="selfPlay">Wieder selbst spielen</button></span>' : '') + '</div>';
     } else {
@@ -6869,8 +6878,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       '<header class="topbar' + tbCls() + '"><div class="tb1">' + tbTog() + '<span class="rnd">Runde <b>' + c.rd.n + '</b>/' + c.total + '</span><span class="chip">' + VARIANTS[c.variant].name + '</span>' + (d.mono ? '<span class="chip">Einfarbig</span>' : '') + (d.blind ? '<span class="chip">Blind</span>' : '') + bidSumChip(c) + (d.n !== c.rd.n ? '<span class="chip">' + d.n + ' Karten</span>' : '') + '</div>' + trumpChip(c, X) +
       '<div class="tb3">' + wChip() + '<button class="btn small" data-act="modal" data-m="score">Punkte</button>' + (S.joined ? '<button class="btn small emotb" data-act="emoToggle" aria-label="Emoji senden">😊</button>' : '') + '<button class="btn small" data-act="modal" data-m="menu" aria-label="Menü">Menü</button></div></header>' +
       '<section class="seats">' + seats + '</section>' +
-      '<section class="center">' + center + (status ? '<p class="status" aria-live="polite">' + status + '</p>' : '') + bidbar + '</section>' +
-      '<section class="mine">' + mine + (c.seated ? handHTML(c, X, lt) : '') + '</section></main>';
+      '<section class="center">' + center + (status ? '<p class="status" aria-live="polite">' + status + '</p>' : '') + '</section>' +
+      '<section class="mine">' + bidbar + mine + (c.seated ? handHTML(c, X, lt) : '') + '</section></main>';
   }
 
   
@@ -7182,25 +7191,30 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const main = $('main.game'); if (!main) return;
     const seatEls = main.querySelectorAll('.seats > .seat'), around = aroundMe(order);
     const area = p === S.pid ? main.querySelector('.pnmine') : seatEls[around.indexOf(p)];
-    const tgt = area && area.querySelector('.pnst.lastmv'), src = p === S.pid ? mineEl(main, ['.hand', '.fan']) : seatEls[around.indexOf(p)];
+    const seat = seatEls[around.indexOf(p)], tgt = area && area.querySelector('.pnst.lastmv'), src = p === S.pid ? mineEl(main, ['.hand', '.fan']) : (seat && seat.querySelector('.minis')) || seat;
     if (!tgt || !src) return;
-    const a = src.getBoundingClientRect(), b = tgt.getBoundingClientRect(); if (!b.width) return;
+    // Eigene Karte startet genau dort, wo sie in der Hand lag; bei anderen an ihren Handkarten
+    const og = p === S.pid && UI.ownGone && UI.ownGone.length === 1 ? UI.ownGone[0] : null;
+    const a = og || src.getBoundingClientRect(), b = tgt.getBoundingClientRect(); if (!b.width) return;
     let layer = $('#flylayer'); if (!layer) { layer = document.createElement('div'); layer.id = 'flylayer'; document.body.appendChild(layer); }
     layer.className = 'dzT';
     const per = Math.max(80, Math.min(2000, st.animMs || 350)) * (UI.lite ? 0.6 : 1) * 1.3;
     const box = document.createElement('div'), cl = tgt.cloneNode(true);
     box.className = 'flyp gm-passt'; box.style.left = b.left + 'px'; box.style.top = b.top + 'px'; box.style.width = b.width + 'px';
     cl.classList.remove('lastmv'); cl.style.margin = '0'; box.appendChild(cl); layer.appendChild(box);
-    const dx = a.left + a.width / 2 - (b.left + b.width / 2), dy = (p === S.pid ? a.top + Math.min(a.height / 2, 70) : a.top + a.height / 2) - (b.top + b.height / 2);
+    const dx = a.left + a.width / 2 - (b.left + b.width / 2), dy = (p === S.pid && !og ? a.top + Math.min(a.height / 2, 70) : a.top + a.height / 2) - (b.top + b.height / 2);
+    const sc0 = og ? Math.max(.5, Math.min(2.5, og.width / b.width)) : p === S.pid ? 1.6 : Math.max(.6, Math.min(1.2, (a.height || b.height) / b.height));
     const hide = () => { const t = (p === S.pid ? main.querySelector('.pnmine') : seatEls[around.indexOf(p)]); const e = t && t.querySelector('.pnst.lastmv'); if (e) e.style.visibility = 'hidden'; return e; };
     hide(); UI.pnHideUntil = Date.now() + per;
-    box.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px) scale(1.6)', opacity: .9 }, { transform: 'translate(0,0) scale(1)', opacity: 1 }], { duration: per, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both' });
+    box.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + sc0.toFixed(3) + ')', opacity: .9 }, { transform: 'translate(0,0) scale(1)', opacity: 1 }], { duration: per, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both' });
     setTimeout(() => { box.remove(); document.querySelectorAll('main.game .pnst.lastmv').forEach(e => { e.style.visibility = ''; }); }, per + 20);
   }
   function flyPlay(order, p, items, st, gone) {
     const main = $('main.game'); if (!main) return;
     const seatEls = main.querySelectorAll('.seats > .seat'), around = aroundMe(order);
-    const srcEl = p === S.pid ? mineEl(main, ['.hand', '.fan']) : seatEls[around.indexOf(p)];
+    const st0 = seatEls[around.indexOf(p)];
+    // Passt nicht: Sitzplätze enthalten die Auslage – Handkarten der anderen kommen von ihrem Kartenrücken-Stapel, nicht aus der Platzmitte
+    const srcEl = p === S.pid ? mineEl(main, ['.hand', '.fan']) : (S.meta && S.meta.game === 'passt' && st0 && st0.querySelector('.minis')) || st0;
     if (!srcEl) return;
     const a0 = srcEl.getBoundingClientRect(), og = p === S.pid && UI.ownGone && UI.ownGone.length === items.length ? UI.ownGone : null;
     const a = a0, ax = a.left + a.width / 2, ay = p === S.pid ? a.top + Math.min(a.height / 2, 70) : a.top + a.height / 2;
@@ -7444,6 +7458,28 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       el.innerHTML = esc(el.textContent).replace(/[0-9]+/g, m => '<span class="dg">' + m + '</span>');
     });
   }
+  // Gespielte Karten wahlweise im Kreis übereinander: jede Karte leicht zu ihrem Spieler hin versetzt (nur dieses Gerät)
+  function layoutPile() {
+    const main = $('main.game'); if (!main) return;
+    const tr = main.querySelector('.center .trick:not(.lasttrick)'); if (!tr) return;
+    const tcs = Array.from(tr.children).filter(e => e.classList.contains('tc'));
+    tr.classList.toggle('pile', !!UI.pile);
+    if (!UI.pile) { tcs.forEach(t => { ['--px', '--py', '--pr'].forEach(k => t.style.removeProperty(k)); t.style.zIndex = ''; }); return; }
+    const cw = parseFloat(tr.style.getPropertyValue('--cw')) || 72, r = tr.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    const dist = cw * 0.42;
+    tcs.forEach((t, i) => {
+      const p = t.dataset.p;
+      const el = !p ? null : p === S.pid ? main.querySelector('section.mine') : main.querySelector('.seats > .seat[data-p="' + (window.CSS && CSS.escape ? CSS.escape(p) : p) + '"]');
+      let dx = 0, dy = 0, rot = 0;
+      if (el) {
+        const b = el.getBoundingClientRect(), vx = b.left + b.width / 2 - cx, vy = (p === S.pid ? b.top : b.top + b.height / 2) - cy, l = Math.hypot(vx, vy) || 1;
+        dx = vx / l * dist; dy = vy / l * dist * 1.15;
+        rot = Math.max(-14, Math.min(14, Math.atan2(vx, -vy) * 180 / Math.PI / 8));
+      }
+      t.style.setProperty('--px', dx.toFixed(1) + 'px'); t.style.setProperty('--py', dy.toFixed(1) + 'px'); t.style.setProperty('--pr', rot.toFixed(1) + 'deg');
+      t.style.zIndex = String(i + 1);
+    });
+  }
   function layoutRound() {
     const main = $('main.game');
     if (!main) return;
@@ -7511,7 +7547,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       }
     }
   }
-  window.addEventListener('resize', () => { clearTimeout(UI.rzT); UI.rzT = setTimeout(() => { layoutRound(); fitNames(document); alignTags(document); }, 120); });
+  window.addEventListener('resize', () => { clearTimeout(UI.rzT); UI.rzT = setTimeout(() => { layoutRound(); layoutPile(); fitNames(document); alignTags(document); }, 120); });
   
   function specSort(k, cards) {
     const id = c => String(c && typeof c === 'object' ? c.v : c);
@@ -7701,7 +7737,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const live = p => d.live && d.phase !== 'pass' ? '<span class="fire" title="Feuerpunkte in den eigenen Stichen dieser Runde">Feuer: <b>' + d.live.pts[p] + '</b></span>' : '';
     const seats = aroundMe(m.order).map(p => {
       const turn = (d.phase === 'play' && d.turn === p) || (d.phase === 'pass' && !d.passed(p));
-      return '<div class="seat' + (turn ? ' turn' : '') + (offline(p) ? ' off' : '') + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + dealTags(d, p) + seatTags(p) + minisHTML((d.left[p] || []).length) + '</div><div class="ss">' + (d.phase === 'pass' ? '<span>' + (d.passed(p) ? 'hat geschoben' : 'wählt Karten') + '</span>' : '<span>Stiche: <b>' + d.won[p] + '</b></span>' + live(p)) + '<span class="pts">Gesamt: <b>' + c.tot.total[p] + ' P</b></span></div></div>';
+      return '<div class="seat' + (turn ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + dealTags(d, p) + seatTags(p) + minisHTML((d.left[p] || []).length) + '</div><div class="ss">' + (d.phase === 'pass' ? '<span>' + (d.passed(p) ? 'hat geschoben' : 'wählt Karten') + '</span>' : '<span>Stiche: <b>' + d.won[p] + '</b></span>' + live(p)) + '<span class="pts">Gesamt: <b>' + c.tot.total[p] + ' P</b></span></div></div>';
     }).join('');
     const dirText = { l: 'nach links', r: 'nach rechts', x: 'gegenüber' }[d.passDir];
     let center = '', status = '';
@@ -7726,7 +7762,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     } else {
       const showTrick = lt || d.cur;
       const tw = Math.min(cardW(), Math.floor((Math.min(window.innerWidth - 24, 760) - (P - 1) * 8) / P));
-      center = '<div class="trick tap" data-act="lastTrick" title="Antippen: letzten Stich ansehen" style="--cw:' + tw + 'px">' + showTrick.cards.map((pl, i) => '<div class="tc' + (showTrick.winner === pl.p ? ' win' : '') + (isNewPlay(c, showTrick, i) ? ' new' : '') + '">' + witCardHTML(pl.c, X) + '<span class="who">' + nm(pl.p) + '</span></div>').join('') + (showTrick.cards.length ? '' : '<div class="tc ph"><span class="card slot"></span><span class="who">&nbsp;</span></div>') + '</div>';
+      center = '<div class="trick tap" data-act="lastTrick" title="Antippen: letzten Stich ansehen" style="--cw:' + tw + 'px">' + showTrick.cards.map((pl, i) => '<div class="tc' + (showTrick.winner === pl.p ? ' win' : '') + (isNewPlay(c, showTrick, i) ? ' new' : '') + '" data-p="' + esc(pl.p) + '">' + witCardHTML(pl.c, X) + '<span class="who">' + nm(pl.p) + '</span></div>').join('') + (showTrick.cards.length ? '' : '<div class="tc ph"><span class="card slot"></span><span class="who">&nbsp;</span></div>') + '</div>';
       if (lt) status = '<b>' + nm(lt.winner) + '</b> ' + (lt.winner === me ? 'bekommst' : 'bekommt') + ' den Stich.';
       else if (d.turn === me) status = (d.cur.cards.length ? '<b>Du bist am Zug.</b>' : '<b>Du spielst aus.</b>');
       else status = esc(pname(d.turn)) + (d.cur.cards.length ? ' ist am Zug …' : ' spielt aus …');
@@ -7894,6 +7930,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     h += sec('Bedienung <small>nur auf diesem Gerät</small>', u);
     // 4. Darstellung (nur dieses Gerät)
     let d = themePickHTML().replace('<span class="fine">nur auf diesem Gerät</span>', '') + loc('cscale', 'Kartengröße', cardScale(), 5) + loc('zoom', 'Zoom gesamt', zoomLvl(), 5);
+    d += '<button class="btn" data-act="pileTog">Gespielte Karten: ' + (UI.pile ? 'im Kreis übereinander (umschalten)' : 'nebeneinander (umschalten)') + '</button>';
     d += '<button class="btn" data-act="liteTog">Leistungsmodus: ' + (UI.lite ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>';
     if (S.joined) d += '<button class="btn" data-act="modal" data-m="avatar">Mein Bild ändern</button>';
     h += '<details class="mfold mdisp"' + (UI.dispOpen ? ' open' : '') + '><summary class="mhead">Darstellung <small>nur auf diesem Gerät</small></summary><div class="mleadin">' + d + '</div></details>';
@@ -8151,7 +8188,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     return plainCard('x' + ci, txt, X, o);
   }
   const xMain = (k, o) => '<main class="game gm-' + k + (o.cls ? ' ' + o.cls : '') + '">' + banner() + topbarHTML(XG[k].name, o.chips || '') + (o.flash || '') + '<section class="seats">' + o.seats + '</section><section class="center">' + o.center + (o.status ? '<p class="status" aria-live="polite">' + o.status + '</p>' : '') + '</section><section class="mine">' + o.mine + '</section></main>';
-  const xSeat = (p, turn, info, extra) => '<div class="seat' + (turn ? ' turn' : '') + (offline(p) ? ' off' : '') + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + seatTags(p) + '</div><div class="ss">' + info + '</div>' + (extra || '') + '</div>';
+  const xSeat = (p, turn, info, extra) => '<div class="seat' + (turn ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + seatTags(p) + '</div><div class="ss">' + info + '</div>' + (extra || '') + '</div>';
   const xMe = (me, turn, info, extra) => '<div class="mebar' + (turn ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + '<span class="nm">' + esc(pname(me)) + '</span>' + dzTags(me) + '<span class="ss">' + info + '</span>' + (extra || '') + autoNote(me) + '</div>';
   const xBtn = (a, label, attrs, cls) => '<button class="btn ' + (cls || '') + '" data-act="xg" data-a="' + a + '"' + (attrs || '') + '>' + label + '</button>';
   const xFan = (n, cw, fn) => n ? fanHTML(n, cw, (k, ml) => { const b = fn(k); return '<button class="hc' + (b.c ? ' ' + b.c : '') + '" style="margin-left:' + ml + 'px" data-act="xg" ' + b.a + '>' + b.h + '</button>'; }) : '<div class="hand"></div>';
@@ -8424,7 +8461,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   function xTrick(s, cardFn, P) {
     const live = s.trick.length ? s.trick : null, show = live || (s.last ? s.last.cards : []), win = live ? null : s.last && s.last.win;
     const tw = Math.min(cardW(), Math.floor((Math.min(window.innerWidth - 24, 760) - (P - 1) * 8) / P));
-    return '<div class="trick tap" data-act="lastTrick" title="Antippen: letzten Stich ansehen" style="--cw:' + tw + 'px">' + show.map(pl => '<div class="tc' + (win === pl.p ? ' win' : '') + '">' + cardFn(pl.c, pl) + '<span class="who">' + esc(pname(pl.p)) + '</span></div>').join('') + '</div>';
+    return '<div class="trick tap" data-act="lastTrick" title="Antippen: letzten Stich ansehen" style="--cw:' + tw + 'px">' + show.map(pl => '<div class="tc' + (win === pl.p ? ' win' : '') + '" data-p="' + esc(pl.p) + '">' + cardFn(pl.c, pl) + '<span class="who">' + esc(pname(pl.p)) + '</span></div>').join('') + '</div>';
   }
   const xTrickDelay = s => (s.trick && !s.trick.length && s.last ? 2300 : 900);
 
@@ -8551,6 +8588,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   
   (function () {
     const K = 'dalmuti';
+    // Wer eröffnet: normal der Große Dalmuti, mit Einstellung der Große Diener (letzter Platz)
+    const dmStart = s => s.servStart ? s.order.length - 1 : 0;
     const RN = ['', 'Dalmuti', 'Erzbischof', 'Hofmarschall', 'Baronin', 'Äbtissin', 'Ritter', 'Näherin', 'Steinmetz', 'Köchin', 'Schafhirtin', 'Bergmann', 'Tagelöhner', 'Narr'];
     const colOf = v => +v === 13 ? 4 : Math.floor((+v - 1) / 3);
     const card = (id, X, o) => xCard(K, String(id), colOf(id), +id === 13 ? '☻' : String(id), X, Object.assign({ label: RN[+id] }, o || {}));
@@ -8564,7 +8603,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       s.hands = {}; s.order.forEach(p => { s.hands[p] = []; });
       xShuffle(d).forEach((c, i) => s.hands[s.order[i % P]].push(c));
       s.order.forEach(p => s.hands[p].sort((a, b) => a - b));
-      s.table = null; s.passes = 0; s.passed = {}; s.fin = []; s.over = null; s.turn = 0; s.played = [];
+      s.table = null; s.passes = 0; s.passed = {}; s.fin = []; s.over = null; s.turn = dmStart(s); s.played = [];
       s.rev = s.order.find(p => s.hands[p].filter(c => c === 13).length === 2) || null;
       s.phase = s.rev ? 'rev' : 'tax'; s.tax = [{ from: 0, to: P - 1, n: 2 }, { from: 1, to: P - 2, n: 1 }];
       s.taxSub = {}; s.taxQ = {}; s.recv = {};
@@ -8610,7 +8649,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         if (cards.length) mv.push([p, to, cards.length]); if (back.length) mv.push([to, p, back.length]);
       });
       s.fx = { id: 'tax' + (s.g || 0) + ':' + (s.round || 0) + ':' + s.seq, moves: mv, tax: 1 };
-      s.tax = []; s.taxSub = {}; s.taxQ = {}; s.phase = 'play'; s.turn = 0; s.seq++;
+      s.tax = []; s.taxSub = {}; s.taxQ = {}; s.phase = 'play'; s.turn = dmStart(s); s.seq++;
       return s;
     }
     function endRound(s) {
@@ -8657,6 +8696,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (c === 13) return hand.some(x => x !== 13 && can(x)) || (jk >= n && 13 < s.table.rank);
       return can(c);
     }
+    // Kann p im laufenden Stich überhaupt etwas legen?
+    const dmCanPlay = (s, p) => { const h = s.hands[p] || []; return !s.table || h.some((c, k) => dmPlayable(s, h, k, false)); };
     function pass(s0, p) {
       if (s0.phase !== 'play' || s0.order[s0.turn] !== p || !s0.table) return null;
       const s = xClone(s0);
@@ -8726,7 +8767,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (!yes) { s.phase = 'tax'; s.seq++; return s; }
       const big = s.order.indexOf(p) === s.order.length - 1;
       if (big) s.order.reverse();
-      s.phase = 'play'; s.turn = 0; s.tax = [];
+      s.phase = 'play'; s.turn = dmStart(s); s.tax = [];
       xLog(s, pname(p) + (big ? ' ruft den großen Aufstand aus: Alle Ränge werden umgedreht!' : ' ruft die Revolution aus: Es wird nicht getauscht.'));
       return s;
     }
@@ -8734,12 +8775,12 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       name: 'Der große Dalmuti', text: 'Für 4 bis 8: Karten loswerden und im Rang aufsteigen. Das Leben ist ungerecht.', min: 4, max: 8, pre: 'dm',
       cols: [['Hof (1 bis 3)', '#b07a2a'], ['Adel (4 bis 6)', '#7b4bb3'], ['Bürger (7 bis 9)', '#2f6fc4'], ['Volk (10 bis 12)', '#2f8f5b'], ['Narr', '#c8402f']],
       cards: ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'], sample: ['1', '4', '8', '12', '13'], colOf: colOf, label: id => RN[+id] + (+id === 13 ? '' : ' (' + id + ')'), card: card,
-      def: { dmRounds: 10, dmGuess: false }, nums: ['dmRounds'], togs: ['dmGuess'],
+      def: { dmRounds: 10, dmGuess: false, dmServ: false }, nums: ['dmRounds'], togs: ['dmGuess', 'dmServ'],
       
       delay: s => s.phase === 'tax' && (s.tax || []).every(t => (s.taxSub || {})[s.order[t.from]]) ? 2000 : 900,
       lobby: (st, h) => '<h3>Rundenzahl</h3>' + h.stepper('Runden', 'dmRounds', Math.max(1, Math.min(30, st.dmRounds || 10)), 1, 1, 30) +
-        '<h3>Abgaben</h3>' + h.toggle('Karten erraten', 'Die Dalmutis bekommen die Karten der Diener nicht automatisch, sondern raten Zahlen: Hat der Diener die Zahl, wird sie getauscht. Der Große Dalmuti darf bis zu dreimal raten (höchstens 2 Karten), der Kleine bis zu zweimal (höchstens 1 Karte).', 'dmGuess', !!st.dmGuess) + '<p class="fine">In der ersten Runde werden die Ränge ausgelost. Danach bestimmt die Reihenfolge, in der ihr fertig werdet, den Rang und die Sitzordnung.</p>',
-      create(seats, st) { const s = { order: xShuffle(seats), round: 1, rounds: Math.max(1, Math.min(30, st.dmRounds || 10)), guess: !!st.dmGuess, scores: {}, winner: null, log: [], seq: 0 }; seats.forEach(p => { s.scores[p] = 0; }); deal(s); return s; },
+        '<h3>Abgaben</h3>' + h.toggle('Karten erraten', 'Die Dalmutis bekommen die Karten der Diener nicht automatisch, sondern raten Zahlen: Hat der Diener die Zahl, wird sie getauscht. Der Große Dalmuti darf bis zu dreimal raten (höchstens 2 Karten), der Kleine bis zu zweimal (höchstens 1 Karte).', 'dmGuess', !!st.dmGuess) + '<h3>Spielbeginn</h3>' + h.toggle('Großer Diener beginnt', 'Statt des Großen Dalmuti eröffnet der Große Diener jede Runde mit dem ersten Ausspielen.', 'dmServ', !!st.dmServ) + '<p class="fine">In der ersten Runde werden die Ränge ausgelost. Danach bestimmt die Reihenfolge, in der ihr fertig werdet, den Rang und die Sitzordnung.</p>',
+      create(seats, st) { const s = { order: xShuffle(seats), round: 1, rounds: Math.max(1, Math.min(30, st.dmRounds || 10)), guess: !!st.dmGuess, servStart: !!st.dmServ, scores: {}, winner: null, log: [], seq: 0 }; seats.forEach(p => { s.scores[p] = 0; }); deal(s); return s; },
       act(a, d, s, me) {
         const U = UI.x, hand = s.hands[me] || [], sel = (U.sel || []).filter(i => i < hand.length);
         if (a === 'next') { if (!canDeal('x' + s.round) || !s.over || s.winner) return; const n = xClone(s); n.order = s.over.order.slice(); n.round++; deal(n); n.seq++; return n; }
@@ -8757,6 +8798,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         if (a === 'play') { const n = play(s, me, cards); if (!n) { toast(!setOf(cards) ? 'Wähle Karten mit demselben Rang. Narren zählen als Joker.' : 'Du brauchst genau ' + s.table.n + (s.table.n === 1 ? ' Karte' : ' Karten') + ' mit einer niedrigeren Zahl als ' + s.table.rank + '.'); return; } U.sel = []; return n; }
         if (a === 'pass') { const n = pass(s, me); if (n) U.sel = []; return n; }
       },
+      // Wer nicht legen kann, wird nach 5 bis 8 Sekunden automatisch übersprungen (führt die Spielleitung aus)
+      autoSkip(s) { if (s.over || s.phase !== 'play' || !s.table) return null; const p = s.order[s.turn]; return p && (s.hands[p] || []).length && !dmCanPlay(s, p) ? { p, k: (s.g || 0) + ':' + s.round + ':' + s.seq + ':' + p } : null; },
+      skip(s, p) { return pass(s, p); },
       bot(s, isB, lvl) {
         if (s.over) return null;
         if (s.phase === 'tax') {
@@ -8799,7 +8843,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         }
         else {
           center = (s.table ? '<div class="trick" style="--cw:' + Math.round(cw * .8) + 'px">' + s.table.cards.map(c => '<div class="tc">' + card(c, X) + '</div>').join('') + '</div><p class="xlog">' + s.table.n + '× ' + RN[s.table.rank] + (s.table.rank < 13 ? ' (' + s.table.rank + ')' : '') + ' von ' + xNm(s.table.by) + '</p>' : '<p class="xlog">Neuer Stich: ' + xNm(cur) + (cur === me ? ' spielst' : ' spielt') + ' aus.</p>') + xLogHTML(s);
-          status = myTurn ? '<b>Du bist am Zug.</b> ' + (s.table ? 'Lege ' + s.table.n + (s.table.n === 1 ? ' Karte' : ' Karten') + ' mit niedrigerer Zahl oder passe.' : 'Spiele eine Karte oder mehrere mit demselben Rang.') : xNm(cur) + ' ist am Zug …';
+          status = myTurn ? '<b>Du bist am Zug.</b> ' + (s.table ? (dmCanPlay(s, me) ? 'Lege ' + s.table.n + (s.table.n === 1 ? ' Karte' : ' Karten') + ' mit niedrigerer Zahl oder passe.' : 'Du kannst nicht höher legen – du wirst in wenigen Sekunden automatisch übersprungen.') : 'Spiele eine Karte oder mehrere mit demselben Rang.') : xNm(cur) + ' ist am Zug …';
         }
         let mine;
         if (seated) mine = xMe(me, myTurn, '<span class="tag' + (s.order.indexOf(me) < 2 ? ' gold' : '') + '">' + title(s, me) + '</span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span>', myTurn && s.phase === 'tax' && !(s.guess && tx && !taxAskDone(s, tx, me)) ? xBtn('tax', 'Abgeben', '', 'small primary') : myTurn && s.phase === 'play' ? xBtn('play', 'Ausspielen', sel.length ? '' : ' disabled', 'small primary') + (s.table ? xBtn('pass', 'Passen', '', 'small') : '') : '') +
@@ -8807,7 +8851,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         else mine = specBar(s.order);
         return xMain(K, { chips: '<span class="chip">Runde ' + s.round + ' von ' + s.rounds + '</span>', seats: seats, center: center, status: status, mine: mine });
       },
-      rules: '<h3>Ziel</h3><p>Werde deine Karten möglichst schnell los. Die Reihenfolge, in der ihr fertig werdet, bestimmt den Rang in der nächsten Runde. Nach der eingestellten Rundenzahl gewinnt, wer die meisten Punkte hat.</p><h3>Karten</h3><p>80 Karten: Von jedem Rang gibt es so viele Karten wie seine Zahl (ein Dalmuti, zwei Erzbischöfe … zwölf Tagelöhner) und zwei Narren. Je niedriger die Zahl, desto stärker. Narren sind Joker; allein gespielt haben sie den schlechtesten Rang 13.</p><h3>Abgaben</h3><p>Vor jeder Runde gibt der Große Dalmuti zwei beliebige Karten an den Großen Diener und bekommt dessen zwei beste. Der Kleine Dalmuti tauscht ebenso eine Karte mit dem Kleinen Diener. Narren werden nicht getauscht. Wer beide Narren hält, kann die Revolution ausrufen: Dann wird nicht getauscht. Ist es der Große Diener, werden alle Ränge umgedreht.</p><h3>Der Stich</h3><p>Der Große Dalmuti beginnt mit einer Karte oder mehreren gleichen. Reihum muss man dieselbe Anzahl Karten mit niedrigerer Zahl legen oder passen. Wer gepasst hat, darf später im selben Stich wieder legen. Passen alle, beginnt, wer zuletzt gelegt hat, den nächsten Stich. Ist diese Person schon fertig, beginnt die nächste im Uhrzeigersinn.</p><h3>Wertung</h3><p>Für jede Person, die nach dir fertig wird, gibt es einen Punkt. Die Sitzordnung folgt dem neuen Rang.</p>'
+      rules: '<h3>Ziel</h3><p>Werde deine Karten möglichst schnell los. Die Reihenfolge, in der ihr fertig werdet, bestimmt den Rang in der nächsten Runde. Nach der eingestellten Rundenzahl gewinnt, wer die meisten Punkte hat.</p><h3>Karten</h3><p>80 Karten: Von jedem Rang gibt es so viele Karten wie seine Zahl (ein Dalmuti, zwei Erzbischöfe … zwölf Tagelöhner) und zwei Narren. Je niedriger die Zahl, desto stärker. Narren sind Joker; allein gespielt haben sie den schlechtesten Rang 13.</p><h3>Abgaben</h3><p>Vor jeder Runde gibt der Große Dalmuti zwei beliebige Karten an den Großen Diener und bekommt dessen zwei beste. Der Kleine Dalmuti tauscht ebenso eine Karte mit dem Kleinen Diener. Narren werden nicht getauscht. Wer beide Narren hält, kann die Revolution ausrufen: Dann wird nicht getauscht. Ist es der Große Diener, werden alle Ränge umgedreht.</p><h3>Der Stich</h3><p>Der Große Dalmuti beginnt (mit der Einstellung „Großer Diener beginnt“ der Große Diener) mit einer Karte oder mehreren gleichen. Reihum muss man dieselbe Anzahl Karten mit niedrigerer Zahl legen oder passen. Wer gepasst hat, darf später im selben Stich wieder legen. Passen alle, beginnt, wer zuletzt gelegt hat, den nächsten Stich. Ist diese Person schon fertig, beginnt die nächste im Uhrzeigersinn.</p><h3>Wertung</h3><p>Für jede Person, die nach dir fertig wird, gibt es einen Punkt. Die Sitzordnung folgt dem neuen Rang.</p>'
     });
   })();
 
@@ -9460,7 +9504,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           const hs = hand.map((c, i) => ({ c: c, i: i })), rank = c => isJ(c) ? 900 : COL.indexOf(c[0]) * 10 + val(c);
           handSort(hs, (a, b) => rank(a.c) - rank(b.c), c => isJ(c) ? [1, 0, 0] : [0, COL.indexOf(c[0]), val(c)], x => x.c);
           const r = roundPts(s, me), fz = myTurn && forced(s, me);
-          mine = xMe(me, myTurn, '<span>Aktuelle Runde: <b>' + (r.plus - r.minus) + ' P</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span>') +
+          mine = xMe(me, myTurn, '<span>Auslage: <b>+' + r.plus + ' P</b></span><span>Hand: <b>' + (r.minus ? '−' + r.minus : '0') + ' P</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span>') +
             '<div class="pnmine"><span class="pnlab">Deine Auslage</span>' + dispRow(me, myTurn) + '</div>' +
             xFan(hs.length, cw, k => { const h = hs[k], f = myTurn && fits(s, h.c), ok = myTurn && (f || (!isJ(h.c) && !fz)); return { c: (myTurn ? (ok ? 'ok' : 'no') : '') + (U.j === h.i ? ' sel' : '') + (s.got && s.got.p === me && h.i === hand.length - 1 ? ' got' : ''), a: 'data-a="c" data-i="' + h.i + '"', h: card(h.c, X) }; });
         } else mine = specBar(s.order);
