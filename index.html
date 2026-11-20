@@ -947,6 +947,9 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 <input id="ed-import" type="file" accept=".json,application/json" hidden>
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
+// Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
+var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
+
 "__WKES__";
 (function (root) {
   'use strict';
@@ -2521,14 +2524,14 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         try {
           const p = wt.col ? db.collection(wt.path).get().then(q => q.docs.map(d => ({ id: d.id, data: clone(d.data()) }))) : db.doc(wt.path).get().then(s => s.exists ? clone(s.data()) : null);
           p.then(v => { if (watchers.has(wt)) wt.cb(v); }).catch(() => {});
-        } catch (e) {}
+        } catch (e) { if (typeof __kw === 'function') __kw(e); }
       });
     };
     const poke = () => { if (named) named.emit('poke', {}).catch(() => {}); };
     const track = (wt, unsub) => { watchers.add(wt); return () => { watchers.delete(wt); unsub(); }; };
     
     const cache = new Map();
-    const echo = (path, data) => { cache.set(path, data); Promise.resolve().then(() => { if (cache.get(path) !== data) return; watchers.forEach(wt => { if (!wt.col && wt.path === path) { try { wt.cb(clone(data)); } catch (e) {} } }); }); };
+    const echo = (path, data) => { cache.set(path, data); Promise.resolve().then(() => { if (cache.get(path) !== data) return; watchers.forEach(wt => { if (!wt.col && wt.path === path) { try { wt.cb(clone(data)); } catch (e) { if (typeof __kw === 'function') __kw(e); } } }); }); };
     return {
       kind: 'claude',
       get: async path => { const s = await db.doc(path).get(); return s.exists ? clone(s.data()) : null; },
@@ -2554,7 +2557,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         } catch (e) { named = null; hooks.onPresence(null); }
       },
       setPid(pid) { if (named) named.presence({ pid }).catch(() => {}); },
-      leave() { clearTimeout(pokeT); try { if (offPeers) offPeers(); if (offPoke) offPoke(); if (named) named.leave(); } catch (e) {} named = null; offPeers = null; offPoke = null; }
+      leave() { clearTimeout(pokeT); try { if (offPeers) offPeers(); if (offPoke) offPoke(); if (named) named.leave(); } catch (e) { if (typeof __kw === 'function') __kw(e); } named = null; offPeers = null; offPoke = null; }
     };
   }
 
@@ -2595,7 +2598,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     
     const peerOpts = () => {
       const ice = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }, { urls: 'stun:stun.cloudflare.com:3478' }, { urls: 'stun:global.stun.twilio.com:3478' }, { urls: ['turn:eu-0.turn.peerjs.com:3478', 'turn:us-0.turn.peerjs.com:3478'], username: 'peerjs', credential: 'peerjsp' }];
-      try { const t = JSON.parse(localStorage.getItem('wiz.turn') || 'null'); if (t && t.urls) ice.push({ urls: String(t.urls).split(/[\s,]+/).filter(Boolean), username: t.username || '', credential: t.credential || '' }); } catch (e) {}
+      try { const t = JSON.parse(localStorage.getItem('wiz.turn') || 'null'); if (t && t.urls) ice.push({ urls: String(t.urls).split(/[\s,]+/).filter(Boolean), username: t.username || '', credential: t.credential || '' }); } catch (e) { if (typeof __kw === 'function') __kw(e); }
       return { debug: 1, config: { iceServers: ice, sdpSemantics: 'unified-plan' } };
     };
     let lostAt = null, takeT = null, taking = false, hoMe = false;
@@ -2615,11 +2618,11 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         const list = all.filter(e => e[0].startsWith('designs/'));
         if (IDB.ok()) {
           desSaving = true; desDirty = false;
-          IDB.set(DES_KEY, list).then(() => { desSaving = false; try { localStorage.removeItem(DES_KEY); } catch (e) {} }, () => { desSaving = false; desLS(list); });
+          IDB.set(DES_KEY, list).then(() => { desSaving = false; try { localStorage.removeItem(DES_KEY); } catch (e) { if (typeof __kw === 'function') __kw(e); } }, () => { desSaving = false; desLS(list); });
         } else desLS(list);
       }
       
-      try { localStorage.setItem(HOST_KEY, JSON.stringify({ code, docs: game })); } catch (e) {}
+      try { localStorage.setItem(HOST_KEY, JSON.stringify({ code, docs: game })); } catch (e) { if (typeof __kw === 'function') __kw(e); }
     };
     const persist = p => { if (role !== 'host') return; if (!p || String(p).startsWith('designs/')) desDirty = true; clearTimeout(saveT); saveT = setTimeout(persistNow, desDirty ? 1500 : 400); };
     if (typeof addEventListener === 'function') addEventListener('pagehide', persistNow);
@@ -2629,9 +2632,9 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     const enc = str => { const b = xorS(new TextEncoder().encode(str)); let o = ''; for (let i = 0; i < b.length; i += 8192) o += String.fromCharCode.apply(null, b.subarray(i, i + 8192)); return btoa(o); };
     const dec = str => { const bin = atob(str), b = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) b[i] = bin.charCodeAt(i); return new TextDecoder().decode(xorS(b)); };
     const secret = msg => ((msg.t === 'd' || msg.t === 'x') && String(msg.p || '').indexOf('games/') === 0) || (msg.t === 'op' && msg.op && String(msg.op.p || '').indexOf('games/') === 0);
-    const pack = msg => secret(msg) ? { z: enc(JSON.stringify(msg)) } : msg;
+    const pack = msg => msg;
     const unpack = msg => { if (msg && typeof msg.z === 'string') { try { return JSON.parse(dec(msg.z)); } catch (e) { return null; } } return msg; };
-    const sendTo = (c, msg) => { try { if (c.open) c.send(pack(msg)); } catch (e) {} };
+    const sendTo = (c, msg) => { try { if (c.open) c.send(pack(msg)); } catch (e) { if (typeof __kw === 'function') __kw(e); } };
     
     // ---------------------------------------------------------------------------------------------
     // Host: Jedes Gerät bekommt seine eigene Sicht auf den Spielstand (fremde Handkarten verdeckt),
@@ -2793,7 +2796,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
           .then(k => crypto.subtle.encrypt({ name: 'AES-GCM', iv }, k, new TextEncoder().encode(JSON.stringify(docs))))
           .then(ct => { if (kid === BK.kid && n === BK.n && c.open) sendTo(c, { t: 'bk', kid, iv: b64e(iv), ct: b64e(new Uint8Array(ct)) }); })
           .catch(() => {});
-      }, ms == null ? 300 : ms);
+      }, ms == null ? 1000 : ms);
     }
     // Ersatzgerät nach der Übernahme: Spielstand wiederherstellen
     const RS = { on: false, wait: false, kid: 0, got: null, t: null };
@@ -2827,7 +2830,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       });
     }
     const presenceList = () => { const s = new Set(myPid ? [myPid] : []); conns.forEach(c => { if (c._pid) s.add(c._pid); }); return [...s]; };
-    const pushPresence = () => { const l = presenceList(); hooks.onPresence(l); broadcast({ t: 'pres', l }); if (role === 'host') setTimeout(bkPlan, 0); };
+    const pushPresence = () => { const l = presenceList(); hooks.onPresence(l); broadcast({ t: 'pres', l, ts: Date.now() }); if (role === 'host') setTimeout(bkPlan, 0); };
 
     function write(op) {
       if (role === 'host') {
@@ -2887,7 +2890,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         // Drosselung: höchstens 60 Nachrichten und 12 Züge pro Sekunde je Gerät
         const now = Date.now(); if (!c._rl || now - c._rl.t > 1000) c._rl = { t: now, n: 0, a: 0 };
         if (++c._rl.n > 60 && msg.t !== 'hello!') return;
-        if (msg.t === 'act' && ++c._rl.a > 12) { sendTo(c, { t: 'actr', id: msg.id, r: { toasts: ['Zu viele Züge auf einmal.'], ok: false } }); return; }
+        if (msg.t === 'act' && ++c._rl.a > 10) { sendTo(c, { t: 'actr', id: msg.id, r: { toasts: ['Zu viele Züge auf einmal.'], ok: false } }); return; }
         if (msg.t === 'hello') {
           if (c._hv) { (c._hb = c._hb || []).push(msg); return; }
           c._hv = true;
@@ -2902,6 +2905,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         }
         if (c._hv && msg.t !== 'hello!') { (c._hb = c._hb || []).push(msg); return; }
         if (msg.t === 'hello!') {
+          sendTo(c, { t: 'clk', ts: Date.now() });
           const np = String(msg.pid || ''), changed = c._pid !== np;
           c._pid = np; pushPresence();
           if (!c._synced) { c._synced = true; clearTimeout(c._helloT); syncConn(c); }
@@ -2944,10 +2948,10 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     function host(roomCode, resume) {
       code = roomCode; role = 'host'; closed = false; hoBusy = false;
       let saved = null;
-      try { saved = JSON.parse(localStorage.getItem(HOST_KEY) || 'null'); } catch (e) {}
+      try { saved = JSON.parse(localStorage.getItem(HOST_KEY) || 'null'); } catch (e) { if (typeof __kw === 'function') __kw(e); }
       mem.docs.clear();
       let lsDes = null;
-      try { lsDes = JSON.parse(localStorage.getItem(DES_KEY) || 'null'); } catch (e) {}
+      try { lsDes = JSON.parse(localStorage.getItem(DES_KEY) || 'null'); } catch (e) { if (typeof __kw === 'function') __kw(e); }
       const fromIdb = IDB.ok() ? IDB.get(DES_KEY).catch(() => null) : Promise.resolve(null);
       return fromIdb.then(idbDes => {
         const ds = Array.isArray(idbDes) ? idbDes : lsDes;
@@ -2966,7 +2970,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         const to = setTimeout(() => { if (!opened) rej(new Error('Der Vermittlungsdienst antwortet nicht. Bitte später erneut versuchen.')); }, 15000);
         peer.on('open', () => { opened = true; clearTimeout(to); linkUp = true; hooks.onLink(true); hooks.onPresence(presenceList()); res(); });
         peer.on('connection', hostWire);
-        peer.on('disconnected', () => { if (!closed) setTimeout(() => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) {} }, 2000); });
+        peer.on('disconnected', () => { if (!closed) setTimeout(() => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) { if (typeof __kw === 'function') __kw(e); } }, 2000); });
         peer.on('error', e => {
           if (!opened) { clearTimeout(to); const err = new Error(e.type === 'unavailable-id' ? 'Dieser Raumcode ist gerade vergeben.' : 'Verbindung fehlgeschlagen (' + (e.type || 'Fehler') + ').'); err.type = e.type; rej(err); }
           else if (e.type === 'unavailable-id' && role === 'host') demote();
@@ -2975,7 +2979,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     }
     
     function demote() {
-      try { if (peer) peer.destroy(); } catch (e) {}
+      try { if (peer) peer.destroy(); } catch (e) { if (typeof __kw === 'function') __kw(e); }
       conns.clear(); role = 'client'; linkUp = false; hooks.onLink(false);
       if (hooks.onNotice) hooks.onNotice('Ein anderes Gerät hat den Raum übernommen. Du wirst neu verbunden …');
       clientReopen();
@@ -2985,7 +2989,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       const first = { pending: false };
       peer = new root.Peer(undefined, peerOpts());
       peer.on('open', () => clientConnect(first));
-      peer.on('disconnected', () => { if (!closed) setTimeout(() => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) {} }, 2000); });
+      peer.on('disconnected', () => { if (!closed) setTimeout(() => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) { if (typeof __kw === 'function') __kw(e); } }, 2000); });
       peer.on('error', e => { if (e.type === 'peer-unavailable' && conn && conn._fail) conn._fail(new Error('Raum nicht erreichbar.')); });
     }
     
@@ -2993,11 +2997,11 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       n = n || 0;
       if (taking || closed || role !== 'client') return;
       taking = true;
-      try { if (peer) peer.destroy(); } catch (e) {}
+      try { if (peer) peer.destroy(); } catch (e) { if (typeof __kw === 'function') __kw(e); }
       conn = null; clearTimeout(retryT);
       const p2 = new root.Peer(PEER_PREFIX + code, peerOpts());
       let ok = false;
-      const giveUp = () => { if (ok) return; taking = false; try { p2.destroy(); } catch (e) {} clientReopen(); };
+      const giveUp = () => { if (ok) return; taking = false; try { p2.destroy(); } catch (e) { if (typeof __kw === 'function') __kw(e); } clientReopen(); };
       const to = setTimeout(giveUp, 12000);
       p2.on('open', () => {
         ok = true; clearTimeout(to); taking = false; peer = p2; role = 'host'; lostAt = null; linkUp = true;
@@ -3007,12 +3011,12 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         if (hooks.onPromote) hooks.onPromote(!!ho);
       });
       p2.on('connection', hostWire);
-      p2.on('disconnected', () => { if (!closed) setTimeout(() => { try { if (!p2.destroyed) p2.reconnect(); } catch (e) {} }, 2000); });
+      p2.on('disconnected', () => { if (!closed) setTimeout(() => { try { if (!p2.destroyed) p2.reconnect(); } catch (e) { if (typeof __kw === 'function') __kw(e); } }, 2000); });
       p2.on('error', e => {
         if (!ok) {
           clearTimeout(to);
           
-          if (ho && e.type === 'unavailable-id' && n < 15) { try { p2.destroy(); } catch (x) {} taking = false; setTimeout(() => promote(n + 1, true), 1000); return; }
+          if (ho && e.type === 'unavailable-id' && n < 15) { try { p2.destroy(); } catch (x) { if (typeof __kw === 'function') __kw(x); } taking = false; setTimeout(() => promote(n + 1, true), 1000); return; }
           giveUp();
         } else if (e.type === 'unavailable-id' && role === 'host') demote();
       });
@@ -3032,7 +3036,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       conn = c;
       let gotReady = false, seen = null;
       let to = null;
-      const arm = ms => { clearTimeout(to); to = setTimeout(() => { if (!gotReady) { try { c.close(); } catch (e) {} fail(new Error('Der Raum antwortet nicht. Ist der Ersteller noch online?')); } }, ms); };
+      const arm = ms => { clearTimeout(to); to = setTimeout(() => { if (!gotReady) { try { c.close(); } catch (e) { if (typeof __kw === 'function') __kw(e); } fail(new Error('Der Raum antwortet nicht. Ist der Ersteller noch online?')); } }, ms); };
       arm(25000);
       const fail = err => {
         if (conn !== c || closed) return;
@@ -3069,7 +3073,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
           if (hadPv && JSON.stringify(nd) === JSON.stringify(mem.docs.get(msg.p) || null)) return;
           mem.put(msg.p, nd);
         }
-        else if (msg.t === 'pres') hooks.onPresence(msg.l);
+        else if (msg.t === 'pres') { hooks.onPresence(msg.l); if (typeof msg.ts === 'number' && typeof hooks.onClock === 'function') hooks.onClock(msg.ts - Date.now()); }
+        else if (msg.t === 'clk') { if (typeof msg.ts === 'number' && typeof hooks.onClock === 'function') hooks.onClock(msg.ts - Date.now()); }
         else if (msg.t === 'who') { c._nonce = typeof msg.n === 'string' ? msg.n : ''; sayHello(c); }
         else if (msg.t === 'deny') { if (typeof hooks.onDeny === 'function') hooks.onDeny(msg.pid); }
         else if (msg.t === 'bks' && msg.kid && Array.isArray(msg.s)) { bkMine = { kid: msg.kid, s: msg.s.slice(0, 2).map(String), h: !!msg.h }; bkBlob = null; }
@@ -3102,7 +3107,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         peer = new root.Peer(undefined, peerOpts());
         const to = setTimeout(() => { if (!opened && first.pending) { first.pending = false; rej(new Error('Der Vermittlungsdienst antwortet nicht. Bitte später erneut versuchen.')); } }, 15000);
         peer.on('open', () => { opened = true; clearTimeout(to); clientConnect(first); });
-        peer.on('disconnected', () => { if (!closed) setTimeout(() => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) {} }, 2000); });
+        peer.on('disconnected', () => { if (!closed) setTimeout(() => { try { if (!peer.destroyed) peer.reconnect(); } catch (e) { if (typeof __kw === 'function') __kw(e); } }, 2000); });
         peer.on('error', e => {
           if (e.type === 'peer-unavailable') {
             if (conn && conn._fail) conn._fail(new Error('Raum nicht gefunden. Stimmt der Code, und hat der Ersteller die Seite offen?'));
@@ -3150,7 +3155,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
           broadcast({ t: 'ho', pid });
           setTimeout(() => {
             if (role !== 'host' || closed) return;
-            try { if (peer) peer.destroy(); } catch (e) {}
+            try { if (peer) peer.destroy(); } catch (e) { if (typeof __kw === 'function') __kw(e); }
             conns.clear(); role = 'client'; linkUp = false; hoBusy = false; hooks.onLink(false);
             setTimeout(clientReopen, 1500);
           }, 1200);
@@ -3181,7 +3186,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       forgetRoom() { [...mem.docs.keys()].forEach(p => { if (!p.startsWith('designs/')) mem.docs.delete(p); }); code = null; persistNow(); },
       leave() {
         persistNow(); closed = true; clearTimeout(retryT); clearInterval(takeT); takeT = null; lostAt = null;
-        try { if (peer) peer.destroy(); } catch (e) {}
+        try { if (peer) peer.destroy(); } catch (e) { if (typeof __kw === 'function') __kw(e); }
         peer = null; conn = null; conns.clear(); linkUp = false; role = null;
       }
     };
@@ -3203,8 +3208,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
   const LS = {
     get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-    set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
-    del(k) { try { localStorage.removeItem(k); } catch (e) {} }
+    set(k, v) { try { localStorage.setItem(k, v); } catch (e) { if (typeof __kw === 'function') __kw(e); } },
+    del(k) { try { localStorage.removeItem(k); } catch (e) { if (typeof __kw === 'function') __kw(e); } }
   };
   const rnd = () => { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] / 4294967296; };
   const pickStr = (abc, n) => Array.from({ length: n }, () => abc[Math.floor(rnd() * abc.length)]).join('');
@@ -3260,8 +3265,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     georgia: { name: 'Georgia (Systemschrift)', css: "Georgia, 'Times New Roman', serif" }
   };
   // Kartenschriften lädt die Seite erst, wenn ein Kartenset sie wirklich benutzt
-  // Schriften liegen im Ordner fonts/ neben der index.html. Fehlt eine Datei (oder klappt das Laden nicht),
-  // kommt die Schrift wie früher von Google Fonts.
+  // Schriften liegen im Ordner fonts/ neben der index.html. Fehlt eine Datei, bleibt es bei der Systemschrift (kein Abruf bei Google).
   const FONT_GF = { base: 'Alegreya+Sans:wght@400;500;700&family=Grenze+Gotisch:wght@500;700', cinzel: 'Cinzel:wght@700', playfair: 'Playfair+Display:wght@700', oswald: 'Oswald:wght@600', caveat: 'Caveat:wght@700', bangers: 'Bangers', elite: 'Special+Elite' }, fontOn = {};
   const FONT_FILES = {
     base: [['Alegreya Sans', 'alegreya-sans-v28-latin-regular', 400], ['Alegreya Sans', 'alegreya-sans-v28-latin-500', 500], ['Alegreya Sans', 'alegreya-sans-v28-latin-700', 700], ['Grenze Gotisch', 'grenze-gotisch-v20-latin-500', 500], ['Grenze Gotisch', 'grenze-gotisch-v20-latin-700', 700]],
@@ -3271,11 +3275,10 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   function needFont(k) {
     if (!FONT_GF[k] || fontOn[k] || typeof document === 'undefined') return;
     fontOn[k] = 1;
-    const google = () => { const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'https://fonts.googleapis.com/css2?family=' + FONT_GF[k] + '&display=swap'; document.head.appendChild(l); };
-    if (typeof FontFace !== 'function' || !document.fonts || !/^https?:$/.test(location.protocol)) { google(); return; }
+    if (typeof FontFace !== 'function' || !document.fonts || !/^https?:$/.test(location.protocol)) return;
     const faces = FONT_FILES[k].map(x => new FontFace(x[0], 'url(fonts/' + x[1] + '.woff2) format("woff2")', { weight: String(x[2]), style: 'normal', display: 'swap' }));
     faces.forEach(f => document.fonts.add(f));
-    Promise.all(faces.map(f => f.load())).catch(() => { faces.forEach(f => { try { document.fonts.delete(f); } catch (e) {} }); google(); });
+    Promise.all(faces.map(f => f.load())).catch(e => { faces.forEach(f => { try { document.fonts.delete(f); } catch (x) { if (typeof __kw === 'function') __kw(x); } }); console.warn('[Kartenrunde] Schriftdatei fehlt, es wird eine Systemschrift verwendet:', FONT_FILES[k].map(x => 'fonts/' + x[1] + '.woff2').join(', ')); });
   }
   needFont('base');
   const CARD_RE = /^(c_([abcd](1[0-3]|[1-9])|[ZN][1-4])|sb_(1[0-2]|[1-9]|w)|u_([abcd]([0-9]|[SRD])|W|F)|p_([abcd](1[0-2]|[1-9])|W|S)|w_([abcd](1[0-4]|[1-9])|Z[1-4]))$/;
@@ -3491,7 +3494,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     joined: false, leaving: false, readonly: false, online: null, connected: true, modal: null, sel: null, toast: null
   };
   const UI = { linger: {}, seen: {}, toastT: null, renderQ: false, botT: null, colT: null };
-  UI.lite = LS.get('wiz.lite') === '1'; try { document.body.classList.toggle('lite', UI.lite); } catch (e) {}
+  UI.lite = LS.get('wiz.lite') === '1'; try { document.body.classList.toggle('lite', UI.lite); } catch (e) { if (typeof __kw === 'function') __kw(e); }
   const ED = { id: 'default', pick: null };
   const CR = { on: false, drag: null };
   let DLP = null;
@@ -3506,6 +3509,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     onPresence(list) { S.online = list ? new Set(list) : null; requestRender(); },
     onLink(up) { S.connected = up; requestRender(); syncWake(); if (up) setTimeout(bindSelf, 300); if (up && S.code) setTimeout(() => { if (runsGame()) { botTick(); hostSched(); } }, 80); },
     identity: () => identity(),
+    // Uhrenabgleich mit der Spielleitung (geglättet, Laufzeit der Nachricht kaum ins Gewicht)
+    onClock(off) { UI.clkOff = UI.clkOff == null ? off : Math.round(UI.clkOff * 0.7 + off * 0.3); },
     // Darf dieses Gerät die Platz-Kennung nutzen? Gebundene Kennungen nur vom eigenen Gerät; Computerplätze und die Spielleitung nie von außen
     allowPid(pid, dev, m) {
       if (!m || !pid) return 'ok';
@@ -3668,6 +3673,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   const fwdOn = () => S.mode === 'peer' && !!backend && typeof backend.act === 'function' && !backend.isHost();
   const FWD = { on: false, hit: false, ops: [], rec: [], toasts: [] }, HXC = { on: false, wrote: false, toasts: [] };
   // Aktionen, die nie über den Host laufen (Menüs, Editor, Beitritt, Bestätigungsdialoge …)
+  // Nur diese Aktionen sind Spielzüge: Bei Mitspielern laufen sie über die Spielleitung, und nur diese führt die Spielleitung für andere aus.
+  const FWD_YES = /^(xg|bid|pick|card|next|unoCard|unoDbl|unoGo|unoColor|unoDraw|unoPass|p10Pick|p10Draw|p10Pile|p10Sel|p10Lay|p10Hit|p10Next|witToggle|witPass|witCard|witNext|sbSrc|sbBuild|sbDisc|sbPass)$/;
   const FWD_NO = /^(modal|closeModal|confirmYes|confTog|leave|leaveReq|copy|emo|emoToggle|optInfo|viewTog|specView|rename|renameSave|zoom|create|join|watch|sit|seat|selfPlay|takeHost|giveHost|kick|assign|unwatchOther|reqOk|reqNo|turnSave|theme.*|crop.*|persp.*|ed[A-Z].*|av[A-Z].*|num.*)$/;
   const UI_S = ['sel', 'sbSel', 'unoPick', 'unoAsk', 'unoTwo', 'p10Sel', 'witSel'], UI_U = ['x', 'bidV'];
   function uiSnap() { const o = { s: {}, u: {} }; UI_S.forEach(k => { o.s[k] = S[k] === undefined ? null : clone(S[k]); }); UI_U.forEach(k => { o.u[k] = UI[k] === undefined ? null : clone(UI[k]); }); return o; }
@@ -3690,7 +3697,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   // Gast: Aktion erst lokal ausführen (für reine Auswahl-Schritte). Will sie den Spielstand ändern,
   // wird stattdessen der Host gefragt.
   function runAction(name, f, el, ev) {
-    if (!fwdOn() || FWD_NO.test(name)) { f(el, ev); return; }
+    if (!fwdOn() || !FWD_YES.test(name)) { f(el, ev); return; }
     const snap = uiSnap();
     FWD.on = true; FWD.hit = false; FWD.ops = []; FWD.rec = []; FWD.toasts = [];
     try { f(el, ev); } catch (e) { FWD.hit = true; }
@@ -3723,7 +3730,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
           FWD.rec.push({ k, p, d: d === undefined ? undefined : clone(d) });
           return Promise.resolve();
         }
-        if (typeof p === 'string' && S.code && p.indexOf(gamePath() + '/rounds/') === 0) { if (HXC.on) HXC.wrote = true; if (!UI.botRun) UI.mover = S.pid; }
+        if (typeof p === 'string' && S.code && p.indexOf(gamePath() + '/rounds/') === 0) { if (HXC.on) HXC.wrote = true; if (!UI.botRun) UI.mover = S.pid; if (!runsGame() && !HXC.on) console.warn('[Kartenrunde] Spielstand-Änderung außerhalb eines gekennzeichneten Spielzugs – bitte die Aktion in FWD_YES eintragen.', p); }
         return f.call(be, p, d);
       };
     });
@@ -3732,7 +3739,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   // Host: Zug eines Gastes in dessen Namen ausführen
   function hostAct(m, actor) {
     const no = { toasts: [] };
-    if (!m || typeof m !== 'object' || typeof m.n !== 'string' || !Object.prototype.hasOwnProperty.call(A, m.n) || typeof A[m.n] !== 'function' || FWD_NO.test(m.n)) return no;
+    if (!m || typeof m !== 'object' || typeof m.n !== 'string' || !Object.prototype.hasOwnProperty.call(A, m.n) || typeof A[m.n] !== 'function' || !FWD_YES.test(m.n)) return no;
     const meta = S.meta;
     if (!meta || !actor || !S.code) return no;
     const seated = !!(meta.players && meta.players[actor]), lead = meta.host === actor;
@@ -3743,7 +3750,9 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     HXC.on = true; HXC.wrote = false; HXC.toasts = [];
     try {
       S.pid = actor; S.joined = seated; S.watch = !seated; uiLoad(m.ux);
-      A[m.n](fakeEl(m.ds, m.cls), { preventDefault() {}, stopPropagation() {}, target: null });
+      const ret = A[m.n](fakeEl(m.ds, m.cls), { preventDefault() {}, stopPropagation() {}, target: null });
+      // Spielzüge müssen ohne Warten fertig werden: Nach einem await liefe der Rest schon wieder unter der Kennung der Spielleitung
+      if (ret && typeof ret.then === 'function') console.warn('[Kartenrunde] Spielzug „' + m.n + '“ wartet asynchron – das ist für Züge von Mitspielern nicht erlaubt.');
     } catch (e) { console.error('Zug konnte nicht ausgeführt werden', e); }
     finally { S.pid = sp; S.joined = sj; S.watch = sw; uiLoad(save); HXC.on = false; }
     requestRender();
@@ -3928,7 +3937,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   function blobPrune() {
     if (BLOBS.size < 40) return;
     const live = new Set(); [tableDynX().imgs, S.modal === 'editor' ? edDynX().imgs : null].forEach(m => Object.values(m || {}).forEach(d => live.add(d)));
-    BLOBS.forEach((u, d) => { if (!live.has(d)) { if (u.indexOf('blob:') === 0) try { URL.revokeObjectURL(u); } catch (e) {} BLOBS.delete(d); Object.keys(dynMemo).forEach(k => { delete dynMemo[k]; }); } });
+    BLOBS.forEach((u, d) => { if (!live.has(d)) { if (u.indexOf('blob:') === 0) try { URL.revokeObjectURL(u); } catch (e) { if (typeof __kw === 'function') __kw(e); } BLOBS.delete(d); Object.keys(dynMemo).forEach(k => { delete dynMemo[k]; }); } });
   }
   function dynCssMemo(scope, X) {
     
@@ -3944,8 +3953,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   
   function releaseImgs() {
     const keep = [tableX().id, S.modal === 'editor' ? ED.id : null];
-    Object.keys(imgWatch).forEach(id => { if (keep.indexOf(id) >= 0) return; try { imgWatch[id](); } catch (e) {} delete imgWatch[id]; if (S.imgs) delete S.imgs[id]; if (S.imgm) delete S.imgm[id]; if (S.imgf) delete S.imgf[id]; });
-    Object.keys(srcWatch).forEach(id => { if (S.modal === 'editor' && ED.id === id) return; try { srcWatch[id](); } catch (e) {} delete srcWatch[id]; if (S.srcs) delete S.srcs[id]; });
+    Object.keys(imgWatch).forEach(id => { if (keep.indexOf(id) >= 0) return; try { imgWatch[id](); } catch (e) { if (typeof __kw === 'function') __kw(e); } delete imgWatch[id]; if (S.imgs) delete S.imgs[id]; if (S.imgm) delete S.imgm[id]; if (S.imgf) delete S.imgf[id]; });
+    Object.keys(srcWatch).forEach(id => { if (S.modal === 'editor' && ED.id === id) return; try { srcWatch[id](); } catch (e) { if (typeof __kw === 'function') __kw(e); } delete srcWatch[id]; if (S.srcs) delete S.srcs[id]; });
   }
   function refreshDyn() {
     releaseImgs(); blobPrune();
@@ -4019,11 +4028,11 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     return false;
   }
   
-  function roomSeen(code) { try { const r = JSON.parse(LS.get('wiz.rooms') || '{}') || {}; r[code] = Date.now(); LS.set('wiz.rooms', JSON.stringify(r)); } catch (e) {} }
+  function roomSeen(code) { try { const r = JSON.parse(LS.get('wiz.rooms') || '{}') || {}; r[code] = Date.now(); LS.set('wiz.rooms', JSON.stringify(r)); } catch (e) { if (typeof __kw === 'function') __kw(e); } }
   function pruneRoomKeys() {
     try {
-      let rooms = {}; try { rooms = JSON.parse(localStorage.getItem('wiz.rooms') || '{}') || {}; } catch (e) {}
-      let last = null; try { last = JSON.parse(localStorage.getItem('wiz.last') || 'null'); } catch (e) {}
+      let rooms = {}; try { rooms = JSON.parse(localStorage.getItem('wiz.rooms') || '{}') || {}; } catch (e) { if (typeof __kw === 'function') __kw(e); }
+      let last = null; try { last = JSON.parse(localStorage.getItem('wiz.last') || 'null'); } catch (e) { if (typeof __kw === 'function') __kw(e); }
       const now = Date.now(), keep = 7 * 864e5, cur = last && last.code;
       for (let i = localStorage.length - 1; i >= 0; i--) {
         const k = localStorage.key(i), m = /^wiz\.(pid|rid|claim)\.([A-Za-z0-9]+)$/.exec(k || '');
@@ -4031,7 +4040,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       }
       Object.keys(rooms).forEach(c => { if (now - rooms[c] >= keep) delete rooms[c]; });
       localStorage.setItem('wiz.rooms', JSON.stringify(rooms));
-    } catch (e) {}
+    } catch (e) { if (typeof __kw === 'function') __kw(e); }
   }
   function pidLS(id) { roomSeen(S.code); LS.set('wiz.pid.' + S.code, id); LS.set('wiz.rid.' + S.code, (S.meta && S.meta.rid) || ''); }
   async function createRoom() {
@@ -4056,7 +4065,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       enterRoom(code, S.mode === 'peer');
       
       if (window.WIZ_PRESET && typeof window.WIZ_PRESET === 'object') {
-        try { await importDesign(new File([JSON.stringify(window.WIZ_PRESET)], 'preset.json')); if (ED.id && ED.id !== 'default') await backend.update(gamePath(), { designId: ED.id }); } catch (e) {}
+        try { await importDesign(new File([JSON.stringify(window.WIZ_PRESET)], 'preset.json')); if (ED.id && ED.id !== 'default') await backend.update(gamePath(), { designId: ED.id }); } catch (e) { if (typeof __kw === 'function') __kw(e); }
       }
     } catch (e) { S.err = (e && e.message && !e.code) ? e.message : 'Der Raum konnte nicht erstellt werden. Hast du Schreibrechte für diese Seite?'; }
     S.busy = false; render();
@@ -4106,11 +4115,11 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     backend.enter(code, S.pid);
   }
   function exitRoom(msg) {
-    unsubs.forEach(u => { try { u(); } catch (e) {} }); unsubs = [];
-    Object.values(imgWatch).forEach(u => { try { u(); } catch (e) {} }); imgWatch = {};
+    unsubs.forEach(u => { try { u(); } catch (e) { if (typeof __kw === 'function') __kw(e); } }); unsubs = [];
+    Object.values(imgWatch).forEach(u => { try { u(); } catch (e) { if (typeof __kw === 'function') __kw(e); } }); imgWatch = {};
     if (backend) backend.leave();
     LS.del('wiz.last');
-    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) { if (typeof __kw === 'function') __kw(e); }
     S.code = null; S.meta = null; S.rounds = []; S.modal = null; S.joined = false; S.watch = false; UI.wAdd = {}; S.leaving = false; S.online = null; S.connected = true; S.imgs = {};
     S.err = msg || '';
     clearTimeout(UI.botT); UI.botT = null; setBusy(null); titleMark(false); syncWake();
@@ -4210,7 +4219,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     botTick();
     hostSched();
     syncWake();
-    try { histTick(); } catch (e) {}
+    tlSync();
+    try { histTick(); } catch (e) { if (typeof __kw === 'function') __kw(e); }
   }
   // ---- Punkteverlauf als Diagramm (Ende von Wizard, Skull King, Phase 10, Cabo) ----
   const CH_COL = ['#f2c14e', '#5fb3f5', '#ef6f6c', '#7bd389', '#c792ea', '#ff9f43', '#4dd0c8', '#f78fb3', '#a3a3ff', '#d4e157'];
@@ -4251,6 +4261,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   // Spielende bei Stichspielen: zuerst der letzte Stich, mit „Zur Statistik“ geht es zur Endübersicht
   function endGate(html) {
     const m = S.meta; if (!m) return html;
+    const wait = Math.max(UI.trickHold || 0, UI.flyEnd || 0) - Date.now();
+    if (wait > 0) { clearTimeout(UI.endT); UI.endT = setTimeout(requestRender, wait + 60); return ''; }
     const key = S.code + ':' + (m.g || 0);
     let lt = null; try { lt = lastTrickData().t; } catch (e) { lt = null; }
     const fig = (html.match(/<figure class="ptchart">[\s\S]*?<\/figure>/) || [])[0], fo = '<div class="sumfoot">', fi = html.lastIndexOf(fo);
@@ -4389,7 +4401,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     UI.mover = null;
     if (grew || mv || UI.twG !== m.g) { UI.twK = Math.max(UI.twK || 0, (m.tw && m.tw.k) || 0) + 1; UI.twStart = Date.now(); UI.twG = m.g; }
     UI.twPs = ps;
-    const tw = ps.length ? { ps, k: UI.twK } : null;
+    const tw = ps.length ? { ps, k: UI.twK, at: UI.twStart } : null;
     if (JSON.stringify(tw) !== JSON.stringify(m.tw || null)) w(backend.update(gamePath(), { tw }));
   }
   // ---- „Du bist dran“ im Tab-Titel und als kurzer Ton ----
@@ -4413,14 +4425,14 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       o.type = 'sine'; o.frequency.setValueAtTime(660, t); o.frequency.setValueAtTime(880, t + 0.12);
       g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.18, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.32);
       o.connect(g); g.connect(C.destination); o.start(t); o.stop(t + 0.35);
-    } catch (e) {}
+    } catch (e) { if (typeof __kw === 'function') __kw(e); }
   }
   // Ohne vorherige Berührung dürfen Browser keinen Ton abspielen: beim ersten Antippen freischalten.
   document.addEventListener('pointerdown', function unlock() { if (sndOn()) audioCtx(); document.removeEventListener('pointerdown', unlock, true); }, true);
   function sigCheck(meta) {
     const tw = meta && meta.status === 'playing' ? meta.tw : null, k = tw ? tw.k : null;
     if (k !== UI.twSeenK) {
-      UI.twSeenK = k; UI.twAt = Date.now(); UI.tlWarned = false;
+      UI.twSeenK = k; UI.twAt = tw && typeof tw.at === 'number' ? tw.at - (runsGame() ? 0 : UI.clkOff || 0) : Date.now(); UI.tlWarned = false;
       if (myTurnNow() && document.hidden) { titleMark(true); if (sigOn() && sndOn()) beep(); }
     }
     if (!myTurnNow() || !document.hidden) titleMark(false);
@@ -4457,7 +4469,11 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       if (p) { UI.probe = p; UI.botRun = true; try { const a = nextBotAction(); if (a) a.run(); } catch (e) { console.error(e); } finally { UI.probe = null; UI.botRun = false; } }
     }
   }
-  setInterval(tlTick, 250);
+  function tlSync() {
+    const need = !!(S.code && S.meta && S.meta.status === 'playing' && settings().tlOn);
+    if (need && !UI.tlI) UI.tlI = setInterval(tlTick, 250);
+    else if (!need && UI.tlI) { clearInterval(UI.tlI); UI.tlI = null; tlTick(); }
+  }
   // ---- Bildschirm bei der Spielleitung wach halten ----
   function syncWake() {
     const want = !!(navigator.wakeLock && S.code && S.mode === 'peer' && backend && backend.isHost && backend.isHost() && S.meta && S.meta.status === 'playing' && !document.hidden);
@@ -4742,13 +4758,11 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     await w(backend.update(gamePath(), { status: 'playing', g, order: seats, firstDealer: first, total: pl.total, start: pl.start, mono: !!st.mono, game: 'wizard' }));
     S.busy = false;
   }
-  async function nextRound() {
+  function nextRound() {
     const c = ctx();
     if (!c || !c.d || c.d.phase !== 'done' || c.over || !canDeal('r' + c.rd.n) || S.busy) return;
-    S.busy = true;
     const n = c.rd.n + 1, P = c.m.order.length;
-    await w(backend.set(gamePath() + '/rounds/' + rid(c.rd.g, n), E.dealRound({ g: c.rd.g, n, cards: (c.m.start || 1) + n - 1, seats: c.m.order, dealerIdx: ((c.m.firstDealer || 0) + n - 1) % P, blind: false, mono: !!c.m.mono }, rnd)));
-    S.busy = false;
+    w(backend.set(gamePath() + '/rounds/' + rid(c.rd.g, n), E.dealRound({ g: c.rd.g, n, cards: (c.m.start || 1) + n - 1, seats: c.m.order, dealerIdx: ((c.m.firstDealer || 0) + n - 1) % P, blind: false, mono: !!c.m.mono }, rnd)));
   }
 
 
@@ -4762,7 +4776,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     'const handSort = (a, f) => a.sort(f), bidSlider = () => false, bidSliderHTML = () => "", canDeal = () => true, dealWaitHTML = () => "";',
     'const tableX = () => { const games = {}; Object.keys(XG).forEach(k => { games[k] = { cols: (XG[k].cols || []).map(c => ({ name: c[0], color: c[1], sym: c[2] || "" })) }; }); return { D: { games: games }, imgs: {} }; };',
     'const window = { innerWidth: 900 }, LS = { get: () => null, set: () => {}, del: () => {} };',
-    'const xgReg = (k, G) => { XG[k] = G; };'
+    'const xgReg = (k, G) => { XG[k] = G; };',
+    'const __kw = e => { try { console.warn("[Kartenrunde/Worker]", e); } catch (x) { return; } };'
   ].join('\n');
   const WK_POST = [
     'self.onmessage = e => { const d = e.data; let r = null, err = null;',
@@ -4783,14 +4798,14 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   }
   let WK = null, wkBad = false, wkId = 0;
   const wkJobs = {};
-  function wkFail(why) { window.__wkFail = String(why || 'Fehler'); wkBad = true; try { if (WK) WK.terminate(); } catch (e) {} WK = null; Object.keys(wkJobs).forEach(k => { const j = wkJobs[k]; delete wkJobs[k]; clearTimeout(j.t); j.no('worker'); }); }
+  function wkFail(why) { window.__wkFail = String(why || 'Fehler'); wkBad = true; try { if (WK) WK.terminate(); } catch (e) { if (typeof __kw === 'function') __kw(e); } WK = null; Object.keys(wkJobs).forEach(k => { const j = wkJobs[k]; delete wkJobs[k]; clearTimeout(j.t); j.no('worker'); }); }
   function wkGet() {
     if (WK || wkBad) return WK;
     try {
       const src = wkSrc(); if (!src) { wkBad = true; return null; }
       WK = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })));
       WK.onmessage = e => { const d = e.data || {}, j = wkJobs[d.id]; if (!j) return; delete wkJobs[d.id]; clearTimeout(j.t); window.__wkN = (window.__wkN || 0) + 1; if (d.err) { window.__wkErr = d.err; j.no(d.err); } else j.ok(d.r); };
-      WK.onerror = ev => { try { ev.preventDefault(); } catch (e) {} wkFail(ev && ev.message); };
+      WK.onerror = ev => { try { ev.preventDefault(); } catch (e) { if (typeof __kw === 'function') __kw(e); } wkFail(ev && ev.message); };
     } catch (e) { wkFail(e && e.message); }
     return WK;
   }
@@ -4811,7 +4826,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     const fin = () => { UI.botBusy = false; setTimeout(botTick, 30); };
     const same = () => { const s2 = getS(); return s2 && JSON.stringify(s2) === sig ? s2 : null; };
     wkRun(Object.assign({ s: JSON.parse(sig), ms }, job)).then(r => { if (r && same()) apply(r); fin(); }, () => {
-      try { const s2 = same(); if (s2) { globalThis.__mcEnd = Date.now() + ms; const r = sync(s2); if (r) apply(r); } } catch (e) {}
+      try { const s2 = same(); if (s2) { globalThis.__mcEnd = Date.now() + ms; const r = sync(s2); if (r) apply(r); } } catch (e) { if (typeof __kw === 'function') __kw(e); }
       fin();
     });
   }
@@ -5073,13 +5088,11 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       S.sel = null;
       w(backend.update(c.path, { plays: { [c.d.playCount]: { p: c.me, c: card } } }));
     },
-    async witNext() {
+    witNext() {
       const c = wctx();
       if (!c || c.d.phase !== 'done' || c.over || !canDeal('w' + c.rd.n) || S.busy) return;
-      S.busy = true;
       const n = c.rd.n + 1, P = c.m.order.length;
-      await w(backend.set(gamePath() + '/rounds/' + wid(c.rd.g, n), HX.deal({ g: c.rd.g, n, seats: c.m.order, dealerIdx: ((c.m.firstDealer || 0) + n - 1) % P }, rnd)));
-      S.busy = false;
+      w(backend.set(gamePath() + '/rounds/' + wid(c.rd.g, n), HX.deal({ g: c.rd.g, n, seats: c.m.order, dealerIdx: ((c.m.firstDealer || 0) + n - 1) % P }, rnd)));
     },
     sbStockStd() { if (isHost()) w(backend.update(gamePath(), { settings: { sbStock: 0 } })); },
     sbStockStep(el) {
@@ -5457,7 +5470,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     ev.preventDefault();
     const cv = ev.target;
     CR.drag = { x: ev.clientX, y: ev.clientY, ox: CR.ox, oy: CR.oy, k: cv.width / (cv.clientWidth || cv.width) };
-    try { cv.setPointerCapture(ev.pointerId); } catch (e) {}
+    try { cv.setPointerCapture(ev.pointerId); } catch (e) { if (typeof __kw === 'function') __kw(e); }
   });
   document.addEventListener('pointermove', ev => {
     if (!CR.drag || !CR.on) return;
@@ -5730,7 +5743,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   }
   
   
-  const fetchCol = path => new Promise(res => { let done = false, un = null; un = backend.watchCol(path, list => { if (done) return; done = true; res(list || []); setTimeout(() => { try { un && un(); } catch (e) {} }, 0); }); setTimeout(() => { if (!done) { done = true; res([]); try { un && un(); } catch (e) {} } }, 8000); });
+  const fetchCol = path => new Promise(res => { let done = false, un = null; un = backend.watchCol(path, list => { if (done) return; done = true; res(list || []); setTimeout(() => { try { un && un(); } catch (e) { if (typeof __kw === 'function') __kw(e); } }, 0); }); setTimeout(() => { if (!done) { done = true; res([]); try { un && un(); } catch (e) { if (typeof __kw === 'function') __kw(e); } } }, 8000); });
   
   async function edCopyGameRun(id, src, tab) {
     const keys = new Set(edCards(tab).concat([BACK_KEY[tab] || 'back']));
@@ -5776,7 +5789,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         await backend.set('designs/' + id + '/img/' + key, doc);
         if (sv) w(backend.del('designs/' + id + '/src/' + key));
         n++;
-      } catch (e) {}
+      } catch (e) { if (typeof __kw === 'function') __kw(e); }
     }
     toast('Farbeinstellungen auf ' + n + (n === 1 ? ' weiteres Bild' : ' weitere Bilder') + ' übertragen.');
   }
@@ -6157,7 +6170,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     const X = designX(ED.id);
     if (X.id === 'default') return;
     const sources = {};
-    for (const k of Object.keys(X.imgs)) { try { const v = await backend.get('designs/' + X.id + '/src/' + k); if (v && typeof v.d === 'string') sources[k] = v; } catch (e) {} }
+    for (const k of Object.keys(X.imgs)) { try { const v = await backend.get('designs/' + X.id + '/src/' + k); if (v && typeof v.d === 'string') sources[k] = v; } catch (e) { if (typeof __kw === 'function') __kw(e); } }
     const data = JSON.stringify({ format: 'wizard-kartenset', version: 1, design: X.D, images: X.imgs, margins: X.imgm || {}, sources });
     const filename = 'wizard-kartenset-' + (X.D.name.toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'design') + '.json';
     if (S.mode === 'claude') {
@@ -6410,7 +6423,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   }
   
   function turnBox() {
-    let t = null; try { t = JSON.parse(LS.get('wiz.turn') || 'null'); } catch (e) {}
+    let t = null; try { t = JSON.parse(LS.get('wiz.turn') || 'null'); } catch (e) { if (typeof __kw === 'function') __kw(e); }
     t = t || {};
     return '<details class="turnbox"' + (UI.turnOpen ? ' open' : '') + '><summary>Verbindungsprobleme (z. B. mit Handys)?</summary><p class="fine">Klappt der Beitritt nicht, blockiert meist das Netz die direkte Verbindung. Ein TURN-Server leitet die Daten dann weiter. Trage auf <b>allen</b> Geräten dieselben Zugangsdaten ein (z. B. kostenloses Konto bei metered.ca / Open Relay).' + (t.urls ? ' <b>Aktiv.</b>' : '') + '</p>' +
       '<input id="turn-u" type="text" autocomplete="off" placeholder="turn:server:80 turns:server:443" value="' + esc(t.urls || '') + '"><input id="turn-n" type="text" autocomplete="off" placeholder="Benutzername" value="' + esc(t.username || '') + '"><input id="turn-p" type="text" autocomplete="off" placeholder="Passwort" value="' + esc(t.credential || '') + '">' +
@@ -6930,6 +6943,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       box.innerHTML = it.html; const cl = box.firstChild; if (cl && cl.style) { cl.style.setProperty('--cw', r.width + 'px'); cl.style.visibility = ''; cl.style.margin = '0'; }
       layer.appendChild(box);
       const dx = bx - (r.left + r.width / 2), dy = by - (r.top + r.height / 2), delay = i * 40;
+      UI.flyEnd = Math.max(UI.flyEnd || 0, Date.now() + delay + per + 50);
       const an = box.animate([{ transform: 'translate(0,0) scale(1)', opacity: 1 }, { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(.3)', opacity: .2 }], { duration: per, delay: delay, easing: 'cubic-bezier(.4,0,.7,1)', fill: 'both' });
       an.onfinish = () => box.remove();
       setTimeout(() => box.remove(), delay + per + 400);
@@ -6987,7 +7001,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     items.forEach((it, i) => {
       // Die abgelegte Karte hat noch ihre kurze „Fallen“-Animation (startet 16 px höher). Die wird hier beendet,
       // damit Zielposition und Karte übereinstimmen – sonst endet der Flug zu hoch und die Karte springt nach unten.
-      try { (it.el.getAnimations ? it.el.getAnimations() : []).forEach(an => an.finish()); } catch (e) {}
+      try { (it.el.getAnimations ? it.el.getAnimations() : []).forEach(an => an.finish()); } catch (e) { if (typeof __kw === 'function') __kw(e); }
       it.el.classList.add('flown');
       const b = it.el.getBoundingClientRect(); if (!b.width) return;
       const box = document.createElement('div'), cl = it.el.cloneNode(true);
@@ -10079,8 +10093,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         S.mode = 'claude';
         let id = null;
         if (user) {
-          try { id = await user.id(); } catch (e) {}
-          try { if ((await user.can('data.write')) === false) S.readonly = true; } catch (e) {}
+          try { id = await user.id(); } catch (e) { if (typeof __kw === 'function') __kw(e); }
+          try { if ((await user.can('data.write')) === false) S.readonly = true; } catch (e) { if (typeof __kw === 'function') __kw(e); }
         }
         S.baseId = id || localId();
       } else S.mode = 'none';
@@ -10090,7 +10104,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     }
     const hm = /^#raum-([A-Za-z0-9]{4,6})$/.exec(location.hash || '');
     let last = null;
-    try { last = JSON.parse(LS.get('wiz.last') || 'null'); } catch (e) {}
+    try { last = JSON.parse(LS.get('wiz.last') || 'null'); } catch (e) { if (typeof __kw === 'function') __kw(e); }
     if (last && Date.now() - (last.at || 0) > 12 * 3600 * 1000) last = null;
     const code = hm ? hm[1].toUpperCase() : last ? last.code : null;
     if (code) S.joinCode = code;
