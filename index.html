@@ -923,6 +923,14 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 .bidbar { grid-template-columns: minmax(0, 1fr); }
 .bidbar .bbs { min-width: 0; max-width: 100%; }
 .bidbar .bidsl input[type=range] { width: 60px; }
+/* Ansage: Zahlen bzw. Regler mittig, der Umschalter ⇄ steht nur daneben */
+.center .bidbar { margin: 4px auto 0; }
+.bidgrp { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 5px; position: relative; }
+@media (min-width: 560px) {
+  .bidbar .bbs > .bidsl { width: auto; position: relative; }
+  .bidbar .bidsl input[type=range] { width: 150px; flex: 0 0 150px; }
+  .bidbar .bidgrp > .bidmode, .bidbar .bidsl > .bidmode { position: absolute; left: calc(100% + 8px); top: 50%; transform: translateY(-50%); }
+}
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -6616,7 +6624,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     if (canBid) {
       let btns = '';
       if (bidSlider()) btns = bidSliderHTML(d.n, d.forbidden, (v, dis) => '<button class="btn primary" data-act="bid" data-k="' + v + '"' + (dis ? ' disabled title="Gesperrt"' : '') + '>' + v + (v === 1 ? ' Stich' : ' Stiche') + ' tippen</button>', bidModeBtn());
-      else { for (let k = 0; k <= d.n; k++) btns += '<button class="bb" data-act="bid" data-k="' + k + '"' + (k === d.forbidden ? ' disabled title="Gesperrt: Die Summe darf nicht ' + d.n + ' ergeben."' : '') + '>' + k + '</button>'; btns += bidModeBtn(); }
+      else { for (let k = 0; k <= d.n; k++) btns += '<button class="bb" data-act="bid" data-k="' + k + '"' + (k === d.forbidden ? ' disabled title="Gesperrt: Die Summe darf nicht ' + d.n + ' ergeben."' : '') + '>' + k + '</button>'; btns = '<span class="bidgrp">' + btns + bidModeBtn() + '</span>'; }
       bidbar = '<div class="bidbar" aria-label="Wie viele Stiche machst du?"><div class="bbs">' + btns + '</div>' + (d.forbidden !== null ? '<small>Plus/Minus Eins: ' + d.forbidden + ' ist gesperrt, weil die Summe sonst ' + d.n + ' ergäbe.</small>' : '') + '</div>';
     }
 
@@ -6638,8 +6646,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       '<header class="topbar' + tbCls() + '"><div class="tb1">' + tbTog() + '<span class="rnd">Runde <b>' + c.rd.n + '</b>/' + c.total + '</span><span class="chip">' + VARIANTS[c.variant].name + '</span>' + (d.mono ? '<span class="chip">Einfarbig</span>' : '') + (d.blind ? '<span class="chip">Blind</span>' : '') + bidSumChip(c) + (d.n !== c.rd.n ? '<span class="chip">' + d.n + ' Karten</span>' : '') + '</div>' + trumpChip(c, X) +
       '<div class="tb3">' + wChip() + '<button class="btn small" data-act="modal" data-m="score">Punkte</button>' + (S.joined ? '<button class="btn small emotb" data-act="emoToggle" aria-label="Emoji senden">😊</button>' : '') + '<button class="btn small" data-act="modal" data-m="menu" aria-label="Menü">Menü</button></div></header>' +
       '<section class="seats">' + seats + '</section>' +
-      '<section class="center">' + center + (status ? '<p class="status" aria-live="polite">' + status + '</p>' : '') + '</section>' +
-      '<section class="mine">' + bidbar + mine + (c.seated ? handHTML(c, X, lt) : '') + '</section></main>';
+      '<section class="center">' + center + (status ? '<p class="status" aria-live="polite">' + status + '</p>' : '') + bidbar + '</section>' +
+      '<section class="mine">' + mine + (c.seated ? handHTML(c, X, lt) : '') + '</section></main>';
   }
 
   
