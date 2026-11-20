@@ -724,7 +724,7 @@ h3 .infot:hover { color: var(--brass-2); border-color: var(--brass); }
 .seat .ss.hasmin > .ssin { display: flex; flex-wrap: wrap; gap: 2px 10px; min-width: 0; flex: 1 1 auto; }
 .seat .ss.hasmin > .minis { position: static; transform: none; margin-left: auto; flex: none; }
 /* Witches: zum Weitergeben gewählte Karten ausgrauen */
-.hc.passsel .card { filter: grayscale(.85) brightness(.55); }
+.hc.passsel .card { filter: none; outline: none; box-shadow: 0 0 0 3px var(--brass-2), 0 8px 18px rgba(0, 0, 0, .45); border-radius: 8px; }
 /* neu bekommene Karten in der Farbe der „ist dran“-Umrandung */
 .hc.got .card { outline-color: var(--brass); }
 .hc.got::after { background: var(--brass); }
@@ -898,6 +898,13 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 .menu details.mlead[open] > summary.mhead::before { transform: rotate(90deg); }
 .menu .mleadin { display: grid; gap: 8px; margin-top: 8px; }
 .menu details.mlead > summary.mhead { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; font-family: var(--display); font-weight: 700; }
+
+.histlist li.hs { color: var(--mist); font-size: 12.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; padding: 8px 2px 2px; border-bottom: 0; }
+.menu details.mfold > summary.mhead { cursor: pointer; list-style: none; margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; font-family: var(--display); font-weight: 700; }
+.menu details.mfold > summary.mhead::-webkit-details-marker { display: none; }
+.menu details.mfold > summary.mhead::before { content: '▸'; font-size: 12px; display: inline-block; transition: transform .15s; }
+.menu details.mfold[open] > summary.mhead::before { transform: rotate(90deg); }
+.tc.new .card.flown, .flyp .card { animation: none !important; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -4128,16 +4135,17 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     const who = p => p === S.pid ? 'Du' : pname(p), v = (p, a, b) => p === S.pid ? a : b, out = [];
     const done = +s.done || 0, first = h.tdone == null || h.tround !== s.round;
     if (s.bids && typeof s.bids === 'object' && h.bidR !== s.round && (s.order || []).every(q => typeof s.bids[q] === 'number' && s.bids[q] >= 0)) {
-      h.bidR = s.round; (s.order || []).forEach(q => out.push(who(q) + v(q, ' sagst ', ' sagt ') + s.bids[q] + ' an'));
+      h.bidR = s.round; out.push('· Ansagen ·'); (s.order || []).forEach(q => out.push(who(q) + v(q, ' sagst ', ' sagt ') + s.bids[q] + ' an'));
     }
     const prevT = first ? [] : h.ttrick || [];
-    const play = arr => arr.forEach(e => out.push(who(e.p) + v(e.p, ' legst ', ' legt ') + lab(e.c)));
+    // Überschrift „Stich n“ vor der ersten Karte eines Stichs
+    const play = (arr, n) => { if (arr.length && h.thead !== s.round + ':' + n) { h.thead = s.round + ':' + n; out.push('· Stich ' + n + ' ·'); } arr.forEach(e => out.push(who(e.p) + v(e.p, ' legst ', ' legt ') + lab(e.c))); };
     if (!first && done > h.tdone && s.last && Array.isArray(s.last.cards)) {
-      play(s.last.cards.slice(prevT.length));
+      play(s.last.cards.slice(prevT.length), done);
       if (s.last.win) out.push(who(s.last.win) + v(s.last.win, ' bekommst', ' bekommt') + ' den Stich' + (s.last.note ? ' (' + s.last.note + ')' : ''));
-      play(s.trick);
-    } else if (!first) play(s.trick.slice(prevT.length));
-    else if (h.tdone != null) play(s.trick);
+      play(s.trick, done + 1);
+    } else if (!first) play(s.trick.slice(prevT.length), done + 1);
+    else if (h.tdone != null) play(s.trick, done + 1);
     h.tdone = done; h.tround = s.round; h.ttrick = s.trick.slice();
     return out;
   }
@@ -4173,8 +4181,10 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     rs.forEach(rd => {
       const d = der(rd); if (!d) return;
       out.push('— ' + header(rd, d) + ' —');
+      if (d.bids && (d.order || []).some(p => d.hasBid && d.hasBid(p))) out.push('· Ansagen ·');
       if (d.bids) (d.order || []).forEach(p => { if (d.hasBid && d.hasBid(p)) out.push(who(p) + (d.bids[p] === -1 ? v(p, ' hast', ' hat') + ' angesagt' : v(p, ' sagst ', ' sagt ') + d.bids[p] + ' an')); });
-      (d.tricks || []).concat(d.cur && d.cur.cards && d.cur.cards.length ? [d.cur] : []).forEach(t => {
+      (d.tricks || []).concat(d.cur && d.cur.cards && d.cur.cards.length ? [d.cur] : []).forEach((t, i) => {
+        out.push('· Stich ' + (i + 1) + ' ·');
         t.cards.forEach(pl => out.push(who(pl.p) + v(pl.p, ' legst ', ' legt ') + nameOf(pl.c)));
         if (t.winner) out.push(who(t.winner) + v(t.winner, ' bekommst', ' bekommt') + ' den Stich');
       });
@@ -4193,8 +4203,14 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     try { l = histLines(); } catch (e) { l = []; }
     if (!l.length) return '<p class="fine">Noch nichts passiert. Hier erscheint, was am Tisch gespielt wird.</p>';
     // Neueste Runde oben; innerhalb einer Runde das Neueste zuerst, die Überschrift bleibt über ihrer Runde
-    const groups = [[]]; l.forEach(t => { if (/^— .* —$/.test(t)) groups.push([t]); else groups[groups.length - 1].push(t); });
-    const html = groups.filter(g => g.length).reverse().map(g => { const hd = /^— .* —$/.test(g[0]) ? g.shift() : null; return (hd ? '<li class="hh">' + esc(hd.replace(/^— | —$/g, '')) + '</li>' : '') + g.reverse().map(t => '<li>' + esc(t) + '</li>').join(''); }).join('');
+    const RH = /^— .* —$/, SH = /^· .* ·$/, rounds = [{ hd: null, parts: [{ hd: null, l: [] }] }];
+    l.forEach(t => {
+      if (RH.test(t)) rounds.push({ hd: t.replace(/^— | —$/g, ''), parts: [{ hd: null, l: [] }] });
+      else if (SH.test(t)) rounds[rounds.length - 1].parts.push({ hd: t.replace(/^· | ·$/g, ''), l: [] });
+      else { const ps = rounds[rounds.length - 1].parts; ps[ps.length - 1].l.push(t); }
+    });
+    const html = rounds.filter(r => r.hd || r.parts.some(p => p.l.length || p.hd)).reverse().map(r => (r.hd ? '<li class="hh">' + esc(r.hd) + '</li>' : '') +
+      r.parts.filter(p => p.l.length || p.hd).reverse().map(p => (p.hd ? '<li class="hs">' + esc(p.hd) + '</li>' : '') + p.l.slice().reverse().map(t => '<li>' + esc(t) + '</li>').join('')).join('')).join('');
     return '<ol class="histlist">' + html + '</ol>' +
       (l.length >= HIST_MAX ? '<p class="fine">Es werden die letzten ' + HIST_MAX + ' Einträge gezeigt.</p>' : '');
   }
@@ -5239,7 +5255,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     else if (t.dataset.ed && (t.type === 'color' || t.type === 'range')) edChange(t, true);
     else if (t.dataset.theme) { const th = themeGet(); th[t.dataset.theme] = t.value; LS.set('wiz.theme', JSON.stringify(th)); themeKeep(th); applyTheme(); }
   });
-  document.addEventListener('toggle', ev => { const t = ev.target; if (t && t.classList && t.classList.contains('edgrp')) UI.edGrpOpen = t.open; if (t && t.classList && t.classList.contains('mlead')) UI.leadOpen = t.open; }, true);
+  document.addEventListener('toggle', ev => { const t = ev.target; if (t && t.classList && t.classList.contains('edgrp')) UI.edGrpOpen = t.open; if (t && t.classList && t.classList.contains('mlead')) UI.leadOpen = t.open; if (t && t.classList && t.classList.contains('mdisp')) UI.dispOpen = t.open; }, true);
   document.addEventListener('change', ev => {
     const t = ev.target;
     if (t.id === 'ed-sel') { ED.id = t.value; ED.pick = null; ensureImgs(ED.id); refreshDyn(); renderModal(true); }
@@ -6758,6 +6774,10 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     layer.className = 'dzT';
     const per = Math.max(80, Math.min(2000, st.animMs || 350)) * (UI.lite ? 0.6 : 1) * 1.2, g = (S.meta && S.meta.game) || 'wizard';
     items.forEach((it, i) => {
+      // Die abgelegte Karte hat noch ihre kurze „Fallen“-Animation (startet 16 px höher). Die wird hier beendet,
+      // damit Zielposition und Karte übereinstimmen – sonst endet der Flug zu hoch und die Karte springt nach unten.
+      try { (it.el.getAnimations ? it.el.getAnimations() : []).forEach(an => an.finish()); } catch (e) {}
+      it.el.classList.add('flown');
       const b = it.el.getBoundingClientRect(); if (!b.width) return;
       const box = document.createElement('div'), cl = it.el.cloneNode(true);
       box.className = 'flyp gm-' + g; box.style.left = b.left + 'px'; box.style.top = b.top + 'px'; box.style.width = b.width + 'px';
@@ -7395,7 +7415,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     let d = themePickHTML().replace('<span class="fine">nur auf diesem Gerät</span>', '') + loc('cscale', 'Kartengröße', cardScale(), 5) + loc('zoom', 'Zoom gesamt', zoomLvl(), 5);
     d += '<button class="btn" data-act="liteTog">Leistungsmodus: ' + (UI.lite ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>';
     if (S.joined) d += '<button class="btn" data-act="modal" data-m="avatar">Mein Bild ändern</button>';
-    h += sec('Darstellung <small>nur auf diesem Gerät</small>', d);
+    h += '<details class="mfold mdisp"' + (UI.dispOpen ? ' open' : '') + '><summary class="mhead">Darstellung <small>nur auf diesem Gerät</small></summary><div class="mleadin">' + d + '</div></details>';
     // 5. Hinweise, wenn man dran ist
     h += sec('Wenn du dran bist', '<button class="btn" data-act="sigTog">„Du bist dran“ im Tab-Titel: ' + (sigOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button><button class="btn" data-act="sndTog">Ton, wenn du dran bist: ' + (sndOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>');
     // Spielleitung zuletzt, direkt vor „Raum verlassen“
