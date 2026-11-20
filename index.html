@@ -253,7 +253,8 @@ label { font-size: .88rem; color: var(--mist); font-weight: 500; }
 .hrow { display: flex; justify-content: center; }
 .hc { all: unset; display: block; position: relative; cursor: default; border-radius: 8px; transition: transform .12s, filter .12s; }
 .hc.ok { cursor: pointer; }
-.hc.ok:hover { transform: translateY(-8px); }
+/* Anheben beim Überfahren nur mit echter Maus – auf iPad & Co. bliebe es nach dem Antippen „hängen“ */
+@media (hover: hover) and (pointer: fine) { .hc.ok:hover { transform: translateY(-8px); } }
 .hc.sel { transform: translateY(-16px) !important; }
 .hc.sel .card { outline: 3px solid var(--brass-2); }
 .hc.no { filter: brightness(.5) saturate(.6); }
@@ -1070,6 +1071,8 @@ section.mine > .bidbar { margin: 0 auto 10px; }
 .trick.pile { position: relative; display: block; width: calc(var(--cw, 72px) * 2.3); height: calc(var(--cw, 72px) * 2.6); margin: 0 auto; }
 .trick.pile > .tc { position: absolute; left: 50%; top: 50%; margin: 0 !important; transform: translate(-50%, -50%) translate(var(--px, 0px), var(--py, 0px)) rotate(var(--pr, 0deg)); }
 .trick.pile > .tc .who { display: none; }
+/* Handy-Ansicht: Tischmitte wie beim Rundtisch um --cdy verschieben, damit der Stapel ruhig liegen bleibt */
+.game:not(.round) .center > *:not(.dealdeck) { position: relative; top: var(--cdy, 0px); }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1087,7 +1090,7 @@ section.mine > .bidbar { margin: 0 auto 10px; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '5ece190e';
+var APP_V = 'eedc17e1';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -6550,6 +6553,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     morph(root, html);
     seatMinis(root);
     layoutRound();
+    pinCenter();
     layoutPile();
     specSeatCards();
     animHook();
@@ -7480,6 +7484,22 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       t.style.zIndex = String(i + 1);
     });
   }
+  // Ankerelement der Tischmitte: Ablagestapel bzw. Stich (nicht Hinweistexte)
+  function pinAnchor(kids) { return kids.find(k => k.tagName !== 'P' && !k.classList.contains('status') && !k.classList.contains('summary') && !k.classList.contains('dealdeck') && !k.classList.contains('pendnote')) || null; }
+  // Ohne Rundtisch (Handy): Stapel/Stich in der Mitte des freien Bereichs festhalten
+  function pinCenter() {
+    const main = $('main.game'); if (!main || main.classList.contains('round')) return;
+    const ce = main.querySelector('.center'); if (!ce) return;
+    ce.style.setProperty('--cdy', '0px');
+    if (ce.querySelector('.summary')) return;
+    const kids = [...ce.children].filter(k => k.offsetHeight && getComputedStyle(k).position !== 'absolute'), an = pinAnchor(kids);
+    if (!kids.length || !an) return;
+    const cr = ce.getBoundingClientRect(), ab = an.getBoundingClientRect();
+    const r0 = Math.min.apply(null, kids.map(k => k.getBoundingClientRect().top)), r1 = Math.max.apply(null, kids.map(k => k.getBoundingClientRect().bottom));
+    let dy = (cr.top + cr.bottom) / 2 - (ab.top + ab.bottom) / 2;
+    dy = Math.max(cr.top + 4 - r0, Math.min(cr.bottom - 4 - r1, dy));
+    ce.style.setProperty('--cdy', Math.round(dy) + 'px');
+  }
   function layoutRound() {
     const main = $('main.game');
     if (!main) return;
@@ -7541,13 +7561,15 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (kids.length) {
         const r0 = Math.min.apply(null, kids.map(k => k.getBoundingClientRect().top)), r1 = Math.max.apply(null, kids.map(k => k.getBoundingClientRect().bottom));
         const cr = ce.getBoundingClientRect(), want = mr.top + cy;
-        let dy = want - (r0 + r1) / 2;
+        // Nicht den ganzen Block mitteln, sondern Stapel/Stich: so wandert er nicht, wenn darunter Text dazukommt oder wegfällt
+        const an = pinAnchor(kids), ab = an && an.getBoundingClientRect();
+        let dy = want - (ab ? (ab.top + ab.bottom) / 2 : (r0 + r1) / 2);
         dy = Math.max(cr.top + (need > 0 ? need : 0) - r0, Math.min(cr.bottom - 6 - r1, dy));
         ce.style.setProperty('--cdy', Math.round(dy) + 'px');
       }
     }
   }
-  window.addEventListener('resize', () => { clearTimeout(UI.rzT); UI.rzT = setTimeout(() => { layoutRound(); layoutPile(); fitNames(document); alignTags(document); }, 120); });
+  window.addEventListener('resize', () => { clearTimeout(UI.rzT); UI.rzT = setTimeout(() => { layoutRound(); pinCenter(); layoutPile(); fitNames(document); alignTags(document); }, 120); });
   
   function specSort(k, cards) {
     const id = c => String(c && typeof c === 'object' ? c.v : c);
