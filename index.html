@@ -905,6 +905,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 .menu details.mfold > summary.mhead::before { content: '▸'; font-size: 12px; display: inline-block; transition: transform .15s; }
 .menu details.mfold[open] > summary.mhead::before { transform: rotate(90deg); }
 .tc.new .card.flown, .flyp .card { animation: none !important; }
+.trick.lasttrick .tc + .tc { margin-left: 0 !important; }
+.endpeek .ltwrap { margin: 4px 0 8px; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -3463,7 +3465,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   
   const dealTags = (d, p) => (d.order && d.order[0] === p ? '<span class="tag gold geb" title="Beginnt diese Runde"><span class="tgl">Startspieler</span><span class="tgs">StartSp.</span></span>' : '') + (d.dealer === p ? '<span class="tag geb" title="Gibt in dieser Runde">Geber</span>' : '');
   
-  const ordNum = p => { const i = ((S.meta && S.meta.order) || []).indexOf(p); return i < 0 ? '' : '<span class="ordn" title="Platz ' + (i + 1) + '">' + (i + 1) + '</span>'; };
+  const ordNum = p => { const i = (UI.ordX || (S.meta && S.meta.order) || []).indexOf(p); return i < 0 ? '' : '<span class="ordn" title="Platz ' + (i + 1) + '">' + (i + 1) + '</span>'; };
   function takeCand() {
     const m = S.meta; if (!m) return [];
     const pl = m.players || {}, seen = {};
@@ -4109,6 +4111,15 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     if (XG[g]) { const s = xState(g); return { t: s && s.last && s.last.cards && s.last.cards.length ? { cards: s.last.cards, win: s.last.win, note: s.last.note } : null, fn: (id, e) => XG[g].card(id, X, null, e), X, g }; }
     return { t: null };
   }
+  // Spielende bei Stichspielen: zuerst der letzte Stich, mit „Zur Statistik“ geht es zur Endübersicht
+  function endGate(html) {
+    const m = S.meta; if (!m) return html;
+    const key = S.code + ':' + (m.g || 0);
+    if (UI.endSeen === key) return html;
+    let lt = null; try { lt = lastTrickData().t; } catch (e) { lt = null; }
+    if (!lt) return html;
+    return '<div class="summary endpeek"><h2>Spielende – der letzte Stich</h2>' + lastTrickHTML() + '<div class="sumfoot"><button class="btn primary" data-act="toStats">Zur Statistik</button></div></div>';
+  }
   function lastTrickHTML() {
     const r = lastTrickData(), t = r.t;
     if (!t) return '<p class="fine">Es wurde noch kein Stich eingesammelt.</p>';
@@ -4241,7 +4252,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     if (JSON.stringify(tw) !== JSON.stringify(m.tw || null)) w(backend.update(gamePath(), { tw }));
   }
   // ---- „Du bist dran“ im Tab-Titel und als kurzer Ton ----
-  const sigOn = () => LS.get('wiz.sig') !== '0', sndOn = () => LS.get('wiz.snd') !== '0';
+  const sigOn = () => LS.get('wiz.sig') !== '0', sndOn = () => LS.get('wiz.snd') === '1';
   const myTurnNow = () => { const m = S.meta, tw = m && m.status === 'playing' && m.tw; return !!(tw && Array.isArray(tw.ps) && S.pid && tw.ps.indexOf(S.pid) >= 0); };
   function titleMark(on) {
     if (!UI.baseTitle) UI.baseTitle = document.title.replace(/^● Du bist dran – /, '');
@@ -4521,6 +4532,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   function xgHTML(X) {
     const k = S.meta.game, s = xState(k);
     if (!s) return WAIT_HTML;
+    UI.ordX = Array.isArray(s.order) ? s.order : null;
     if (UI.xgId !== k + s.g) { UI.xgId = k + s.g; UI.x = {}; }
     
     UI.dz = null;
@@ -5041,6 +5053,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       if (settings().game !== g) w(backend.update(gamePath(), { settings: { game: g } })).then(go); else go();
     },
     lastTrick() { S.modal = 'lasttrick'; renderModal(true); },
+    toStats() { const m = S.meta; if (m) UI.endSeen = S.code + ':' + (m.g || 0); render(); },
     abort() { if (isHost()) confirmBox('Das laufende Spiel abbrechen und zur Lobby zurückkehren?', 'Abbrechen', () => w(backend.update(gamePath(), { status: 'lobby' }))); },
     assign(el) {
       const wid = el.dataset.id, sel = $('#as-' + wid), to = sel && sel.value;
@@ -6161,7 +6174,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     root.className = 'dzT' + scopeCls(X.D);
     root.style.setProperty('--ov', String(Math.max(0, Math.min(80, settings().overlap || 0)) / 100));
     let html;
-    UI.dz = null;
+    UI.dz = null; UI.ordX = null;
     if (S.mode === 'boot') html = '<main class="home"><p class="wait">Lade …</p></main>';
     else if (!S.code) html = homeHTML(X);
     else if (!S.meta) html = '<main class="home"><p class="wait">Verbinde mit Raum ' + esc(S.code) + ' …</p></main>';
@@ -6424,7 +6437,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     let foot;
     if (c.over) foot = (isHost() ? '<button class="btn primary rematch" data-act="rematch">Nochmal</button><button class="btn" data-act="toLobby">Zurück zur Lobby</button>' : '<span class="waitline">' + esc(pname(c.m.host)) + ' kann eine neue Partie starten.</span>') + '<button class="btn" data-act="modal" data-m="score">Punktetafel</button>';
     else foot = (canDeal('r' + c.rd.n) ? '<button class="btn primary" data-act="next">Runde ' + (c.rd.n + 1) + ' austeilen</button>' : dealWaitHTML()) + '<button class="btn" data-act="modal" data-m="score">Punktetafel</button>';
-    return '<div class="summary"><h2>' + (c.over ? 'Endstand: ' + esc(pname(rank[0])) + ' gewinnt' : 'Runde ' + c.rd.n + ' ist gespielt') + '</h2><div class="tablewrap"><table><thead><tr><th scope="col">' + 'Platz' + '</th><th scope="col">Tipp</th><th scope="col">Stiche</th><th scope="col">Runde</th><th scope="col">Gesamt</th></tr></thead><tbody>' + rows + '</tbody></table></div>' + (c.over ? ptChart(order, c.table.rows.filter(r => r.done).map(r => { const t = {}; order.forEach(p => { t[p] = r.cells[p].total; }); return { n: r.n, tot: t }; }), 'Punkteverlauf') : '') + '<div class="sumfoot">' + foot + '</div></div>';
+    const out = '<div class="summary"><h2>' + (c.over ? 'Endstand: ' + esc(pname(rank[0])) + ' gewinnt' : 'Runde ' + c.rd.n + ' ist gespielt') + '</h2><div class="tablewrap"><table><thead><tr><th scope="col">' + 'Platz' + '</th><th scope="col">Tipp</th><th scope="col">Stiche</th><th scope="col">Runde</th><th scope="col">Gesamt</th></tr></thead><tbody>' + rows + '</tbody></table></div>' + (c.over ? ptChart(order, c.table.rows.filter(r => r.done).map(r => { const t = {}; order.forEach(p => { t[p] = r.cells[p].total; }); return { n: r.n, tot: t }; }), 'Punkteverlauf') : '') + '<div class="sumfoot">' + foot + '</div></div>';
+    return c.over ? endGate(out) : out;
   }
 
   function gameHTML(X) {
@@ -6628,7 +6642,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     UI.hideCen = (UI.hideCen || []).filter(x => x.t > now);
     const cu = new Set();
     centerCards().forEach(x => { x.el.style.visibility = ''; });
-    if (UI.hideCen.length) centerCards().forEach(x => { const j = UI.hideCen.findIndex((y, n) => !cu.has(n) && y.k === x.k); if (j >= 0) { cu.add(j); x.el.style.visibility = 'hidden'; } });
+    // Von hinten zuordnen: Neu gelegte Karten stehen am Ende. Gleich aussehende Karten (z. B. gleiche Zahl) treffen so die richtige.
+    if (UI.hideCen.length) centerCards().reverse().forEach(x => { const j = UI.hideCen.findIndex((y, n) => !cu.has(n) && y.k === x.k); if (j >= 0) { cu.add(j); x.el.style.visibility = 'hidden'; } });
     
     document.querySelectorAll('[data-hp]').forEach(box => {
       const cs = box.querySelectorAll('.card'), pend = (hs[box.dataset.hp] || []).length;
@@ -6690,8 +6705,14 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       
       let took = !!(UI.trickGone && UI.trickGone.indexOf(prev.key + ':') === 0 && gone.length >= 2);
       if (took) UI.trickGone = null;
+      const xc = XG[k0] && S.meta.status === 'playing' ? xState(k0) : null;
+      if (xc && xc.clr && xc.clr.id !== UI.clrSeen) { UI.clrSeen = xc.clr.id; if (!took && gone.length) { flyTrick(h.order, xc.clr.p, gone, st); took = true; } }
       if (!took && gone.length >= 2 && UI.trickWin && Date.now() - UI.trickWin.t < 20000 && (!fresh2.length || lost.length === 1)) { flyTrick(h.order, UI.trickWin.p, gone, st); UI.trickWin = null; took = true; }
       if (lost.length === 1 && fresh2.length && fresh2.length <= 4) flyPlay(h.order, lost[0], fresh2, st, took ? [] : gone);
+    }
+    if (k0 === 'passt' && S.meta.status === 'playing') {
+      const ps = xState('passt'), lm = ps && ps.lm, id = lm ? (ps.g || 0) + ':' + (ps.seq || 0) + ':' + lm.p + ':' + lm.to : null;
+      if (id && UI.pnLm !== id) { const first = UI.pnLm === undefined; UI.pnLm = id; if (!first && lm.to !== 'pile' && st.anim !== false && !document.hidden) flyIntoDisp(h.order, lm.p, st); }
     }
     const fxNew = h.fx && h.fx.id && UI.anFx !== h.fx.id;
     if (h.fx && h.fx.id) UI.anFx = h.fx.id;
@@ -6705,7 +6726,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   }
   function centerCards() {
     const main = $('main.game'); if (!main) return [];
-    return Array.from(main.querySelectorAll('.center .card:not(.back):not(.slot)')).map(el => ({ el, k: (el.getAttribute('title') || '') + '|' + el.className.replace(/\b(new|win|sel|ok|no|arriving)\b/g, '') + '|' + el.textContent }));
+    return Array.from(main.querySelectorAll('.center .card:not(.back):not(.slot)')).map(el => ({ el, k: (el.getAttribute('title') || '') + '|' + el.className.replace(/\b(new|win|sel|ok|no|arriving|flown)\b/g, '').replace(/\s+/g, ' ').trim() + '|' + el.textContent }));
   }
   function mkSnap() {
     const m = {};
@@ -6762,6 +6783,25 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       an.onfinish = () => box.remove();
       setTimeout(() => box.remove(), delay + per + 400);
     });
+  }
+  function flyIntoDisp(order, p, st) {
+    const main = $('main.game'); if (!main) return;
+    const seatEls = main.querySelectorAll('.seats > .seat'), around = aroundMe(order);
+    const area = p === S.pid ? main.querySelector('.pnmine') : seatEls[around.indexOf(p)];
+    const tgt = area && area.querySelector('.pnst.lastmv'), src = p === S.pid ? mineEl(main, ['.hand', '.fan']) : seatEls[around.indexOf(p)];
+    if (!tgt || !src) return;
+    const a = src.getBoundingClientRect(), b = tgt.getBoundingClientRect(); if (!b.width) return;
+    let layer = $('#flylayer'); if (!layer) { layer = document.createElement('div'); layer.id = 'flylayer'; document.body.appendChild(layer); }
+    layer.className = 'dzT';
+    const per = Math.max(80, Math.min(2000, st.animMs || 350)) * (UI.lite ? 0.6 : 1) * 1.3;
+    const box = document.createElement('div'), cl = tgt.cloneNode(true);
+    box.className = 'flyp gm-passt'; box.style.left = b.left + 'px'; box.style.top = b.top + 'px'; box.style.width = b.width + 'px';
+    cl.classList.remove('lastmv'); cl.style.margin = '0'; box.appendChild(cl); layer.appendChild(box);
+    const dx = a.left + a.width / 2 - (b.left + b.width / 2), dy = (p === S.pid ? a.top + Math.min(a.height / 2, 70) : a.top + a.height / 2) - (b.top + b.height / 2);
+    const hide = () => { const t = (p === S.pid ? main.querySelector('.pnmine') : seatEls[around.indexOf(p)]); const e = t && t.querySelector('.pnst.lastmv'); if (e) e.style.visibility = 'hidden'; return e; };
+    hide(); UI.pnHideUntil = Date.now() + per;
+    box.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px) scale(1.6)', opacity: .9 }, { transform: 'translate(0,0) scale(1)', opacity: 1 }], { duration: per, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both' });
+    setTimeout(() => { box.remove(); document.querySelectorAll('main.game .pnst.lastmv').forEach(e => { e.style.visibility = ''; }); }, per + 20);
   }
   function flyPlay(order, p, items, st, gone) {
     const main = $('main.game'); if (!main) return;
@@ -7241,6 +7281,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       center = '<div class="summary"><h2>' + (c.over ? 'Endstand: ' + esc(pname(rank[0])) + ' gewinnt' : 'Runde ' + c.rd.n + ' ist gespielt') + '</h2>' + (res.spell ? '<p>' + esc(pname(res.spell.p)) + ' gelingt ein Feuerzauber: Alle anderen bekommen ' + res.spell.pts + ' Punkte.</p>' : '') +
         '<div class="tablewrap"><table><thead><tr><th scope="col">Platz</th><th scope="col">Runde</th><th scope="col">Gesamt</th></tr></thead><tbody>' + rank.map((p, i) => '<tr class="' + (p === me ? 'me' : '') + (c.over && i === 0 ? ' win' : '') + '"><th scope="row">' + (i + 1) + '. ' + esc(pname(p)) + (note(p) ? ' <small>' + note(p) + '</small>' : '') + '</th><td class="' + (res.pts[p] > 0 ? 'neg' : 'pos') + '">' + sign(res.pts[p]) + '</td><td><b>' + c.tot.total[p] + '</b></td></tr>').join('') + '</tbody></table></div><div class="sumfoot">' +
         (c.over ? lobbyFoot() : canDeal('w' + c.rd.n) ? '<button class="btn primary" data-act="witNext">Runde ' + (c.rd.n + 1) + ' austeilen</button>' : dealWaitHTML()) + '<button class="btn" data-act="modal" data-m="score">Punktetafel</button></div></div>';
+      if (c.over) center = endGate(center);
     } else {
       const showTrick = lt || d.cur;
       const tw = Math.min(cardW(), Math.floor((Math.min(window.innerWidth - 24, 760) - (P - 1) * 8) / P));
@@ -7400,7 +7441,6 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       l += '<div class="animctl"><b>Ziehanimation</b><button class="btn small" data-act="tog" data-k="anim">' + (st.anim === false ? 'einschalten' : 'ausschalten') + '</button>' + (st.anim === false ? '' : '<button class="btn small" data-act="setv" data-k="animMode" data-v="' + (st.animMode === 'all' ? 'seq' : 'all') + '">' + (st.animMode === 'all' ? 'gleichzeitig → nacheinander' : 'nacheinander → gleichzeitig') + '</button>' + stepBtns('animMs', 50, 100, 1500, Math.max(100, Math.min(1500, st.animMs || 350)), ' ms') + stepBtns('animMax', 1, 1, 30, Math.max(1, Math.min(30, st.animMax || 6)), ' s', 'höchstens ')) + '</div>';
       l += '<div class="animctl"><b>Gelegte Karten überlappen</b>' + stepBtns('overlap', 5, 0, 80, Math.max(0, Math.min(80, st.overlap || 0)), ' %') + '</div>';
       l += players().filter(p => !p.bot && p.id !== S.pid).map(p => '<button class="btn" data-act="giveHost" data-id="' + esc(p.id) + '">Spielleitung an ' + esc(p.name) + ' übertragen</button>').join('');
-      if (playing) l += '<button class="btn danger" data-act="abort">Spiel abbrechen</button>';
       // Eingeklappt, bis die Spielleitung ihn aufklappt (bleibt dann offen)
       UI.menuLead = '<details class="mlead"' + (UI.leadOpen ? ' open' : '') + '><summary class="mhead">Spielleitung <small>gilt für alle</small></summary><div class="mleadin">' + l + '</div></details>';
     } else UI.menuLead = '';
@@ -7420,7 +7460,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
     h += sec('Wenn du dran bist', '<button class="btn" data-act="sigTog">„Du bist dran“ im Tab-Titel: ' + (sigOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button><button class="btn" data-act="sndTog">Ton, wenn du dran bist: ' + (sndOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>');
     // Spielleitung zuletzt, direkt vor „Raum verlassen“
     h += UI.menuLead || '';
-    return h + '<div class="mhead sep"></div><button class="btn ghost" data-act="leave">Raum verlassen</button></div>';
+    return h + '<div class="mhead sep"></div>' + (host && playing ? '<button class="btn danger" data-act="abort">Spiel abbrechen</button>' : '') + '<button class="btn ghost" data-act="leave">Raum verlassen</button></div>';
   }
 
 
@@ -7675,7 +7715,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   const xBtn = (a, label, attrs, cls) => '<button class="btn ' + (cls || '') + '" data-act="xg" data-a="' + a + '"' + (attrs || '') + '>' + label + '</button>';
   const xFan = (n, cw, fn) => n ? fanHTML(n, cw, (k, ml) => { const b = fn(k); return '<button class="hc' + (b.c ? ' ' + b.c : '') + '" style="margin-left:' + ml + 'px" data-act="xg" ' + b.a + '>' + b.h + '</button>'; }) : '<div class="hand"></div>';
   const xTable = (head, rows) => '<div class="tablewrap"><table><thead><tr>' + head.map(h => '<th scope="col">' + h + '</th>').join('') + '</tr></thead><tbody>' + rows.map(r => '<tr class="' + (r.p === S.pid ? 'me' : '') + (r.win ? ' win' : '') + '"><th scope="row">' + r.cells[0] + '</th>' + r.cells.slice(1).map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
-  const xSum = (s, title, body, nextLabel) => '<div class="summary"><h2>' + title + '</h2>' + body + (s.winner && CHART_X[S.meta && S.meta.game] ? ptChart(s.order || [], xChartRows(s), S.meta.game === 'cabo' ? 'Punkte im Verlauf (wenige sind gut)' : 'Punkteverlauf') : '') + '<div class="sumfoot">' + (s.winner ? lobbyFoot() : canDeal('x' + s.round) ? xBtn('next', nextLabel || 'Nächste Runde', '', 'primary') : dealWaitHTML()) + '</div></div>';
+  const xSum = (s, title, body, nextLabel) => (s.winner ? endGate : (x => x))('<div class="summary"><h2>' + title + '</h2>' + body + (s.winner && CHART_X[S.meta && S.meta.game] ? ptChart(s.order || [], xChartRows(s), S.meta.game === 'cabo' ? 'Punkte im Verlauf (wenige sind gut)' : 'Punkteverlauf') : '') + '<div class="sumfoot">' + (s.winner ? lobbyFoot() : canDeal('x' + s.round) ? xBtn('next', nextLabel || 'Nächste Runde', '', 'primary') : dealWaitHTML()) + '</div></div>');
   const xPick = (text, btns) => '<div class="pickbox"><p>' + text + '</p><div class="picks">' + btns + '</div></div>';
   const xWin = (s, me) => s.winner === me ? 'Du gewinnst' : esc(pname(s.winner)) + ' gewinnt';
 
@@ -8083,7 +8123,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       s.hands = {}; s.order.forEach(p => { s.hands[p] = []; });
       xShuffle(d).forEach((c, i) => s.hands[s.order[i % P]].push(c));
       s.order.forEach(p => s.hands[p].sort((a, b) => a - b));
-      s.table = null; s.passes = 0; s.fin = []; s.over = null; s.turn = 0; s.played = [];
+      s.table = null; s.passes = 0; s.passed = {}; s.fin = []; s.over = null; s.turn = 0; s.played = [];
       s.rev = s.order.find(p => s.hands[p].filter(c => c === 13).length === 2) || null;
       s.phase = s.rev ? 'rev' : 'tax'; s.tax = [{ from: 0, to: P - 1, n: 2 }, { from: 1, to: P - 2, n: 1 }];
       s.taxSub = {}; s.taxQ = {}; s.recv = {};
@@ -8139,13 +8179,19 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       s.over = { order: s.fin.slice() }; s.phase = 'over';
       if (s.round >= s.rounds) { const best = Math.max.apply(null, s.order.map(q => s.scores[q])); s.winner = s.over.order.find(q => s.scores[q] === best); }
     }
+    // Wer gepasst hat, ist bis zum Ende des Stichs raus. Kommt die Reihe wieder bei dem an, der zuletzt gelegt hat
+    // (alle anderen haben gepasst oder sind fertig), ist der Stich vorbei und er spielt neu aus.
     function advance(s) {
-      const need = live(s).filter(q => q !== s.table.by).length;
-      if (s.passes >= need) {
-        const bi = s.order.indexOf(s.table.by);
-        s.turn = s.hands[s.table.by].length ? bi : xNext(s, bi, q => s.hands[q].length);
-        s.table = null; s.passes = 0;
-      } else s.turn = xNext(s, s.turn, q => s.hands[q].length);
+      const P = s.order.length; s.passed = s.passed || {};
+      for (let k = 1; k <= P; k++) {
+        const i = (s.turn + k) % P, q = s.order[i];
+        if (q === s.table.by) break;
+        if (s.hands[q].length && !s.passed[q]) { s.turn = i; return; }
+      }
+      const bi = s.order.indexOf(s.table.by);
+      s.clr = { id: 'c' + (s.g || 0) + ':' + s.round + ':' + (s.seq || 0), p: s.table.by };
+      s.turn = s.hands[s.table.by].length ? bi : xNext(s, bi, q => s.hands[q].length);
+      s.table = null; s.passes = 0; s.passed = {};
     }
     function play(s0, p, cards) {
       const v = setOf(cards);
@@ -8154,15 +8200,26 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
       const s = xClone(s0), h = s.hands[p];
       for (const c of cards) { const k = h.indexOf(c); if (k < 0) return null; h.splice(k, 1); }
       s.table = { cards: cards.slice(), n: v.n, rank: v.rank, by: p }; s.passes = 0; s.seq = (s.seq || 0) + 1; s.played = (s.played || []).concat(cards);
+      if (s.recv && s.recv[p] && s.recv[p].length) s.recv[p] = [];
       if (!h.length) { s.fin.push(p); xLog(s, pname(p) + ' ist fertig (Platz ' + s.fin.length + ').'); }
       if (live(s).length <= 1) { endRound(s); return s; }
       advance(s);
       return s;
     }
+    // Kann diese Handkarte jetzt sinnvoll gewählt werden?
+    function dmPlayable(s, hand, k, giving) {
+      const c = hand[k];
+      if (s.phase === 'tax') return giving && c !== 13;
+      if (s.phase !== 'play' || !s.table) return true;
+      const jk = hand.filter(x => x === 13).length, n = s.table.n;
+      const can = r => r < s.table.rank && hand.filter(x => x === r).length + jk >= n;
+      if (c === 13) return hand.some(x => x !== 13 && can(x)) || (jk >= n && 13 < s.table.rank);
+      return can(c);
+    }
     function pass(s0, p) {
       if (s0.phase !== 'play' || s0.order[s0.turn] !== p || !s0.table) return null;
       const s = xClone(s0);
-      s.passes++; s.seq = (s.seq || 0) + 1;
+      s.passes++; s.seq = (s.seq || 0) + 1; s.passed = s.passed || {}; s.passed[p] = true;
       advance(s);
       return s;
     }
@@ -8281,7 +8338,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         const outIdx = []; outCards.concat(s.phase === 'tax' ? ((s.taxSub || {})[me] || []).filter(c => c > 0) : []).forEach(c => { const k = hand.findIndex((x, j) => x === c && outIdx.indexOf(j) < 0); if (k >= 0) outIdx.push(k); });
         
         const gotIdx = []; (s.phase === 'play' && s.recv ? s.recv[me] || [] : []).forEach(c => { const k = hand.findIndex((x, j) => x === c && gotIdx.indexOf(j) < 0); if (k >= 0) gotIdx.push(k); });
-        const seats = aroundMe(s.order).map(p => xSeat(p, cur === p || taxTurn(p), '<span class="tag' + (s.order.indexOf(p) < 2 ? ' gold' : '') + '">' + title(s, p) + '</span>' + (s.hands[p].length ? minisHTML(s.hands[p].length) : '<span class="tag gold">fertig, Platz ' + (s.fin.indexOf(p) + 1) + '</span>') + '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>')).join('');
+        const seats = aroundMe(s.order).map(p => xSeat(p, cur === p || taxTurn(p), '<span class="tag' + (s.order.indexOf(p) < 2 ? ' gold' : '') + '">' + title(s, p) + '</span>' + (s.phase === 'play' && s.table && (s.passed || {})[p] ? '<span class="tag dim">gepasst</span>' : '') + (s.hands[p].length ? minisHTML(s.hands[p].length) : '<span class="tag gold">fertig, Platz ' + (s.fin.indexOf(p) + 1) + '</span>') + '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>')).join('');
         let center, status = '';
         if (s.over) center = xSum(s, s.winner ? xWin(s, me) : 'Runde ' + s.round + ' ist gespielt', xTable(['Neuer Rang', 'Runde', 'Gesamt'], s.over.order.map((p, i) => ({ p: p, win: s.winner === p, cells: [(i + 1) + '. ' + esc(pname(p)), '+' + (s.order.length - 1 - i), '<b>' + s.scores[p] + '</b>'] }))), 'Nächste Runde austeilen');
         else if (s.phase === 'rev') { center = myTurn ? xPick('Du hast beide Narren. ' + (s.order.indexOf(me) === s.order.length - 1 ? 'Als Großer Diener kannst du den großen Aufstand ausrufen: Alle Ränge werden umgedreht.' : 'Du kannst die Revolution ausrufen: Dann wird nicht getauscht.'), xBtn('rev', 'Ausrufen', ' data-v="1"', 'primary') + xBtn('rev', 'Nicht ausrufen', ' data-v="0"')) : ''; status = myTurn ? '<b>Entscheide dich.</b>' : 'Gleich geht es los …'; }
@@ -8305,7 +8362,7 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
         }
         let mine;
         if (seated) mine = xMe(me, myTurn, '<span class="tag' + (s.order.indexOf(me) < 2 ? ' gold' : '') + '">' + title(s, me) + '</span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span>', myTurn && s.phase === 'tax' && !(s.guess && tx && !taxAskDone(s, tx, me)) ? xBtn('tax', 'Abgeben', '', 'small primary') : myTurn && s.phase === 'play' ? xBtn('play', 'Ausspielen', sel.length ? '' : ' disabled', 'small primary') + (s.table ? xBtn('pass', 'Passen', '', 'small') : '') : '') +
-          xFan(hand.length, cw, k => ({ c: (myTurn && s.phase !== 'rev' ? 'ok' : '') + (sel.indexOf(k) >= 0 ? ' sel' + (s.phase === 'tax' ? ' taxout' : '') : '') + (outIdx.indexOf(k) >= 0 ? ' taxout' : '') + (gotIdx.indexOf(k) >= 0 ? ' got' : ''), a: 'data-a="c" data-i="' + k + '"', h: card(hand[k], X) }));
+          xFan(hand.length, cw, k => ({ c: (myTurn && s.phase !== 'rev' ? (dmPlayable(s, hand, k, giving) ? 'ok' : 'no') : '') + (sel.indexOf(k) >= 0 ? ' sel' + (s.phase === 'tax' ? ' taxout' : '') : '') + (outIdx.indexOf(k) >= 0 ? ' taxout' : '') + (gotIdx.indexOf(k) >= 0 ? ' got' : ''), a: 'data-a="c" data-i="' + k + '"', h: card(hand[k], X) }));
         else mine = specBar(s.order);
         return xMain(K, { chips: '<span class="chip">Runde ' + s.round + ' von ' + s.rounds + '</span>', seats: seats, center: center, status: status, mine: mine });
       },
