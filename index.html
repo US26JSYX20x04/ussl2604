@@ -1169,7 +1169,7 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '886dac39';
+var APP_V = '794c96fb';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -7422,8 +7422,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const refit = () => { let t = null; try { t = document.querySelector('main.game [data-mk="' + CSS.escape(e.t) + '"]'); } catch (er) { t = null; } if (!t) return; const c = t.querySelector('.card') || t, r = c.getBoundingClientRect(); if (!r.width) return;
         flyNudge(box.firstChild, r.left + r.width / 2 - b.x, r.top + r.height / 2 - b.y, delay + per - (Date.now() - t0f)); };
       setTimeout(refit, delay + 30); setTimeout(refit, delay + per * 0.6);
-      setTimeout(applyHide, delay + per + 2);
-      setTimeout(() => box.remove(), delay + per + 120);
+      // Landung: echte Karte zeigen und die fliegende Kopie im nächsten Bild entfernen (vorher lagen beide kurz übereinander – das sah wie ein Schatten aus)
+      setTimeout(() => { applyHide(); requestAnimationFrame(() => requestAnimationFrame(() => { box.remove(); if (typeof ub !== 'undefined' && ub) ub.remove(); })); }, delay + per + 2); setTimeout(() => box.remove(), delay + per + 500);
     });
     applyHide();
   }
@@ -7538,7 +7538,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         setTimeout(() => ub.remove(), delay + per + 120);
       }
       (UI.hideCen = UI.hideCen || []).push({ k: it.k, t: land });
-      setTimeout(applyHide, delay + per + 2);
+      // Landung: echte Karte zeigen und die fliegende Kopie im nächsten Bild entfernen (vorher lagen beide kurz übereinander – das sah wie ein Schatten aus)
       const s0 = og ? Math.max(.4, Math.min(1.6, og[i].width / b.width)).toFixed(3) : '.55';
       const pkf = (ddx, ddy) => [{ transform: 'translate(' + ddx + 'px,' + ddy + 'px) rotate(' + (p === S.pid ? 0 : -10) + 'deg) scale(' + s0 + ')', opacity: .9 }, { transform: 'translate(0,0) rotate(' + rEnd + 'deg) scale(1)', opacity: 1 }];
       const pan = box.animate(pkf(dx, dy), { duration: per, delay: delay, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both' });
@@ -7550,7 +7550,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         flyNudge(cl, ox * Math.cos(a) - oy * Math.sin(a), ox * Math.sin(a) + oy * Math.cos(a), left); };
       setTimeout(refit, delay + per * 0.35); setTimeout(refit, delay + per * 0.75);
       
-      setTimeout(() => box.remove(), delay + per + 120);
+      setTimeout(() => { applyHide(); requestAnimationFrame(() => requestAnimationFrame(() => { box.remove(); if (typeof ub !== 'undefined' && ub) ub.remove(); })); }, delay + per + 2); setTimeout(() => box.remove(), delay + per + 500);
     });
     applyHide();
   }
