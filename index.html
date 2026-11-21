@@ -1120,7 +1120,7 @@ main.game .seats > .seat > * { zoom: var(--seatz, 1); }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = 'd431f053';
+var APP_V = 'efd90823';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -6898,7 +6898,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const rows = rank.map((p, i) => '<tr class="' + (p === c.me ? 'me' : '') + (c.over && i === 0 ? ' win' : '') + '"><th scope="row">' + (i + 1) + '. ' + esc(pname(p)) + '</th><td>' + d.bids[p] + '</td><td>' + d.won[p] + '</td><td class="' + (d.points[p] > 0 ? 'pos' : 'neg') + '">' + (d.points[p] > 0 ? '+' : '') + d.points[p] + '</td><td><b>' + c.table.total[p] + '</b></td></tr>').join('');
     let foot;
     if (c.over) foot = (isHost() ? '<button class="btn primary rematch" data-act="rematch">Nochmal</button><button class="btn" data-act="toLobby">Zurück zur Lobby</button>' : '<span class="waitline">' + esc(pname(c.m.host)) + ' kann eine neue Partie starten.</span>') + '<button class="btn" data-act="modal" data-m="score">Punktetafel</button>';
-    else foot = (canDeal('r' + c.rd.n) ? '<button class="btn primary" data-act="next">Runde ' + (c.rd.n + 1) + ' austeilen</button>' : dealWaitHTML()) + '<button class="btn" data-act="modal" data-m="score">Punktetafel</button>';
+    else foot = (dealBtn('r' + c.rd.n, '<button class="btn primary" data-act="next">Runde ' + (c.rd.n + 1) + ' austeilen</button>')) + '<button class="btn" data-act="modal" data-m="score">Punktetafel</button>';
     const out = '<div class="summary"><h2>' + (c.over ? 'Endstand: ' + esc(pname(rank[0])) + ' gewinnt' : 'Runde ' + c.rd.n + ' ist gespielt') + '</h2><div class="tablewrap"><table><thead><tr><th scope="col">' + 'Platz' + '</th><th scope="col">Angesagt</th><th scope="col">Stiche</th><th scope="col">Runde</th><th scope="col">Gesamt</th></tr></thead><tbody>' + rows + '</tbody></table></div>' + (c.over ? ptChart(order, c.table.rows.filter(r => r.done).map(r => { const t = {}; order.forEach(p => { t[p] = r.cells[p].total; }); return { n: r.n, tot: t }; }), 'Punkteverlauf') : '') + '<div class="sumfoot">' + foot + '</div></div>';
     return c.over ? endGate(out) : out;
   }
@@ -7839,15 +7839,21 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   
   const hostAway = () => !!(S.meta && S.meta.status === 'playing' && (S.meta.order || []).indexOf(S.meta.host) < 0);
   function canDeal(tag) {
-    if (isHost()) return true;
-    if (!S.joined) return false;
-    
-    const ms = hostAway() ? 5000 : 10000;
+    const ms = hostAway() ? 1000 : 5000;
     const k = S.code + ':' + (S.meta.game || 'wizard') + ':' + S.meta.g + ':' + tag;
     UI.overAt = UI.overAt || {};
-    if (!UI.overAt[k]) { UI.overAt[k] = Date.now(); setTimeout(requestRender, ms + 100); }
-    return Date.now() - UI.overAt[k] >= ms;
+    // Auch die Spielleitung merkt sich, seit wann die Runde fertig ist – sonst begann ihre Wartezeit erst mit dem ersten Klick eines Mitspielers
+    const first = !UI.overAt[k];
+    if (first) UI.overAt[k] = Date.now();
+    if (isHost()) return true;
+    if (!S.joined) return false;
+    if (first) setTimeout(requestRender, ms + 100);
+    // Auf dem Gerät der Spielleitung im Auftrag eines Mitspielers: etwas Spielraum, weil die Uhren beider Geräte nicht exakt gleich starten
+    const slack = runsGame() ? ms * 0.4 : 0;
+    return Date.now() - UI.overAt[k] >= ms - slack;
   }
+  // Austeilen-Knopf: für Mitspieler ausgegraut sichtbar, bis die Wartezeit vorbei ist (danach wird neu gezeichnet)
+  const dealBtn = (tag, html) => canDeal(tag) ? html : S.joined ? String(html).replace('<button ', '<button disabled aria-disabled="true" title="Gleich verfügbar – die Spielleitung hat zuerst die Gelegenheit" ') : dealWaitHTML();
   const dealWaitHTML = () => '<span class="waitline">' + (hostAway() && S.joined ? 'Gleich kann jede Person am Tisch die nächste Runde austeilen …' : 'Warte auf ' + esc(pname(S.meta.host)) + ' …' + (S.joined ? ' Sonst kannst du in wenigen Sekunden selbst austeilen.' : '')) + '</span>';
   const lobbyFoot = () => isHost() ? '<button class="btn primary rematch" data-act="rematch">Nochmal</button><button class="btn" data-act="toLobby">Zurück zur Lobby</button>' : '<span class="waitline">' + esc(pname(S.meta.host)) + ' kann eine neue Partie starten.</span>';
   const wChip = () => tlChip() + (S.meta && S.meta.status === 'playing' ? '<button class="btn small histbtn" data-act="modal" data-m="hist" aria-label="Spielverlauf" title="Spielverlauf">Verlauf</button>' : '') + wChip0();
@@ -7928,7 +7934,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     let center, status = '';
     if (s.over) {
       const head = s.winner ? (s.winner === me ? 'Du gewinnst' : esc(pname(s.winner)) + ' gewinnt') : s.nopts && s.order.every(q => s.over.res[q] && s.over.res[q].done) ? 'Runde ' + s.round + ': Alle haben ihre Phase geschafft' : 'Runde ' + s.round + ' ist vorbei: ' + nm(s.over.out) + (s.over.out === me ? ' hast' : ' hat') + ' keine Karten mehr';
-      center = '<div class="summary"><h2>' + head + '</h2>' + p10Table(s, !!s.winner) + (s.winner && !s.nopts ? ptChart(s.order, s.hist, 'Strafpunkte im Verlauf') : '') + '<div class="sumfoot">' + (s.winner ? lobbyFoot() : canDeal('p' + s.round) ? '<button class="btn primary" data-act="p10Next">Nächste Runde austeilen</button>' : dealWaitHTML()) + '</div></div>';
+      center = '<div class="summary"><h2>' + head + '</h2>' + p10Table(s, !!s.winner) + (s.winner && !s.nopts ? ptChart(s.order, s.hist, 'Strafpunkte im Verlauf') : '') + '<div class="sumfoot">' + (s.winner ? lobbyFoot() : dealBtn('p' + s.round, '<button class="btn primary" data-act="p10Next">Nächste Runde austeilen</button>')) + '</div></div>';
       if (s.winner) center = endGate(center);
     } else if (choosing) {
       const mineOpen = seated && !s.phase[me];
@@ -7977,7 +7983,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const sign = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v);
       center = '<div class="summary"><h2>' + (c.over ? 'Endstand: ' + esc(pname(rank[0])) + ' gewinnt' : 'Runde ' + c.rd.n + ' ist gespielt') + '</h2>' + (res.spell ? '<p>' + esc(pname(res.spell.p)) + ' gelingt ein Feuerzauber: Alle anderen bekommen ' + res.spell.pts + ' Punkte.</p>' : '') +
         '<div class="tablewrap"><table><thead><tr><th scope="col">Platz</th><th scope="col">Runde</th><th scope="col">Gesamt</th></tr></thead><tbody>' + rank.map((p, i) => '<tr class="' + (p === me ? 'me' : '') + (c.over && i === 0 ? ' win' : '') + '"><th scope="row">' + (i + 1) + '. ' + esc(pname(p)) + (note(p) ? ' <small>' + note(p) + '</small>' : '') + '</th><td class="' + (res.pts[p] > 0 ? 'neg' : 'pos') + '">' + sign(res.pts[p]) + '</td><td><b>' + c.tot.total[p] + '</b></td></tr>').join('') + '</tbody></table></div><div class="sumfoot">' +
-        (c.over ? lobbyFoot() : canDeal('w' + c.rd.n) ? '<button class="btn primary" data-act="witNext">Runde ' + (c.rd.n + 1) + ' austeilen</button>' : dealWaitHTML()) + '<button class="btn" data-act="modal" data-m="score">Punktetafel</button></div></div>';
+        (c.over ? lobbyFoot() : dealBtn('w' + c.rd.n, '<button class="btn primary" data-act="witNext">Runde ' + (c.rd.n + 1) + ' austeilen</button>')) + '<button class="btn" data-act="modal" data-m="score">Punktetafel</button></div></div>';
       if (c.over) {
         // Feuerpunkte im Verlauf (wie in der Wertung nie unter 0)
         const acc = {}, rows = c.tot.rows.filter(r => r.done).map(r => { const t = {}; m.order.forEach(p => { acc[p] = Math.max(0, (acc[p] || 0) + (+r.pts[p] || 0)); t[p] = acc[p]; }); return { n: r.n, tot: t }; });
@@ -8424,7 +8430,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const xBtn = (a, label, attrs, cls) => '<button class="btn ' + (cls || '') + '" data-act="xg" data-a="' + a + '"' + (attrs || '') + '>' + label + '</button>';
   const xFan = (n, cw, fn) => n ? fanHTML(n, cw, (k, ml) => { const b = fn(k); return '<button class="hc' + (b.c ? ' ' + b.c : '') + '" style="margin-left:' + ml + 'px" data-act="xg" ' + b.a + '>' + b.h + '</button>'; }) : emptyHand();
   const xTable = (head, rows) => '<div class="tablewrap"><table><thead><tr>' + head.map(h => '<th scope="col">' + h + '</th>').join('') + '</tr></thead><tbody>' + rows.map(r => '<tr class="' + (r.p === S.pid ? 'me' : '') + (r.win ? ' win' : '') + '"><th scope="row">' + r.cells[0] + '</th>' + r.cells.slice(1).map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
-  const xSum = (s, title, body, nextLabel) => (s.winner ? endGate : (x => x))('<div class="summary"><h2>' + title + '</h2>' + body + (s.winner && CHART_X[S.meta && S.meta.game] ? ptChart(s.order || [], xChartRows(s), S.meta.game === 'cabo' ? 'Punkte im Verlauf (wenige sind gut)' : 'Punkteverlauf') : '') + '<div class="sumfoot">' + (s.winner ? lobbyFoot() : canDeal('x' + s.round) ? xBtn('next', nextLabel || 'Nächste Runde', '', 'primary') : dealWaitHTML()) + '</div></div>');
+  const xSum = (s, title, body, nextLabel) => (s.winner ? endGate : (x => x))('<div class="summary"><h2>' + title + '</h2>' + body + (s.winner && CHART_X[S.meta && S.meta.game] ? ptChart(s.order || [], xChartRows(s), S.meta.game === 'cabo' ? 'Punkte im Verlauf (wenige sind gut)' : 'Punkteverlauf') : '') + '<div class="sumfoot">' + (s.winner ? lobbyFoot() : dealBtn('x' + s.round, xBtn('next', nextLabel || 'Nächste Runde', '', 'primary'))) + '</div></div>');
   const xPick = (text, btns) => '<div class="pickbox"><p>' + text + '</p><div class="picks">' + btns + '</div></div>';
   const xWin = (s, me) => s.winner === me ? 'Du gewinnst' : esc(pname(s.winner)) + ' gewinnt';
 
