@@ -1101,7 +1101,7 @@ body.dealing main.game .center:has(> .dealdeck) > :not(.dealdeck), body.dealing 
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = 'eebf8037';
+var APP_V = '2391eb6e';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -7506,11 +7506,29 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     tr.querySelectorAll(':scope > .pilelab').forEach(e => e.remove());
     const on = pileOn();
     tr.classList.toggle('pile', on);
-    if (!on) { tr.style.width = tr.style.height = ''; tcs.forEach(t => { ['--px', '--py', '--pr'].forEach(k => t.style.removeProperty(k)); t.style.zIndex = ''; }); return; }
-    const cw = parseFloat(tr.style.getPropertyValue('--cw')) || 72, ch = cw * 1.5625;
+    if (!on) { if (tr.dataset.cwb && tr.dataset.cwa === tr.style.getPropertyValue('--cw').replace('px', '')) tr.style.setProperty('--cw', tr.dataset.cwb + 'px'); delete tr.dataset.cwa; tr.style.width = tr.style.height = ''; tcs.forEach(t => { ['--px', '--py', '--pr'].forEach(k => t.style.removeProperty(k)); t.style.zIndex = ''; }); return; }
+    // Kartengröße an den freien Platz anpassen (z. B. iPad im Querformat mit 6 Spielern): nichts soll aus dem Bild ragen
+    const cur = parseFloat(tr.style.getPropertyValue('--cw')) || 72;
+    if (tr.dataset.cwa !== String(cur)) tr.dataset.cwb = String(cur);
+    const cwb = parseFloat(tr.dataset.cwb) || cur;
     const ring = [S.pid].concat(Array.from(main.querySelectorAll('.seats > .seat[data-p]')).map(e => e.dataset.p)), P = Math.max(2, ring.length);
     // Feste Plätze je Spielerzahl: unabhängig davon, welche Karten schon liegen – so springt nichts, und der Bereich ist von Anfang an gleich groß
     const G = pileGeo(P);
+    let cw = cwb;
+    {
+      const ce = tr.closest('.center'), me = main.querySelector('section.mine'), r0 = tr.getBoundingClientRect(), cxm = r0.left + r0.width / 2;
+      const meTop = me && me.getClientRects().length ? me.getBoundingClientRect().top : window.innerHeight;
+      let top = (main.querySelector('.topbar') || main).getBoundingClientRect().bottom;
+      const half = G.w * cwb / 2 + 8;
+      main.querySelectorAll('.seats > .seat').forEach(e => { const b = e.getBoundingClientRect(); if (b.right > cxm - half && b.left < cxm + half && b.bottom < meTop - 40 && b.top < r0.top + r0.height / 2) top = Math.max(top, b.bottom); });
+      let other = 0; if (ce) Array.from(ce.children).forEach(k => { if (k !== tr && k.offsetHeight && getComputedStyle(k).position !== 'absolute') other += k.offsetHeight + 12; });
+      const availH = Math.min(meTop, window.innerHeight) - top - other - 28;
+      const cs = ce ? getComputedStyle(ce) : null, availW = ce ? ce.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 8 : window.innerWidth;
+      const sc = Math.min(1, availH / (G.h * cwb * 1.5625 + 16), availW / (G.w * cwb + 12));
+      if (sc < 1) cw = Math.max(34, Math.floor(cwb * sc));
+    }
+    tr.style.setProperty('--cw', cw + 'px'); tr.dataset.cwa = String(cw);
+    const ch = cw * 1.5625;
     const L = tcs.map((t, i) => {
       const p = t.dataset.p, k = ring.indexOf(p) >= 0 ? ring.indexOf(p) : i;
       return { t, p, sl: p ? G.slots[k % P] : { ux: 0, uy: 0, dx: 0, dy: 0 } };
@@ -7589,13 +7607,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       ce.style.paddingTop = ce.style.paddingBottom = ce.style.paddingLeft = ce.style.paddingRight = '';
       const ct = ce.offsetTop, cl = sw + 20, sum = ce.querySelector('.summary');
       let need = 0;
-      bs.forEach(b => { if (b.y + b.h / 2 < cy && b.x + b.w > cl && b.x < mr.width - cl) need = Math.max(need, b.y + b.h - ct + 10); });
+      // Nur Plätze, die wirklich über dem Inhalt der Mitte liegen (Spalte so breit wie Stapel/Stich), nicht die seitlichen
+      const kw = Math.max(120, ...[...ce.children].filter(k => k.offsetWidth && k.tagName !== 'P').map(k => k.offsetWidth)), lo = mr.width / 2 - kw / 2 - 10, hi = mr.width / 2 + kw / 2 + 10;
+      bs.forEach(b => { if (b.y + b.h / 2 < cy && b.x + b.w > Math.max(cl, lo) && b.x < Math.min(mr.width - cl, hi)) need = Math.max(need, b.y + b.h - ct + 10); });
       // Größten bisher nötigen Abstand behalten (gleiches Spiel, gleiche Fenstergröße): wächst ein oberer Platz kurz, springt die Mitte nicht hin und her
       { const nk = ((S.meta && S.meta.game) || '') + ':' + seats.length + ':' + window.innerWidth + 'x' + window.innerHeight; if (UI.needK !== nk) { UI.needK = nk; UI.needMax = 0; } UI.needMax = Math.max(UI.needMax || 0, need); need = UI.needMax; }
       ce.classList.toggle('sumover', !!sum);
       if (sum) { ce.style.paddingLeft = ce.style.paddingRight = '12px'; return; }
       ce.style.paddingLeft = ce.style.paddingRight = cl + 'px';
-      if (need > 90) ce.style.paddingTop = need + 'px';
       
       ce.style.setProperty('--cdy', '0px');
       const kids = [...ce.children].filter(k => k.offsetHeight);
