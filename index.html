@@ -1099,7 +1099,7 @@ body.dealing main.game .center:has(> .dealdeck) > :not(.dealdeck), body.dealing 
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = 'ad154d1a';
+var APP_V = 'b494c4e0';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -7490,12 +7490,12 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     tr.classList.toggle('pile', on);
     if (!on) { tr.style.width = tr.style.height = ''; tcs.forEach(t => { ['--px', '--py', '--pr'].forEach(k => t.style.removeProperty(k)); t.style.zIndex = ''; }); return; }
     const cw = parseFloat(tr.style.getPropertyValue('--cw')) || 72, ch = cw * 1.5625;
-    // Anzahl der Plätze im Kreis = Anzahl der Spieler
     const ring = [S.pid].concat(Array.from(main.querySelectorAll('.seats > .seat[data-p]')).map(e => e.dataset.p)), P = Math.max(2, ring.length);
     const kx = P <= 4 ? 0.5 : P === 5 ? 0.6 : 0.68, ky = P <= 4 ? 0.42 : P === 5 ? 0.5 : 0.56;
     const L = tcs.map((t, i) => {
-      // Erste Karte des Stichs (Startspieler) unten, die weiteren in Spielreihenfolge im Uhrzeigersinn
-      const p = t.dataset.p, k = i;
+      // Jede Karte liegt vor ihrem Spieler: Kreis in Sitzreihenfolge (ich unten, dann im Uhrzeigersinn wie die Plätze).
+      // Die erste Karte liegt so vor dem Startspieler, die weiteren folgen im Uhrzeigersinn.
+      const p = t.dataset.p, k = ring.indexOf(p) >= 0 ? ring.indexOf(p) : i;
       let ux = 0, uy = 0;
       if (p) { const ang = Math.PI / 2 + k * 2 * Math.PI / P; ux = Math.cos(ang); uy = Math.sin(ang); }
       return { t, p, ux, uy, f: 1, dx: ux * cw * kx, dy: uy * ch * ky };
