@@ -1084,6 +1084,25 @@ section.mine > .bidbar { position: absolute; left: 50%; bottom: calc(100% + 10px
 .game:not(.round) .center > *:not(.dealdeck) { position: relative; top: var(--cdy, 0px); }
 /* Austeilen vom Stapel: erst wenn alles verteilt ist, erscheinen Text, Ansage-Leiste und Co. (Platz bleibt reserviert, nichts springt) */
 body.dealing main.game .center:has(> .dealdeck) > :not(.dealdeck), body.dealing main.game:has(.center > .dealdeck) section.mine > .bidbar { visibility: hidden; }
+/* „Du bist dran!“ – wie „UNO!“, aber kleiner, blockiert nichts und verschwindet von selbst */
+.turnflash { pointer-events: none; animation: unoin .25s ease-out, tfout .35s ease-in 1.25s forwards; }
+.turnflash b { font-size: clamp(2.2rem, 9vw, 3.8rem); }
+@keyframes tfout { to { opacity: 0; transform: translate(-50%, -50%) scale(.9); } }
+@media (prefers-reduced-motion: reduce) { .turnflash { animation: tfout .3s ease-in 1.3s forwards; } }
+/* Karten umdrehen: beim Austeilen (eigene Hand), Trumpfkarte, Aufdecken */
+.flyc.flipbox { perspective: 700px; }
+.flyc .flipc { position: relative; transform-style: preserve-3d; }
+.flyc .ff { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+.flyc .ffr { position: absolute; inset: 0; transform: rotateY(180deg); }
+.card.flipin { animation: flipin .45s ease-out; }
+@keyframes flipin { 0% { transform: perspective(600px) rotateY(90deg); } 100% { transform: perspective(600px) rotateY(0deg); } }
+@media (prefers-reduced-motion: reduce) { .card.flipin { animation: none; } }
+/* Kreis-Ansicht: Hinweiszeile unten in der Tischmitte, nicht im Fluss – sie verschiebt nichts und macht die Seite nicht länger */
+main.game .center:has(> .trick.pile) { position: relative; }
+main.game .center:has(> .trick.pile) > .status { position: absolute; left: 0; right: 0; bottom: 4px; top: auto !important; margin: 0; text-align: center; pointer-events: none; }
+/* Spielerplätze größer/kleiner (Darstellung, nur dieses Gerät): Inhalt der Plätze skaliert, Lage berechnet der Tisch neu */
+main.game .seats > .seat > * { zoom: var(--seatz, 1); }
+.game.round .seats > .seat { min-width: calc(200px * var(--seatz, 1)); max-width: calc(300px * var(--seatz, 1)); }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1101,7 +1120,7 @@ body.dealing main.game .center:has(> .dealdeck) > :not(.dealdeck), body.dealing 
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '52f7d04b';
+var APP_V = '0372c569';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3445,7 +3464,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const GAME_KEYS = ['wizard', 'witches', 'skipbo', 'uno', 'phase10'];
   
   const XG = {}, XPRE = {}, XDEF = {}, VAL_KEYS = { animMode: ['seq', 'all'] };
-  const SET_KEYS = { botMin: 1, botMs: 1, overlap: 1, animMax: 1, animMs: 1, unoHand: 1, unoD2: 1, unoD4: 1, unoS: 1, unoR: 1, unoW: 1, sbHand: 1, witGoal: 1, seats: 1, p10Hand: 1, tlSec: 1, lbP1: 1, lbP2: 1, lbP3: 1, lbP4: 1, lbP5: 1, lbP6: 1 }, TOG_KEYS = { unoStay: 1, unoTill: 1, unoDbl: 1, unoAny: 1, p10Free: 1, spec: 1, anim: 1, pub: 1, tlOn: 1, backup: 1, lbOwn: 1 };
+  const SET_KEYS = { botMin: 1, botMs: 1, overlap: 1, animMax: 1, animMs: 1, unoHand: 1, unoD2: 1, unoD4: 1, unoS: 1, unoR: 1, unoW: 1, sbHand: 1, witGoal: 1, seats: 1, p10Hand: 1, tlSec: 1, lbP1: 1, lbP2: 1, lbP3: 1, lbP4: 1, lbP5: 1, lbP6: 1 }, TOG_KEYS = { unoStay: 1, unoTill: 1, unoDbl: 1, unoAny: 1, p10Free: 1, spec: 1, anim: 1, pub: 1, tlOn: 1, backup: 1, lbOwn: 1, tfOn: 1 };
   const GAME_ORDER = ['wizard', 'witches', 'druids', 'skullking', 'uno', 'nomercy', 'allwild', 'passt', 'phase10', 'cabo', 'texas', 'loveletter', 'skipbo', 'dalmuti', 'werwolf'];
   const gameList = () => GAME_ORDER.filter(k => GAMES[k]).concat(Object.keys(GAMES).filter(k => GAME_ORDER.indexOf(k) < 0));
   const xKey = k => { const m = /^([a-z]{2})_([A-Za-z0-9]+)$/.exec(k || ''), g = m && XPRE[m[1]]; return g ? { g, id: m[2] } : null; };
@@ -3776,7 +3795,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const isRealBot = id => { const p = S.meta && S.meta.players && S.meta.players[id]; return !!(p && p.bot); };
   const seatCap = () => Math.max(2, Math.min(18, settings().seats || 6));
   const cap0 = seatCap;
-  const settings = () => Object.assign({ seats: 6, botMs: 300, tlOn: false, tlSec: 60, backup: true, lbOwn: false, lbP1: 3, lbP2: 2, lbP3: 1, lbP4: 0, lbP5: 0, lbP6: 0, p10Hand: 10, p10Free: false, spec: false, overlap: 50, anim: true, animMode: 'seq', animMs: 350, animMax: 6 }, XDEF, { game: 'wizard', sbStock: 0, unoHand: 7, unoD2: 8, unoD4: 4, unoS: 2, unoR: 2, unoW: 4, unoTill: false, unoDbl: true, unoStay: true, sbHand: 5, p10List: null, p10NoPts: false, witGoal: 70, variant: 'standard', blind: false, rounds: 0, start: 1, mono: false }, (S.meta && S.meta.settings) || {});
+  const settings = () => Object.assign({ seats: 6, botMs: 300, tfOn: false, tlOn: false, tlSec: 60, backup: true, lbOwn: false, lbP1: 3, lbP2: 2, lbP3: 1, lbP4: 0, lbP5: 0, lbP6: 0, p10Hand: 10, p10Free: false, spec: false, overlap: 50, anim: true, animMode: 'seq', animMs: 350, animMax: 6 }, XDEF, { game: 'wizard', sbStock: 0, unoHand: 7, unoD2: 8, unoD4: 4, unoS: 2, unoR: 2, unoW: 4, unoTill: false, unoDbl: true, unoStay: true, sbHand: 5, p10List: null, p10NoPts: false, witGoal: 70, variant: 'standard', blind: false, rounds: 0, start: 1, mono: false }, (S.meta && S.meta.settings) || {});
   
   function plan(P, st) {
     if (st.mono) return { ok: P === 3 || P === 4, start: 4, max: 12, total: st.rounds ? Math.min(st.rounds, 12) : 12 };
@@ -4569,6 +4588,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   }
   // ---- „Du bist dran“ im Tab-Titel und als kurzer Ton ----
   const sigOn = () => LS.get('wiz.sig') !== '0', sndOn = () => LS.get('wiz.snd') === '1';
+  // Großer Hinweis „Du bist dran!“ (wie „UNO!“): eigene Einstellung geht vor, sonst gilt die der Spielleitung (Standard aus)
+  const flashOn = () => { const v = LS.get('wiz.tflash'); return v === '1' ? true : v === '0' ? false : !!settings().tfOn; };
+  function turnFlash() {
+    const old = document.querySelector('.turnflash'); if (old) old.remove();
+    const d = document.createElement('div'); d.className = 'unoflash turnflash'; d.setAttribute('role', 'alert');
+    d.innerHTML = '<b>Du bist dran!</b>';
+    document.body.appendChild(d); setTimeout(() => d.remove(), 1600);
+  }
   const myTurnNow = () => { const m = S.meta, tw = m && m.status === 'playing' && m.tw; return !!(tw && Array.isArray(tw.ps) && S.pid && tw.ps.indexOf(S.pid) >= 0); };
   function titleMark(on) {
     if (!UI.baseTitle) UI.baseTitle = document.title.replace(/^● Du bist dran – /, '');
@@ -4597,6 +4624,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (k !== UI.twSeenK) {
       UI.twSeenK = k; UI.twAt = tw && typeof tw.at === 'number' ? tw.at - (runsGame() ? 0 : UI.clkOff || 0) : Date.now(); UI.tlWarned = false;
       if (myTurnNow() && document.hidden) { titleMark(true); if (sigOn() && sndOn()) beep(); }
+      if (myTurnNow() && !document.hidden && flashOn()) turnFlash();
     }
     if (!myTurnNow() || !document.hidden) titleMark(false);
   }
@@ -5117,6 +5145,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     hsortSet(el) { LS.set('wiz.hsort', el.dataset.v); renderModal(true); render(); },
     hrevTog() { LS.set('wiz.hrev', LS.get('wiz.hrev') === '1' ? '0' : '1'); renderModal(true); render(); },
     cbLay() { LS.set('wiz.cbcol', LS.get('wiz.cbcol') === '1' ? '0' : '1'); render(); },
+    tflTog() { LS.set('wiz.tflash', flashOn() ? '0' : '1'); if (flashOn()) turnFlash(); renderModal(true); },
     sigTog() { LS.set('wiz.sig', sigOn() ? '0' : '1'); titleMark(myTurnNow() && document.hidden); toast(sigOn() ? 'Ist dein Tab im Hintergrund, zeigt der Titel „● Du bist dran“, sobald du am Zug bist.' : 'Hinweis im Tab-Titel aus.'); renderModal(true); },
     sndTog() { LS.set('wiz.snd', sndOn() ? '0' : '1'); if (sndOn()) { audioCtx(); beep(); } toast(sndOn() ? 'Ton an: Ist dein Tab im Hintergrund, hörst du einen kurzen Ton, wenn du dran bist.' : 'Ton aus.'); renderModal(true); },
     lbReset() { if (!isHost()) return; confirmBox('Rangliste zurücksetzen? Alle Punkte und Siege werden für alle gelöscht.', 'Zurücksetzen', () => w(backend.update(gamePath(), { lb: null }))); },
@@ -5125,11 +5154,13 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     liteTog() { UI.lite = !UI.lite; LS.set('wiz.lite', UI.lite ? '1' : '0'); document.body.classList.toggle('lite', UI.lite); toast(UI.lite ? 'Leistungsmodus an: weniger Effekte, kürzere Animationen.' : 'Leistungsmodus aus.'); renderModal(true); },
     tbTog() { LS.set('wiz.tbc', LS.get('wiz.tbc') !== '0' ? '0' : '1'); render(); },
     gCompact() { LS.set('wiz.gcompact', LS.get('wiz.gcompact') !== '0' ? '0' : '1'); render(); },
+    midStep(el) { const d = +el.dataset.d; if (!d) LS.del('wiz.mrel'); else midSet(Math.max(50, Math.min(250, midEff() + d)), UI.pileAuto || 100); layoutRound(); layoutPile(); layoutRound(); renderModal(true); },
     locStep(el) {
-      const k = el.dataset.k, d = +el.dataset.d, cur = k === 'zoom' ? zoomLvl() : cardScale();
+      const k = el.dataset.k, d = +el.dataset.d, cur = k === 'zoom' ? zoomLvl() : k === 'hscale' ? handScale() : k === 'sscale' ? seatScale() : cardScale();
       const v = d === 0 ? 100 : Math.max(50, Math.min(200, cur + d));
       if (v === 100) LS.del('wiz.' + k); else LS.set('wiz.' + k, String(v));
       if (k === 'zoom') applyZoom();
+      if (k === 'sscale') { applySeatScale(); UI.pileFit = null; UI.needK = null; }
       renderModal(true); render();
     },
     kick(el) { if (isHost()) w(backend.update(gamePath(), { players: { [el.dataset.id]: null } })); },
@@ -5575,7 +5606,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const t = k === 'botMin' ? Math.round(v * 10) : k === 'botMs' ? Math.round(v * 1000) : Math.round(v);
       if (t !== base) A.num({ dataset: { k, d: String(t - base), lo: btn.dataset.lo, hi: btn.dataset.hi } });
     } else if (act === 'locStep') {
-      const cur = k === 'zoom' ? zoomLvl() : cardScale(), t = Math.max(50, Math.min(200, Math.round(v)));
+      const cur = k === 'zoom' ? zoomLvl() : k === 'hscale' ? handScale() : k === 'sscale' ? seatScale() : cardScale(), t = Math.max(50, Math.min(200, Math.round(v)));
       if (t !== cur) A.locStep({ dataset: { k, d: String(t - cur) } });
     } else if (act === 'cropStep') { const kk = btn.dataset.k; if (CR.on) { cropSet(kk, kk === 'zoom' ? v / 100 : v); cropSync(); } }
   }
@@ -6568,7 +6599,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     else if (S.meta.status === 'playing') html = XG[S.meta.game] ? xgHTML(X) : S.meta.game === 'skipbo' ? skipboHTML(X) : S.meta.game === 'uno' ? unoHTML(X) : S.meta.game === 'phase10' ? p10HTML(X) : S.meta.game === 'witches' ? witHTML(X) : gameHTML(X);
     else html = lobbyHTML(X);
     
+    // Aufdecken/Zudecken (z. B. Cabo): vorher merken, welche Karten verdeckt waren
+    const faceWas = {}; root.querySelectorAll('main.game [data-mk]').forEach(el => { const c = el.querySelector('.card'); if (c) faceWas[el.dataset.mk] = c.classList.contains('back'); });
     morph(root, html);
+    if (!UI.lite) root.querySelectorAll('main.game [data-mk]').forEach(el => { const c = el.querySelector('.card'), was = faceWas[el.dataset.mk]; if (!c || was === undefined || was === c.classList.contains('back')) return; c.classList.remove('flipin'); void c.offsetWidth; c.classList.add('flipin'); setTimeout(() => c.classList.remove('flipin'), 600); });
     seatMinis(root);
     layoutRound();   // erst Plätze setzen,
     layoutPile();    // dann den Kreis an den freien Platz anpassen,
@@ -6803,10 +6837,23 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       '<div class="ss"><span>Angesagt: <b>' + bv.text + '</b></span>' + '<span>Stiche: <b>' + (showWon ? d.won[p] : '–') + '</b></span>' + '<span class="pts">Gesamt: <b>' + (c.table.total[p] || 0) + ' P</b></span></div></div>';
   }
   const cardScale = () => { const v = +LS.get('wiz.cscale'); return v >= 50 && v <= 200 ? v : 100; };
+  // Karten in der Mitte (Kreis-Ansicht): ohne eigenen Wert automatisch so groß, dass der freie Bereich gefüllt ist
+  // Eigene Anpassung relativ zum automatischen Wert gespeichert: „k:0.5“ = halbe automatische Vergrößerung, „d:-10“ = 10 Punkte weniger
+  const midRule = auto => { const r = String(LS.get('wiz.mrel') || ''), v = parseFloat(r.slice(2)); if (!isFinite(v)) return auto; const x = r[0] === 'k' ? 100 + (auto - 100) * v : auto + v; return Math.max(50, Math.min(250, Math.round(x))); };
+  const midSet = (user, auto) => { if (Math.abs(auto - 100) >= 5) LS.set('wiz.mrel', 'k:' + Math.max(-3, Math.min(3, (user - 100) / (auto - 100))).toFixed(4)); else LS.set('wiz.mrel', 'd:' + Math.round(user - auto)); };
+  const midScale = () => LS.get('wiz.mrel') ? 1 : 0;
+  const midEff = () => UI.pileEff || 100;
   const zoomLvl = () => { const v = +LS.get('wiz.zoom'); return v >= 50 && v <= 200 ? v : 100; };
   function applyZoom() { const z = zoomLvl() / 100; ['#app', '#modal'].forEach(q => { const e = $(q); if (e) e.style.zoom = z === 1 ? '' : String(z); }); }
   // Leere Hand behält die Höhe einer Kartenreihe – sonst rutscht der eigene Platz nach unten, sobald alle Karten gespielt sind
-  const emptyHand = () => '<div class="hand" style="--cw:' + cardW() + 'px"></div>';
+  const emptyHand = () => '<div class="hand" style="--cw:' + handW() + 'px"></div>';
+  // Handkarten: eigener Größenwert (nur dieses Gerät), zusätzlich zur allgemeinen Kartengröße
+  const handScale = () => { const v = +LS.get('wiz.hscale'); return v >= 50 && v <= 200 ? v : 100; };
+  // Spielerplätze: eigener Größenwert (nur dieses Gerät) – vergrößert den Inhalt der Plätze
+  const seatScale = () => { const v = +LS.get('wiz.sscale'); return v >= 50 && v <= 200 ? v : 100; };
+  const applySeatScale = () => document.documentElement.style.setProperty('--seatz', String(seatScale() / 100));
+  applySeatScale();
+  const handW = cw => Math.round((cw || cardW()) * handScale() / 100);
   function cardW() { const wv = window.innerWidth; return Math.round((wv < 480 ? 56 : wv < 900 ? 68 : 80) * cardScale() / 100); }
 
   function handHTML(c, X, lt) {
@@ -6815,7 +6862,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const hide = d.blind && d.phase !== 'done';
     const myTurn = d.phase === 'play' && d.turn === me && !lt;
     const legal = myTurn ? E.legalCards(cards, d.cur.cards.map(x => x.c), d.mono) : [];
-    const W = Math.min(window.innerWidth - 24, 1000), cw = cardW();
+    const W = Math.min(window.innerWidth - 24, 1000), cw = handW();
     
     const maxPer = (window.innerWidth <= 600 || isPhone()) ? 10 : 15;
     let per = n > maxPer ? Math.ceil(n / Math.ceil(n / maxPer)) : n, step = Math.min(cw + 6, (W - cw) / Math.max(1, per - 1));
@@ -6966,6 +7013,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     return plainCard(c[0], v, X, o);
   }
   function fanHTML(n, cw, btn) {
+    cw = handW(cw);
     const W = Math.min(window.innerWidth - 24, 1000);
     
     const maxPer = (window.innerWidth <= 600 || isPhone()) ? 10 : 15;
@@ -7019,6 +7067,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   
   function applyHide() {
     const now = Date.now();
+    document.querySelectorAll('main.game .topbar .trump .card').forEach(e => { e.style.visibility = (UI.hideTrump || 0) > now ? 'hidden' : ''; });
     UI.hideMine = (UI.hideMine || []).filter(x => x.t > now);
     const used = new Set();
     const oc = ownCards(), ocr = oc.slice().reverse();
@@ -7371,7 +7420,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       clearTimeout(UI.dealT); UI.dealT = setTimeout(() => { document.body.classList.remove('dealing'); dealDeck(false); botTick(); }, UI.dealUntil - Date.now());
     }
     const usedOwn = new Set(), ownList = ownCards().reverse();
-    const occ = {}, ownSpot = k => { const el = ownList.find(e => !usedOwn.has(e) && cardKey(e) === k); if (!el) return null; usedOwn.add(el); const r = el.getBoundingClientRect(); if (!r.width) return null; const o = occ[k] = (occ[k] || 0) + 1; return { left: r.left, top: r.top, width: r.width, height: r.height, k, o: o - 1 }; };
+    const occ = {}, ownSpot = k => { const el = ownList.find(e => !usedOwn.has(e) && cardKey(e) === k); if (!el) return null; usedOwn.add(el); const r = el.getBoundingClientRect(); if (!r.width) return null; const o = occ[k] = (occ[k] || 0) + 1; return { left: r.left, top: r.top, width: r.width, height: r.height, k, o: o - 1, el }; };
     // Zielplatz erst beim Losfliegen noch einmal messen: Am Spielanfang verschiebt sich die Hand oft noch (Stapel, Hinweise, Bilder)
     const ownAnySpot = () => { const el = ownList.find(e => !usedOwn.has(e)); if (!el) return null; return ownSpot(cardKey(el)); };
     const spotNow = sp => { const l = ownCards().reverse().filter(e => cardKey(e) === sp.k), el = l[sp.o]; if (!el) return null; const r = el.getBoundingClientRect(); return r.width ? r : null; };
@@ -7384,11 +7433,16 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       j.sc = spot ? spot.width / bw : null; j.spot = spot;
       const box = document.createElement('div');
       box.className = 'flyc gm-' + g;
-      box.innerHTML = backHTML(X, g);
+      // Eigene Karten fliegen verdeckt an und drehen sich in der Hand um
+      let front = null;
+      if (j.p === S.pid && spot && spot.el && !UI.lite) { const fe = spot.el.querySelector('.card') || spot.el; if (fe && !fe.classList.contains('back')) { front = fe.cloneNode(true); front.classList.remove('arriving', 'sel', 'ok'); front.removeAttribute('style'); } }
+      if (front) { box.innerHTML = '<div class="flipc"><div class="ff fb">' + backHTML(X, g) + '</div><div class="ff ffr"></div></div>'; box.querySelector('.ffr').appendChild(front); box.classList.add('flipbox'); }
+      else box.innerHTML = backHTML(X, g);
       if (pl) { box.style.width = bw + 'px'; box.style.setProperty('--cw', bw + 'px'); box.style.left = sr.left + 'px'; box.style.top = sr.top + 'px'; const c0 = box.firstChild; if (c0 && c0.style) { c0.style.setProperty('--cw', bw + 'px'); c0.style.boxShadow = 'none'; } }
       else { box.classList.add('big'); box.style.left = (sx - 48) + 'px'; box.style.top = (sy - 75) + 'px'; }
       layer.appendChild(box);
-      const delay = seq ? n * gap : j.k * gap, land = Date.now() + delay + per;
+      if (front) box.querySelectorAll('.card').forEach(c => { c.style.setProperty('--cw', (pl ? bw : 96) + 'px'); c.style.boxShadow = 'none'; });
+      const FD = front ? 280 : 0, delay = seq ? n * gap : j.k * gap, land = Date.now() + delay + per + FD;
       if (j.p === S.pid) { const k = ownNew[j.k]; if (k !== undefined) (UI.hideMine = UI.hideMine || []).push({ k: k, t: land }); }
       else { UI.hideSeat = UI.hideSeat || {}; (UI.hideSeat[j.p] = UI.hideSeat[j.p] || []).push(land); }
       setTimeout(applyHide, delay + per + 15);
@@ -7398,9 +7452,36 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const fix = () => { const r = spotNow(j.spot); if (r && (Math.abs(r.left - j.spot.left) > 1 || Math.abs(r.top - j.spot.top) > 1 || Math.abs(r.width - j.spot.width) > 1)) { j.spot = Object.assign({}, j.spot, { left: r.left, top: r.top, width: r.width }); an.effect.setKeyframes(kf(r.left + r.width / 2, r.top + r.height / 2, (r.width / bw).toFixed(3))); } };
         setTimeout(fix, Math.max(0, delay - 10)); setTimeout(fix, delay + per * 0.6);
       }
-      an.onfinish = () => box.remove();
-      setTimeout(() => box.remove(), delay + per + 400);
+      if (front) {
+        an.onfinish = () => { const fc = box.querySelector('.flipc'); const f2 = fc && fc.animate([{ transform: 'rotateY(0deg)' }, { transform: 'rotateY(180deg)' }], { duration: FD, easing: 'ease-in-out', fill: 'forwards' }); if (f2) f2.onfinish = () => box.remove(); else box.remove(); };
+      } else an.onfinish = () => box.remove();
+      setTimeout(() => box.remove(), delay + per + FD + 400);
     });
+    // Wizard: Die Trumpfkarte wird als letzte Karte gezogen, fliegt in die obere Leiste und dreht sich dabei um
+    if (g === 'wizard' && jobs.length && Object.keys(add).filter(p => add[p] > 0).length >= 2 && !UI.lite) {
+      const tEl = document.querySelector('main.game .topbar .trump .card'), tr = tEl && tEl.getBoundingClientRect();
+      if (tEl && tr && tr.width) {
+        const delay = (seq ? jobs.length * gap : max * gap) + gap * 0.5, dur = per * 1.4, land = Date.now() + delay + dur;
+        UI.hideTrump = land;
+        UI.dealUntil = Math.max(UI.dealUntil || 0, land + 150);
+        if (S.joined) { clearTimeout(UI.dealT); UI.dealT = setTimeout(() => { document.body.classList.remove('dealing'); dealDeck(false); botTick(); }, UI.dealUntil - Date.now()); }
+        const box = document.createElement('div'), front = tEl.cloneNode(true);
+        front.classList.remove('tiny'); front.removeAttribute('style');
+        box.className = 'flyc flipbox gm-' + g;
+        box.innerHTML = '<div class="flipc"><div class="ff fb">' + backHTML(X, g) + '</div><div class="ff ffr"></div></div>';
+        box.querySelector('.ffr').appendChild(front);
+        if (pl) { box.style.width = bw + 'px'; box.style.setProperty('--cw', bw + 'px'); box.style.left = sr.left + 'px'; box.style.top = sr.top + 'px'; }
+        else { box.classList.add('big'); box.style.left = (sx - 48) + 'px'; box.style.top = (sy - 75) + 'px'; }
+        layer.appendChild(box);
+        box.querySelectorAll('.card').forEach(c => { c.style.setProperty('--cw', (pl ? bw : 96) + 'px'); c.style.boxShadow = 'none'; });
+        const w0 = pl ? bw : 96, sc = tr.width / w0;
+        const an = box.animate([{ transform: 'translate(0,0) scale(1)' }, { transform: 'translate(' + (tr.left + tr.width / 2 - sx) + 'px,' + (tr.top + tr.height / 2 - sy) + 'px) scale(' + sc.toFixed(3) + ')' }], { duration: dur, delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' });
+        const fc = box.querySelector('.flipc');
+        fc.animate([{ transform: 'rotateY(0deg)', offset: 0 }, { transform: 'rotateY(0deg)', offset: .25 }, { transform: 'rotateY(180deg)', offset: .8 }, { transform: 'rotateY(180deg)', offset: 1 }], { duration: dur, delay, easing: 'ease-in-out', fill: 'both' });
+        an.onfinish = () => { box.remove(); applyHide(); };
+        setTimeout(() => { box.remove(); applyHide(); }, delay + dur + 400);
+      }
+    }
     applyHide();
   }
   
@@ -7509,7 +7590,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     tr.querySelectorAll(':scope > .pilelab').forEach(e => e.remove());
     const on = pileOn();
     tr.classList.toggle('pile', on);
-    if (!on) { if (tr.dataset.cwb && tr.dataset.cwa === tr.style.getPropertyValue('--cw').replace('px', '')) tr.style.setProperty('--cw', tr.dataset.cwb + 'px'); delete tr.dataset.cwa; tr.style.width = tr.style.height = ''; tcs.forEach(t => { ['--px', '--py', '--pr'].forEach(k => t.style.removeProperty(k)); t.style.zIndex = ''; }); return; }
+    if (!on) { tr.style.left = ''; if (tr.dataset.cwb && tr.dataset.cwa === tr.style.getPropertyValue('--cw').replace('px', '')) tr.style.setProperty('--cw', tr.dataset.cwb + 'px'); delete tr.dataset.cwa; tr.style.width = tr.style.height = ''; tcs.forEach(t => { ['--px', '--py', '--pr'].forEach(k => t.style.removeProperty(k)); t.style.zIndex = ''; }); return; }
     // Kartengröße an den freien Platz anpassen (z. B. iPad im Querformat mit 6 Spielern): nichts soll aus dem Bild ragen
     const cur = parseFloat(tr.style.getPropertyValue('--cw')) || 72;
     if (tr.dataset.cwa !== String(cur)) tr.dataset.cwb = String(cur);
@@ -7532,31 +7613,37 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const fits = (f, cy) => {
         const c = cwb * f, h = c * 1.5625, H = G.h * h + 16;
         for (const sl of G.slots.slice(0, P)) { const x = cxm + sl.dx * c, y = cy + sl.dy * h; if (clash(x - c / 2 - 3, y - h / 2 - 3, x + c / 2 + 3, y + h / 2 + 3)) return false; }
-        return !other || !clash(cxm - 110, cy + H / 2, cxm + 110, cy + H / 2 + other);
+        // die Hinweiszeile steht unten in der Mitte (über dem eigenen Platz) – dort Platz freihalten
+        return cy + H / 2 <= meTop - 4 - other && cy - H / 2 >= tb + 4;
       };
       let best = 0, bcy = (tb + meTop) / 2, bG = G;
       // Einmal gefundene Lage behalten, solange sie weiter passt (gleiches Fenster, gleiche Spielerzahl) – sonst springt der Stapel bei kleinen Änderungen
-      const fk = P + ':' + window.innerWidth + 'x' + window.innerHeight + ':' + cwb, pf = UI.pileFit;
+      // Ziel: eigener Wert aus dem Menü oder automatisch bis 180 % (füllt die Mitte)
+      // Bei jedem Spielstart neu: automatisch so groß wie möglich (bis 180 %), die eigene Anpassung wird danach relativ angewendet
+      const T = 1.8, m0 = S.meta || {};
+      const fk = P + ':' + window.innerWidth + 'x' + window.innerHeight + ':' + cwb + ':' + (m0.game || '') + ':' + (m0.g || ''), pf = UI.pileFit;
       let keep = null;
       if (pf && pf.k === fk) { G = pileGeo(P, pf.v); if (fits(pf.f, pf.cy)) keep = pf; }
-      if (!(keep && keep.f >= 1)) for (const v of (P >= 5 ? [0, 1, 2] : [0])) {
+      if (!(keep && keep.f >= T - 0.001)) for (const v of (P >= 5 ? [0, 1, 2] : [0])) {
         G = pileGeo(P, v);
         let vb = 0, vcy = (tb + meTop) / 2;
         for (let k = 0; k <= 16; k++) {
           const cy = tb + (meTop - tb) * (0.2 + 0.6 * k / 16);
-          if (fits(1, cy)) { if (vb < 1 || Math.abs(cy - (tb + meTop) / 2) < Math.abs(vcy - (tb + meTop) / 2)) { vb = 1; vcy = cy; } continue; }
-          let lo = 0, hi = 1; for (let n = 0; n < 10; n++) { const m = (lo + hi) / 2; if (fits(m, cy)) lo = m; else hi = m; }
-          if (lo > vb + 0.01) { vb = lo; vcy = cy; }
+          if (fits(T, cy)) { if (vb < T || Math.abs(cy - (tb + meTop) / 2) < Math.abs(vcy - (tb + meTop) / 2)) { vb = T; vcy = cy; } continue; }
+          let lo = 0, hi = T; for (let n = 0; n < 12; n++) { const m = (lo + hi) / 2; if (fits(m, cy)) lo = m; else hi = m; }
+          const mid = (tb + meTop) / 2;
+          if (lo > vb + 0.03 * T || (lo > vb - 0.03 * T && Math.abs(cy - mid) < Math.abs(vcy - mid))) { if (lo >= vb - 0.03 * T) { vb = Math.max(vb, lo); vcy = cy; } }
         }
         if (vb > best + 0.04) { best = vb; bcy = vcy; bG = G; }
-        if (best >= 1) break;
+        if (best >= T - 0.001) break;
       }
       // Bisherige Lage nur aufgeben, wenn die neue spürbar größere Karten erlaubt
       if (keep && !(best > keep.f + 0.08)) { best = keep.f; bcy = keep.cy; bG = pileGeo(P, keep.v); }
       else UI.pileFit = { k: fk, v: [0, 1, 2].find(v => pileGeo(P, v) === bG) || 0, f: best, cy: bcy };
       G = bG;
-      if (best < 1) cw = Math.max(34, Math.floor(cwb * Math.max(best, 0.3)));
-      UI.pileCy = bcy;
+      const auto = Math.round(best * 100), eff = Math.min(auto, midRule(auto));
+      cw = Math.max(34, Math.floor(cwb * Math.max(eff / 100, 0.3)));
+      UI.pileCy = bcy; UI.pileAuto = auto; UI.pileEff = Math.round(cw / cwb * 100);
     }
     tr.style.setProperty('--cw', cw + 'px'); tr.dataset.cwa = String(cw);
     const ch = cw * 1.5625;
@@ -7571,6 +7658,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     });
     const W = Math.ceil(G.w * cw + 12), H = Math.ceil(G.h * ch + 16);
     tr.style.width = W + 'px'; tr.style.height = H + 'px';
+    // waagerecht genau in die Mitte des Tisches (auch wenn der Kreis breiter ist als die Spalte zwischen den Plätzen)
+    tr.style.left = '0px';
+    { const mr = main.getBoundingClientRect(), rb = tr.getBoundingClientRect(); tr.style.left = Math.round(mr.left + mr.width / 2 - (rb.left + rb.width / 2)) + 'px'; }
   }
   // Ankerelement der Tischmitte: Ablagestapel bzw. Stich (nicht Hinweistexte)
   function pinAnchor(kids) { return kids.find(k => k.tagName !== 'P' && !k.classList.contains('status') && !k.classList.contains('summary') && !k.classList.contains('dealdeck') && !k.classList.contains('pendnote')) || null; }
@@ -7656,7 +7746,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         // Kreis-Ansicht: an die Höhe setzen, bei der die Karten am größten Platz finden
         const cr = ce.getBoundingClientRect(), want = an && an.classList.contains('pile') && UI.pileCy ? UI.pileCy : mr.top + cy;
         let dy = want - (ab ? (ab.top + ab.bottom) / 2 : (r0 + r1) / 2);
-        dy = Math.max(cr.top + (need > 0 ? need : 0) - r0, Math.min(cr.bottom - 6 - r1, dy));
+        // Kreis-Ansicht: Lage ist schon so berechnet, dass nichts überdeckt wird – genau dort hinsetzen
+        if (!(an && an.classList.contains('pile') && UI.pileCy)) dy = Math.max(cr.top + (need > 0 ? need : 0) - r0, Math.min(cr.bottom - 6 - r1, dy));
         ce.style.setProperty('--cdy', Math.round(dy) + 'px');
       }
     }
@@ -7948,7 +8039,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           const d = s.disc[me][i] || [], show = d.slice(-4);
           return '<div class="sbcol"><button class="dp' + isSel('disc', i) + (sel && sel.t === 'hand' ? ' ok' : '') + '" data-act="sbDisc" data-i="' + i + '"' + dis + ' aria-label="Ablagestapel ' + (i + 1) + '"><span class="stack">' + (show.length ? show.map(v => sbCardHTML(v, X)).join('') : '<span class="card slot"></span>') + '</span></button><span class="who">' + (d.length ? d.length + (d.length === 1 ? ' Karte' : ' Karten') : 'Ablage ' + (i + 1)) + '</span></div>';
         }).join('') + '</div></div>' +
-        '<div class="hand" style="--cw:' + cardW() + 'px"><div class="hrow sbhand">' + hand.map(h => '<button class="hc' + (myTurn ? ' ok' : '') + isSel('hand', h.i) + (h.i >= gotFrom ? ' got' : '') + '" data-act="sbSrc" data-t="hand" data-i="' + h.i + '"' + dis + ' aria-label="Handkarte ' + (h.v || 'Joker') + '">' + sbCardHTML(h.v, X) + '</button>').join('') +
+        '<div class="hand" style="--cw:' + handW() + 'px"><div class="hrow sbhand">' + hand.map(h => '<button class="hc' + (myTurn ? ' ok' : '') + isSel('hand', h.i) + (h.i >= gotFrom ? ' got' : '') + '" data-act="sbSrc" data-t="hand" data-i="' + h.i + '"' + dis + ' aria-label="Handkarte ' + (h.v || 'Joker') + '">' + sbCardHTML(h.v, X) + '</button>').join('') +
         (myTurn && !hand.length ? '<button class="btn" data-act="sbPass">Zug beenden</button>' : '') + '</div></div>';
     } else {
       const humans = s.order.filter(p => !isRealBot(p));
@@ -8012,6 +8103,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   function menuHTML() {
     const playing = S.meta && S.meta.status === 'playing', host = isHost(), st = settings(), game = (playing ? S.meta.game : st.game) || 'wizard';
     const stepBtns = (k, d, lo, hi, val, unit, lab) => '<span class="steps">' + (lab || '') + '<button class="rb" data-act="num" data-k="' + k + '" data-d="-' + d + '" data-lo="' + lo + '" data-hi="' + hi + '" aria-label="Weniger">−</button><output>' + val + unit + '</output><button class="rb" data-act="num" data-k="' + k + '" data-d="' + d + '" data-lo="' + lo + '" data-hi="' + hi + '" aria-label="Mehr">+</button></span>';
+    // Karten in der Mitte: zeigt den geltenden Wert (auch den automatischen); − / + setzen einen eigenen Wert, „Automatisch“ hebt ihn auf
+    const midLoc = () => '<div class="animctl"><b>Karten in der Mitte</b><span class="steps"><button class="rb" data-act="midStep" data-d="-5" aria-label="Karten in der Mitte kleiner">−</button><output>' + midEff() + ' %</output><button class="rb" data-act="midStep" data-d="5" aria-label="Karten in der Mitte größer">+</button></span>' + (midScale() ? '<button class="btn small ghost" data-act="midStep" data-d="0">Automatisch</button>' : '<span class="fine">automatisch</span>') + '</div>';
     const loc = (k, lab, v, d) => '<div class="animctl"><b>' + lab + '</b><span class="steps"><button class="rb" data-act="locStep" data-k="' + k + '" data-d="-' + d + '" aria-label="' + lab + ' kleiner">−</button><output>' + v + ' %</output><button class="rb" data-act="locStep" data-k="' + k + '" data-d="' + d + '" aria-label="' + lab + ' größer">+</button></span>' + (v !== 100 ? '<button class="btn small ghost" data-act="locStep" data-k="' + k + '" data-d="0">100 %</button>' : '') + '</div>';
     const sec = (title, body, cls) => body ? '<h3 class="mhead' + (cls ? ' ' + cls : '') + '">' + title + '</h3>' + body : '';
     let h = '<p class="menuinfo">Raumcode <b>' + esc(S.code) + '</b> · Spielleitung: <b>' + esc(pname(S.meta.host)) + '</b></p>' + (playing ? watchersHTML() : '') + '<div class="menu">';
@@ -8026,6 +8119,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       let l = '';
       if (playing) l += S.meta.order.filter(p => p !== S.pid && !isRealBot(p)).map(p => '<button class="btn" data-act="auto" data-id="' + esc(p) + '">' + (S.meta.players[p] && S.meta.players[p].auto ? esc(pname(p)) + ' spielt wieder selbst' : 'Computer spielt für ' + esc(pname(p))) + '</button>').join('');
       l += '<div class="animctl"><b>Zugzeit</b><button class="btn small" data-act="tog" data-k="tlOn">' + (st.tlOn ? 'ausschalten' : 'einschalten') + '</button>' + (st.tlOn ? stepBtns('tlSec', 15, 15, 300, tlSec(), ' s') : '') + '</div>';
+      l += '<div class="animctl"><b>Hinweis „Du bist dran!“ für alle</b><button class="btn small" data-act="tog" data-k="tfOn">' + (st.tfOn ? 'ausschalten' : 'einschalten') + '</button></div>';
       l += '<div class="animctl"><b>Computer überlegt mindestens</b>' + stepBtns('botMin', 5, 0, 50, botMinTxt(), '') + '</div>';
       l += players().filter(p => p.bot).map(p => (playing ? '' : '<button class="btn" data-act="rename" data-id="' + esc(p.id) + '">' + esc(p.name) + ' umbenennen</button>') + '<button class="btn" data-act="lvl" data-id="' + esc(p.id) + '">' + esc(p.name) + ': Stufe ' + LEVELS[botLevel(p.id)] + ' (wechseln)</button>').join('');
       if (playing) l += '<div class="animctl"><b>Kartenset</b><select id="lob-design"><option value="default">Standard</option>' + S.designs.map(d => '<option value="' + esc(d.id) + '"' + (S.meta.designId === d.id ? ' selected' : '') + '>' + esc(normDesign(d.data).name) + '</option>').join('') + '</select></div>';
@@ -8045,13 +8139,13 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (playing && !S.joined && st.spec === true) u += '<button class="btn" data-act="specView">Handkarten der Spieler: ' + (specAtSeat() ? 'beim Spieler' : 'unten') + ' (wechseln)</button>';
     h += sec('Bedienung <small>nur auf diesem Gerät</small>', u);
     // 4. Darstellung (nur dieses Gerät)
-    let d = themePickHTML().replace('<span class="fine">nur auf diesem Gerät</span>', '') + loc('cscale', 'Kartengröße', cardScale(), 5) + loc('zoom', 'Zoom gesamt', zoomLvl(), 5);
+    let d = themePickHTML().replace('<span class="fine">nur auf diesem Gerät</span>', '') + loc('cscale', 'Kartengröße', cardScale(), 5) + loc('hscale', 'Handkarten', handScale(), 5) + loc('sscale', 'Spielerplätze', seatScale(), 5) + (pileOn() ? midLoc() : '') + loc('zoom', 'Zoom gesamt', zoomLvl(), 5);
     d += '<button class="btn" data-act="pileTog">Gespielte Karten: ' + (pileOn() ? 'im Kreis übereinander (umschalten)' : 'nebeneinander (umschalten)') + '</button>';
     d += '<button class="btn" data-act="liteTog">Leistungsmodus: ' + (UI.lite ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>';
     if (S.joined) d += '<button class="btn" data-act="modal" data-m="avatar">Mein Bild ändern</button>';
     h += '<details class="mfold mdisp"' + (UI.dispOpen ? ' open' : '') + '><summary class="mhead">Darstellung <small>nur auf diesem Gerät</small></summary><div class="mleadin">' + d + '</div></details>';
     // 5. Hinweise, wenn man dran ist
-    h += sec('Wenn du dran bist', '<button class="btn" data-act="sigTog">„Du bist dran“ im Tab-Titel: ' + (sigOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button><button class="btn" data-act="sndTog">Ton, wenn du dran bist: ' + (sndOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>');
+    h += sec('Wenn du dran bist', '<button class="btn" data-act="tflTog">Großer Hinweis „Du bist dran!“: ' + (flashOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button><button class="btn" data-act="sigTog">„Du bist dran“ im Tab-Titel: ' + (sigOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button><button class="btn" data-act="sndTog">Ton, wenn du dran bist: ' + (sndOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>');
     // Spielleitung zuletzt, direkt vor „Raum verlassen“
     h += UI.menuLead || '';
     return h + '<div class="mhead sep"></div>' + (host && playing ? '<button class="btn danger" data-act="abort">Spiel abbrechen</button>' : '') + '<button class="btn ghost" data-act="leave">Raum verlassen</button></div>';
