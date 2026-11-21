@@ -1101,7 +1101,7 @@ body.dealing main.game .center:has(> .dealdeck) > :not(.dealdeck), body.dealing 
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '2391eb6e';
+var APP_V = '52f7d04b';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -6570,8 +6570,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     
     morph(root, html);
     seatMinis(root);
-    layoutPile();
-    layoutRound();
+    layoutRound();   // erst Plätze setzen,
+    layoutPile();    // dann den Kreis an den freien Platz anpassen,
+    layoutRound();   // dann die Mitte danach ausrichten
     pinCenter();
     specSeatCards();
     animHook();
@@ -6869,8 +6870,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const tw = Math.min(cardW(), Math.floor((Math.min(window.innerWidth - 24, 760) - (P - 1) * 8) / P));
       center = '<div class="trick tap" data-act="lastTrick" title="Antippen: letzten Stich ansehen" style="--cw:' + tw + 'px">' + showTrick.cards.map((pl, i) => '<div class="tc' + (showTrick.winner === pl.p ? ' win' : '') + (isNewPlay(c, showTrick, i) ? ' new' : '') + '" data-p="' + esc(pl.p) + '">' + cardHTML(pl.c, X) + '<span class="who">' + nm(pl.p) + '</span></div>').join('') + (showTrick.cards.length ? '' : '<div class="tc ph"><span class="card slot"></span><span class="who">&nbsp;</span></div>') + '</div>';
       if (lt) status = '<b>' + nm(lt.winner) + '</b> ' + (lt.winner === me ? 'bekommst' : 'bekommt') + ' den Stich.';
-      else if (d.turn === me) status = d.cur.cards.length ? '<b>Du bist am Zug.</b>' : '<b>Du spielst aus.</b>';
-      else status = esc(pname(d.turn)) + (d.cur.cards.length ? ' ist am Zug …' : ' spielt aus …');
+      else if (d.turn === me) status = '';  // wer dran ist, zeigt der orange Rahmen – der Text kostete Platz in der Tischmitte
+      else status = '';  // wer dran ist, zeigt der orange Rahmen – der Text kostete Platz in der Tischmitte
     }
     if (d.phase === 'play' && c.variant === 'hidden' && d.playCount === 0 && !lt) status += ' <small>Die Tipps sind aufgedeckt.</small>';
 
@@ -7485,8 +7486,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   // Gespielte Karten wahlweise im Kreis übereinander: jede Karte leicht zu ihrem Spieler hin versetzt (nur dieses Gerät)
   // Kreis-Geometrie (in Kartenbreiten/-höhen): kleinster Abstand, bei dem für jeden Startspieler von jeder Karte eine Ecke mit Zahl frei bleibt
   const PILE_GEO = {};
-  function pileGeo(P) {
-    if (PILE_GEO[P]) return PILE_GEO[P];
+  function pileGeo(P, v) {
+    v = v || 0; const key = P + ':' + v;
+    if (PILE_GEO[key]) return PILE_GEO[key];
     const mk = f => Array.from({ length: P }, (_, k) => { const a = Math.PI / 2 + k * 2 * Math.PI / P, ux = Math.cos(a), uy = Math.sin(a); return { ux, uy, dx: ux * 0.5 * f, dy: uy * 0.42 * f }; });
     const box = o => ({ x0: o.dx - .5, y0: o.dy - .5, x1: o.dx + .5, y1: o.dy + .5 });
     const hit = (a, q) => a.x0 < q.x1 - .01 && a.x1 > q.x0 + .01 && a.y0 < q.y1 - .01 && a.y1 > q.y0 + .01;
@@ -7495,9 +7497,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     // dort bleibt der Kreis kompakt (feste Werte); selten kann dann eine Karte beide Ecken verdeckt haben.
     let f = 1, sl = mk(f);
     if (P <= 4) { while (f < 2.6 && !ok(sl)) { f += .05; sl = mk(f); } }
-    else { const kx = P === 5 ? 1.22 : 1.36, ky = P === 5 ? 1.2 : 1.33; sl = sl.map(o => ({ ux: o.ux, uy: o.uy, dx: o.ux * 0.5 * kx, dy: o.uy * 0.42 * ky })); }
+    // Varianten für wenig Höhe (iPad quer): flacher und breiter
+    else { const VX = [[1.22, 1.2], [1.5, 0.95], [1.8, 0.75]], VY = [[1.36, 1.33], [1.65, 1.05], [1.95, 0.8]], kk = (P === 5 ? VX : VY)[v] || (P === 5 ? VX : VY)[0], kx = kk[0], ky = kk[1]; sl = sl.map(o => ({ ux: o.ux, uy: o.uy, dx: o.ux * 0.5 * kx, dy: o.uy * 0.42 * ky })); }
     const w = Math.max(1.1 * 2, 2 * Math.max.apply(null, sl.map(o => Math.abs(o.dx) + .5))), h = Math.max(.95 * 2, 2 * Math.max.apply(null, sl.map(o => Math.abs(o.dy) + .5)));
-    return (PILE_GEO[P] = { slots: sl, w, h });
+    return (PILE_GEO[key] = { slots: sl, w, h });
   }
   function layoutPile() {
     const main = $('main.game'); if (!main) return;
@@ -7513,19 +7516,47 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const cwb = parseFloat(tr.dataset.cwb) || cur;
     const ring = [S.pid].concat(Array.from(main.querySelectorAll('.seats > .seat[data-p]')).map(e => e.dataset.p)), P = Math.max(2, ring.length);
     // Feste Plätze je Spielerzahl: unabhängig davon, welche Karten schon liegen – so springt nichts, und der Bereich ist von Anfang an gleich groß
-    const G = pileGeo(P);
+    let G = pileGeo(P);
     let cw = cwb;
+    UI.pileCy = null;
     {
-      const ce = tr.closest('.center'), me = main.querySelector('section.mine'), r0 = tr.getBoundingClientRect(), cxm = r0.left + r0.width / 2;
-      const meTop = me && me.getClientRects().length ? me.getBoundingClientRect().top : window.innerHeight;
-      let top = (main.querySelector('.topbar') || main).getBoundingClientRect().bottom;
-      const half = G.w * cwb / 2 + 8;
-      main.querySelectorAll('.seats > .seat').forEach(e => { const b = e.getBoundingClientRect(); if (b.right > cxm - half && b.left < cxm + half && b.bottom < meTop - 40 && b.top < r0.top + r0.height / 2) top = Math.max(top, b.bottom); });
-      let other = 0; if (ce) Array.from(ce.children).forEach(k => { if (k !== tr && k.offsetHeight && getComputedStyle(k).position !== 'absolute') other += k.offsetHeight + 12; });
-      const availH = Math.min(meTop, window.innerHeight) - top - other - 28;
-      const cs = ce ? getComputedStyle(ce) : null, availW = ce ? ce.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 8 : window.innerWidth;
-      const sc = Math.min(1, availH / (G.h * cwb * 1.5625 + 16), availW / (G.w * cwb + 12));
-      if (sc < 1) cw = Math.max(34, Math.floor(cwb * sc));
+      // Größte Kartengröße (bis zur normalen), bei der jede Karte des Kreises und der Text darunter zwischen die Plätze passen.
+      // Geprüft wird jede Kartenposition einzeln (nicht das umschließende Rechteck) und mehrere Höhen – die beste gewinnt.
+      const ce = tr.closest('.center'), me = main.querySelector('section.mine'), mr = main.getBoundingClientRect();
+      const meTop = Math.min(window.innerHeight, me && me.getClientRects().length ? me.getBoundingClientRect().top : window.innerHeight);
+      const tb = (main.querySelector('.topbar') || main).getBoundingClientRect().bottom, cxm = mr.left + mr.width / 2;
+      const seatsR = Array.from(main.querySelectorAll('.seats > .seat')).map(e => e.getBoundingClientRect());
+      // Feste Reserve für eine Hinweiszeile („… bekommt den Stich“) – so ändert sich die Kartengröße nicht, wenn der Text kommt und geht
+      const other = 34;
+      const clash = (x0, y0, x1, y1) => y0 < tb + 4 || y1 > meTop - 4 || x0 < mr.left + 4 || x1 > mr.right - 4 || seatsR.some(b => b.right > x0 - 6 && b.left < x1 + 6 && b.bottom > y0 - 6 && b.top < y1 + 6);
+      const fits = (f, cy) => {
+        const c = cwb * f, h = c * 1.5625, H = G.h * h + 16;
+        for (const sl of G.slots.slice(0, P)) { const x = cxm + sl.dx * c, y = cy + sl.dy * h; if (clash(x - c / 2 - 3, y - h / 2 - 3, x + c / 2 + 3, y + h / 2 + 3)) return false; }
+        return !other || !clash(cxm - 110, cy + H / 2, cxm + 110, cy + H / 2 + other);
+      };
+      let best = 0, bcy = (tb + meTop) / 2, bG = G;
+      // Einmal gefundene Lage behalten, solange sie weiter passt (gleiches Fenster, gleiche Spielerzahl) – sonst springt der Stapel bei kleinen Änderungen
+      const fk = P + ':' + window.innerWidth + 'x' + window.innerHeight + ':' + cwb, pf = UI.pileFit;
+      let keep = null;
+      if (pf && pf.k === fk) { G = pileGeo(P, pf.v); if (fits(pf.f, pf.cy)) keep = pf; }
+      if (!(keep && keep.f >= 1)) for (const v of (P >= 5 ? [0, 1, 2] : [0])) {
+        G = pileGeo(P, v);
+        let vb = 0, vcy = (tb + meTop) / 2;
+        for (let k = 0; k <= 16; k++) {
+          const cy = tb + (meTop - tb) * (0.2 + 0.6 * k / 16);
+          if (fits(1, cy)) { if (vb < 1 || Math.abs(cy - (tb + meTop) / 2) < Math.abs(vcy - (tb + meTop) / 2)) { vb = 1; vcy = cy; } continue; }
+          let lo = 0, hi = 1; for (let n = 0; n < 10; n++) { const m = (lo + hi) / 2; if (fits(m, cy)) lo = m; else hi = m; }
+          if (lo > vb + 0.01) { vb = lo; vcy = cy; }
+        }
+        if (vb > best + 0.04) { best = vb; bcy = vcy; bG = G; }
+        if (best >= 1) break;
+      }
+      // Bisherige Lage nur aufgeben, wenn die neue spürbar größere Karten erlaubt
+      if (keep && !(best > keep.f + 0.08)) { best = keep.f; bcy = keep.cy; bG = pileGeo(P, keep.v); }
+      else UI.pileFit = { k: fk, v: [0, 1, 2].find(v => pileGeo(P, v) === bG) || 0, f: best, cy: bcy };
+      G = bG;
+      if (best < 1) cw = Math.max(34, Math.floor(cwb * Math.max(best, 0.3)));
+      UI.pileCy = bcy;
     }
     tr.style.setProperty('--cw', cw + 'px'); tr.dataset.cwa = String(cw);
     const ch = cw * 1.5625;
@@ -7620,16 +7651,17 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const kids = [...ce.children].filter(k => k.offsetHeight);
       if (kids.length) {
         const r0 = Math.min.apply(null, kids.map(k => k.getBoundingClientRect().top)), r1 = Math.max.apply(null, kids.map(k => k.getBoundingClientRect().bottom));
-        const cr = ce.getBoundingClientRect(), want = mr.top + cy;
         // Nicht den ganzen Block mitteln, sondern Stapel/Stich: so wandert er nicht, wenn darunter Text dazukommt oder wegfällt
         const an = pinAnchor(kids), ab = an && an.getBoundingClientRect();
+        // Kreis-Ansicht: an die Höhe setzen, bei der die Karten am größten Platz finden
+        const cr = ce.getBoundingClientRect(), want = an && an.classList.contains('pile') && UI.pileCy ? UI.pileCy : mr.top + cy;
         let dy = want - (ab ? (ab.top + ab.bottom) / 2 : (r0 + r1) / 2);
         dy = Math.max(cr.top + (need > 0 ? need : 0) - r0, Math.min(cr.bottom - 6 - r1, dy));
         ce.style.setProperty('--cdy', Math.round(dy) + 'px');
       }
     }
   }
-  window.addEventListener('resize', () => { clearTimeout(UI.rzT); UI.rzT = setTimeout(() => { layoutPile(); layoutRound(); pinCenter(); fitNames(document); alignTags(document); }, 120); });
+  window.addEventListener('resize', () => { clearTimeout(UI.rzT); UI.rzT = setTimeout(() => { layoutRound(); layoutPile(); layoutRound(); pinCenter(); fitNames(document); alignTags(document); }, 120); });
   
   function specSort(k, cards) {
     const id = c => String(c && typeof c === 'object' ? c.v : c);
@@ -7846,8 +7878,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const tw = Math.min(cardW(), Math.floor((Math.min(window.innerWidth - 24, 760) - (P - 1) * 8) / P));
       center = '<div class="trick tap" data-act="lastTrick" title="Antippen: letzten Stich ansehen" style="--cw:' + tw + 'px">' + showTrick.cards.map((pl, i) => '<div class="tc' + (showTrick.winner === pl.p ? ' win' : '') + (isNewPlay(c, showTrick, i) ? ' new' : '') + '" data-p="' + esc(pl.p) + '">' + witCardHTML(pl.c, X) + '<span class="who">' + nm(pl.p) + '</span></div>').join('') + (showTrick.cards.length ? '' : '<div class="tc ph"><span class="card slot"></span><span class="who">&nbsp;</span></div>') + '</div>';
       if (lt) status = '<b>' + nm(lt.winner) + '</b> ' + (lt.winner === me ? 'bekommst' : 'bekommt') + ' den Stich.';
-      else if (d.turn === me) status = (d.cur.cards.length ? '<b>Du bist am Zug.</b>' : '<b>Du spielst aus.</b>');
-      else status = esc(pname(d.turn)) + (d.cur.cards.length ? ' ist am Zug …' : ' spielt aus …');
+      else if (d.turn === me) status = '';  // wer dran ist, zeigt der orange Rahmen – der Text kostete Platz in der Tischmitte
+      else status = '';  // wer dran ist, zeigt der orange Rahmen – der Text kostete Platz in der Tischmitte
     }
     let mine;
     
