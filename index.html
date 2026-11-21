@@ -1106,7 +1106,9 @@ main.game .seats > .seat > * { zoom: var(--seatz, 1); }
 /* PC und Tablet: im Spiel kein Scrollen */
 html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 /* „Spiel abbrechen“ ganz rechts im Rundenende */
-.sumfoot > .abortb { order: 99; margin-left: auto; }
+.sumfoot > .abortgrp { order: 99; margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
+.btn.abortb { color: #ff6b6b; }
+.btn.abortb.armed { color: #ff6b6b; outline: 2px solid #ff6b6b; outline-offset: 3px; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1124,7 +1126,7 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = 'ddcfa467';
+var APP_V = '69613279';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -5465,8 +5467,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const g = S.meta.game || 'wizard', go = () => { S.sel = null; S.sbSel = null; S.unoPick = null; S.p10Sel = null; S.witSel = []; startGame(); };
       if (settings().game !== g) w(backend.update(gamePath(), { settings: { game: g } })).then(go); else go();
     },
-    abortAsk() { if (!isHost()) return; S.modal = 'abort'; renderModal(true); },
-    abortGo(el) { if (!isHost()) return; S.modal = null; renderModal(true); if (el.dataset.v === 'new') A.rematch(); else A.toLobby(); },
+    abortArm(el) {
+      if (!isHost()) return;
+      const v = el.dataset.v;
+      if (armed(v)) { UI.arm = null; if (v === 'new') A.rematch(); else A.toLobby(); return; }
+      UI.arm = { v, k: S.code + ':' + (S.meta && S.meta.g), t: Date.now() + 5000 };
+      clearTimeout(UI.armT); UI.armT = setTimeout(() => { UI.arm = null; requestRender(); }, 5050);
+      render();
+    },
     lastTrick() { S.modal = 'lasttrick'; renderModal(true); },
     toStats() { const m = S.meta; if (m) UI.endSeen = S.code + ':' + (m.g || 0); render(); },
     toEnd() { UI.endSeen = null; render(); },
@@ -7896,7 +7904,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     return Date.now() - UI.overAt[k] >= ms - slack;
   }
   // Austeilen-Knopf: für Mitspieler ausgegraut sichtbar, bis die Wartezeit vorbei ist (danach wird neu gezeichnet)
-  const abortBtn = () => isHost() ? '<button class="btn abortb" data-act="abortAsk">Spiel abbrechen</button>' : '';
+  // Rundenende: Punkteverlauf für alle; Spielleitung kann direkt neu starten oder abbrechen (zweimal klicken zum Bestätigen)
+  const armed = v => !!(UI.arm && UI.arm.v === v && UI.arm.k === S.code + ':' + (S.meta && S.meta.g) && Date.now() < UI.arm.t);
+  const abortBtn = () => '<button class="btn" data-act="modal" data-m="chart">Punkteverlauf</button>' + (isHost() ? '<span class="abortgrp">' +
+    [['new', 'Spiel neu starten'], ['lobby', 'Spiel abbrechen']].map(o => '<button class="btn abortb' + (armed(o[0]) ? ' armed' : '') + '" data-act="abortArm" data-v="' + o[0] + '"' + (armed(o[0]) ? ' title="Zum Bestätigen noch einmal klicken"' : '') + '>' + o[1] + '</button>').join('') + '</span>' : '');
   const dealBtn = (tag, html) => dealBtn0(tag, html) + abortBtn();
   const dealBtn0 = (tag, html) => canDeal(tag) ? html : S.joined ? String(html).replace('<button ', '<button disabled aria-disabled="true" title="Gleich verfügbar – die Spielleitung hat zuerst die Gelegenheit" ') : dealWaitHTML();
   const dealWaitHTML = () => '<span class="waitline">' + (hostAway() && S.joined ? 'Gleich kann jede Person am Tisch die nächste Runde austeilen …' : 'Warte auf ' + esc(pname(S.meta.host)) + ' …' + (S.joined ? ' Sonst kannst du in wenigen Sekunden selbst austeilen.' : '')) + '</span>';
@@ -8416,10 +8427,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     } else UI.edSig = null;
     let title = '', body = '', cls = 'sheet';
     if (S.modal === 'score') { title = 'Punktetafel'; body = scoreHTML(); }
-    else if (S.modal === 'abort') {
-      title = 'Spiel abbrechen'; cls += ' mid';
+    else if (S.modal === 'chart') {
+      title = 'Punkteverlauf'; cls += ' mid';
       const ch = curChart();
-      body = (ch ? '<div class="summary endstats">' + ch + '</div>' : scoreHTML()) + '<div class="sumfoot"><button class="btn primary" data-act="closeModal">Doch weiter spielen</button>' + (isHost() ? '<button class="btn" data-act="abortGo" data-v="lobby">Zurück zur Lobby</button><button class="btn" data-act="abortGo" data-v="new">Spiel neu starten</button>' : '') + '</div>';
+      body = (ch ? '<div class="summary endstats">' + ch + '</div>' : '<p class="fine">Der Verlauf erscheint ab der zweiten gespielten Runde.</p>' + scoreHTML()) + '<div class="sumfoot"><button class="btn primary" data-act="closeModal">Schließen</button></div>';
     }
     else if (S.modal === 'theme') { title = 'Farben anpassen'; body = themeHTML(); }
     else if (S.modal === 'lasttrick') { title = 'Letzter Stich'; body = lastTrickHTML(); cls += ' mid'; }
