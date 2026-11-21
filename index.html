@@ -388,7 +388,7 @@ table.score thead th { position: sticky; top: 0; background: var(--velvet); text
 .sbdp { display: flex; gap: 10px; }
 .dp { all: unset; display: block; cursor: pointer; border-radius: 10px; }
 .dp .stack { display: flex; flex-direction: column; }
-.dp .stack .card + .card { margin-top: calc(var(--cw, 72px) * -1.5 + 15px); }
+.dp .stack .card + .card { margin-top: calc(var(--cw, 72px) * -1.5 + 12px); }
 .dp.ok .stack .card:last-child, .dp.sel .stack .card:last-child, .sbst.sel .card { outline: 3px solid var(--brass-2); outline-offset: 2px; }
 .dp.ok .stack { opacity: .92; }
 .dp:focus-visible .stack .card:last-child { outline: 2px solid var(--brass-2); outline-offset: 2px; }
@@ -1132,6 +1132,26 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 .seat > .st > .nm { margin-right: auto; }
 .seat > .st > .nm:has(+ .witsp) { margin-right: 0; }
 .seat > .st > .witsp { margin-right: auto; }
+/* Arschloch: dickes Farbsymbol in der Kartenmitte */
+.card .cm.msym { font-weight: 900; -webkit-text-stroke: .05em currentColor; font-size: calc(var(--cw, 72px) * .5 * var(--cmid, 1)); line-height: 1; }
+/* Dalmuti/Arschloch: Mehrlinge überlappend nebeneinander bzw. im Bogen */
+.dmset { display: flex; justify-content: center; align-items: flex-start; padding: 8px 0 4px; }
+.dmset > .tc { flex: none; transform-origin: 50% 100%; }
+.dmset > .tc + .tc { margin-left: calc(var(--cw, 72px) * -0.7); }
+.dmset .card { --cw: inherit; }
+/* Phase 10: Platz für die ausgelegten Karten von Anfang an einplanen */
+.p10seat .pgs { min-height: calc(22px * 1.5625 + 30px); }
+.p10seat .pgs.pgempty { visibility: hidden; }
+/* Uno-Varianten: gleiche, etwas höhere Spielerrahmen; Kartenrücken rechts mittig */
+.gm-uno .seat, .gm-nomercy .seat, .gm-allwild .seat { min-height: 62px; }
+.gm-nomercy .seat .ss.hasmin:has(> .ssin:empty), .gm-allwild .seat .ss.hasmin:has(> .ssin:empty) { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); margin: 0; }
+.gm-nomercy .seat:has(.ss.hasmin > .ssin:empty), .gm-allwild .seat:has(.ss.hasmin > .ssin:empty) { padding-right: 96px; }
+/* Uno-Varianten: Spielrichtung über den Karten */
+.unodir { text-align: center; margin: 0 0 4px; color: var(--mist); font-size: .9rem; }
+.unodir b { color: var(--brass-2); font-size: 1.5rem; vertical-align: -2px; margin-left: 4px; }
+/* Person wählen: Rahmen markiert und anklickbar */
+.seat.tgt { cursor: pointer; outline: 2px dashed var(--brass-2); outline-offset: 3px; }
+.seat.tgt:hover, .seat.tgt:focus-visible { background: rgba(245, 215, 126, .12); }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1149,7 +1169,7 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '6e15f7ab';
+var APP_V = '0293a4b8';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -2244,14 +2264,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     let i = d.findIndex(c => c !== 'S');
     if (i < 0) i = 0;
     st.pile = [d.splice(i, 1)[0]]; st.draw = d;
-    st.drawn = false; st.over = null; st.got = null; st.first = null;
+    st.drawn = false; st.over = null; st.got = null; st.first = null; st.laidNow = null;
     st.turn = seatAt(st, st.dealer, 1);
   }
   
   T.create = function (order, opts, rnd, g) {
     opts = opts || {};
     const plist = T.cleanList(opts.list);
-    const st = { kind: 'phase10', g: g, order: order.slice(), dealer: Math.floor(rnd() * order.length), plist: plist, goal: plist.length, nopts: !!opts.nopts, free: !!opts.free, hsize: Math.max(5, Math.min(18, opts.hand || 10)), done: {}, round: 1, phase: {}, scores: {}, firsts: {}, winner: null, seq: 0, log: null, at: Date.now() };
+    const st = { kind: 'phase10', g: g, order: order.slice(), dealer: Math.floor(rnd() * order.length), plist: plist, goal: plist.length, nopts: !!opts.nopts, free: !!opts.free, hitNext: opts.hitNext !== false, hsize: Math.max(5, Math.min(18, opts.hand || 10)), done: {}, round: 1, phase: {}, scores: {}, firsts: {}, winner: null, seq: 0, log: null, at: Date.now() };
     order.forEach(p => { st.phase[p] = 1; st.scores[p] = 0; st.firsts[p] = 0; st.done[p] = []; });
     tDeal(st, rnd);
     return st;
@@ -2328,22 +2348,25 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (!sol) return null;
     const st = clone(st0);
     st.hands[p] = removeCards(st.hands[p], sol.used);
-    st.laid[p] = sol.groups;
+    st.laid[p] = sol.groups; st.laidNow = p;
     if (!st.first) st.first = p;
     st.seq = (st.seq || 0) + 1; st.log = { p: p, a: 'lay', n: st.phase[p] };
     tCheckEnd(st, p);
     return st;
   };
+  T.hitLate = (st, p, owner) => !!st.hitNext && owner !== p && st.laidNow === p;
   T.hit = function (st0, p, i, owner, gi) {
-    if (!tMine(st0, p) || !st0.drawn || !st0.laid[p]) return null;
+    if (!tMine(st0, p) || !st0.drawn || !st0.laid[p] || T.hitLate(st0, p, owner)) return null;
     const card = (st0.hands[p] || [])[i], g0 = st0.laid[owner] && st0.laid[owner][gi];
     if (!T.canHit(g0, card)) return null;
     const st = clone(st0), g = st.laid[owner][gi];
-    st.hands[p].splice(i, 1); g.cards.push(card);
+    st.hands[p].splice(i, 1);
+    if (g.lo === undefined) g.cards.push(card);
     if (g.lo !== undefined) {
       const stp = g.st || 1, up = card === 'W' ? (g.wrap || g.hi + stp <= 12) : (g.wrap ? T.val(card) === T.wv(g.hi + 1) : T.val(card) === g.hi + stp);
-      if (up) g.hi += stp;
-      else { g.lo -= stp; if (g.t === 'arun') { const sw = g.ca; g.ca = g.cb; g.cb = sw; } }
+      // Folge: Karte an der passenden Seite einreihen, damit die Anzeige zur Beschriftung („… bis …“) passt
+      if (up) { g.hi += stp; g.cards.push(card); }
+      else { g.lo -= stp; g.cards.unshift(card); if (g.t === 'arun') { const sw = g.ca; g.ca = g.cb; g.cb = sw; } }
       if (g.t === 'rdc' && card !== 'W') g.cols.push(card[0]);
     }
     st.seq = (st.seq || 0) + 1; st.log = { p: p, a: 'hit' };
@@ -2360,6 +2383,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (st.got && st.got.p === p) st.got = null;
     if (!st.hands[p].length) { tEndRound(st, p); return st; }
     if (card === 'S') st.skipped[st.order[seatAt(st, st.turn, 1)]] = true;
+    st.laidNow = null;
     tAdvance(st);
     return st;
   };
@@ -2417,6 +2441,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (st.laid[p]) {
       for (let i = 0; i < hand.length; i++) for (const o of st.order) {
         const gs = st.laid[o] || [];
+        if (T.hitLate(st, p, o)) continue;
         for (let gi = 0; gi < gs.length; gi++) if (T.canHit(gs[gi], hand[i])) return T.hit(st, p, i, o, gi);
       }
     }
@@ -3493,7 +3518,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const GAME_KEYS = ['wizard', 'witches', 'skipbo', 'uno', 'phase10'];
   
   const XG = {}, XPRE = {}, XDEF = {}, VAL_KEYS = { animMode: ['seq', 'all'] };
-  const SET_KEYS = { botMin: 1, botMs: 1, overlap: 1, animMax: 1, animMs: 1, unoHand: 1, unoD2: 1, unoD4: 1, unoS: 1, unoR: 1, unoW: 1, sbHand: 1, witGoal: 1, seats: 1, p10Hand: 1, tlSec: 1, nameMax: 1, lbP1: 1, lbP2: 1, lbP3: 1, lbP4: 1, lbP5: 1, lbP6: 1 }, TOG_KEYS = { unoStay: 1, unoTill: 1, unoDbl: 1, unoAny: 1, p10Free: 1, spec: 1, anim: 1, pub: 1, tlOn: 1, backup: 1, lbOwn: 1, tfOn: 1, flipOff: 1 };
+  const SET_KEYS = { botMin: 1, botMs: 1, overlap: 1, animMax: 1, animMs: 1, unoHand: 1, unoD2: 1, unoD4: 1, unoS: 1, unoR: 1, unoW: 1, sbHand: 1, witGoal: 1, seats: 1, p10Hand: 1, tlSec: 1, nameMax: 1, lbP1: 1, lbP2: 1, lbP3: 1, lbP4: 1, lbP5: 1, lbP6: 1 }, TOG_KEYS = { unoStay: 1, unoTill: 1, unoDbl: 1, unoAny: 1, p10Free: 1, spec: 1, anim: 1, pub: 1, tlOn: 1, backup: 1, lbOwn: 1, tfOn: 1, flipOff: 1, p10HitLate: 1 };
   const GAME_ORDER = ['wizard', 'witches', 'druids', 'skullking', 'uno', 'nomercy', 'allwild', 'passt', 'phase10', 'cabo', 'texas', 'loveletter', 'skipbo', 'dalmuti', 'arschloch', 'werwolf'];
   const gameList = () => GAME_ORDER.filter(k => GAMES[k]).concat(Object.keys(GAMES).filter(k => GAME_ORDER.indexOf(k) < 0));
   const xKey = k => { const m = /^([a-z]{2})_([A-Za-z0-9]+)$/.exec(k || ''), g = m && XPRE[m[1]]; return g ? { g, id: m[2] } : null; };
@@ -4982,7 +5007,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const meta = { status: 'playing', g, order: seats, game: kind };
     if (XG[kind]) { const s0 = XG[kind].create(seats, st, rnd); s0.kind = kind; s0.g = g; await w(backend.set(gamePath() + '/rounds/g' + g + kind, s0)); }
     else if (kind === 'uno') await w(backend.set(gamePath() + '/rounds/g' + g + 'uno', UN.create(seats, Math.max(3, Math.min(15, st.unoHand || 7)), rnd, g, { d2: st.unoD2, d4: st.unoD4, s: st.unoS, r: st.unoR, w: st.unoW, till: !!st.unoTill, dbl: !!st.unoDbl, stay: st.unoStay !== false, any: !!st.unoAny })));
-    else if (kind === 'phase10') await w(backend.set(gamePath() + '/rounds/g' + g + 'phase10', PT.create(seats, { list: st.p10List, nopts: !!st.p10NoPts, hand: st.p10Hand, free: !!st.p10Free }, rnd, g)));
+    else if (kind === 'phase10') await w(backend.set(gamePath() + '/rounds/g' + g + 'phase10', PT.create(seats, { list: st.p10List, nopts: !!st.p10NoPts, hand: st.p10Hand, free: !!st.p10Free, hitNext: st.p10HitLate !== true }, rnd, g)));
     else { meta.firstDealer = first; meta.witGoal = Math.max(20, Math.min(300, st.witGoal || 70)); await w(backend.set(gamePath() + '/rounds/' + wid(g, 1), HX.deal({ g, n: 1, seats, dealerIdx: first }, rnd))); }
     await w(backend.update(gamePath(), meta));
     S.busy = false;
@@ -5388,6 +5413,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const s = xState('phase10');
       if (!xTurn(s)) return;
       if (!s.drawn || !s.laid[S.pid]) { toast('Anlegen darfst du erst, wenn du gezogen und deine eigene Phase ausgelegt hast.'); return; }
+      if (PT.hitLate(s, S.pid, el.dataset.o)) { toast('Bei anderen anlegen darfst du erst ab deinem nächsten Zug nach dem Auslegen.'); return; }
       if (S.p10Sel === null || S.p10Sel === undefined) { toast('Wähle zuerst eine Handkarte.'); return; }
       const n = PT.hit(s, S.pid, S.p10Sel, el.dataset.o, +el.dataset.g);
       if (!n) { toast('Diese Karte passt dort nicht.'); return; }
@@ -6948,6 +6974,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         (host ? '<div class="designctl"><label for="p10-add">Phase hinzufügen</label><select id="p10-add">' + Object.keys(PT.CAT).map(k => '<option value="' + k + '">' + PT.CAT[k].t + '</option>').join('') + '</select><button class="btn small" data-act="p10Add"' + (pl10.length >= 20 ? ' disabled' : '') + '>Hinzufügen</button></div>' : '') +
         '<p class="fine">Gespielt werden diese ' + pl10.length + (pl10.length === 1 ? ' Phase' : ' Phasen in dieser Reihenfolge') + '. Mit den Pfeilen änderst du die Reihenfolge, mit × entfernst du eine Phase.</p>' +
         '<h3>Reihenfolge</h3>' + toggle('Freie Reihenfolge', 'Die Phasen dürfen in beliebiger Reihenfolge gespielt werden. Nach dem Austeilen wählt jeder, welche Phase er in dieser Runde versucht. Keine Phase zählt doppelt; wer zuerst alle geschafft hat, gewinnt.', 'p10Free', st.p10Free) +
+        '<h3>Anlegen</h3>' + toggle('Bei anderen sofort anlegen', st.p10HitLate ? 'An: Wer seine Phase ausgelegt hat, darf im selben Zug auch bei anderen anlegen.' : 'Aus: Bei anderen anlegen darf man erst ab dem nächsten Zug nach dem Auslegen (bei sich selbst sofort).', 'p10HitLate', !!st.p10HitLate) +
         '<h3>Karten auf der Hand</h3>' + stepper('Karten je Person', 'p10Hand', Math.max(6, Math.min(18, st.p10Hand || 10)), 1, 6, 18) + '<p class="fine">Üblich sind 10, beim Satz für zwei Personen 15. Die größte gewählte Phase braucht ' + Math.max.apply(null, pl10.map(PT.need)) + ' Karten; man hat nach dem Ziehen eine Karte mehr als ausgeteilt.</p>' +
         '<h3>Wertung</h3><button class="opt toggle' + (st.p10NoPts ? ' on' : '') + '" role="switch" aria-checked="' + !!st.p10NoPts + '" data-act="p10NoPts"' + hdis + '><b>Ohne Punkte spielen</b><span>Es gibt keine Strafpunkte. Eine Runde läuft, bis alle ihre Phase ausgelegt haben oder jemand keine Karten mehr hat. Wer seine Phase nicht geschafft hat, bleibt in ihr.</span></button>';
     }
@@ -7145,7 +7172,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (o.cls) cls.push(o.cls);
     const cs = o.sym ? '<i>' + sym(o.sym) + '</i>' : '';
     if (key && X.D.txt[key] !== undefined) o = Object.assign({}, o, { label: X.D.txt[key] });
-    return '<span class="' + cls.join(' ') + '"' + (o.title ? ' title="' + esc(o.title) + '"' : '') + '><span class="ci tl"><b>' + txt + '</b>' + cs + '</span><span class="cm' + (o.label ? ' lb' : '') + '">' + txt + '</span>' + (o.label ? '<span class="cn' + (o.label.length > 8 ? ' lg' : '') + (key && X.D.txt[key] ? ' own' : '') + '">' + esc(o.label) + '</span>' : '') + '<span class="ci br"><b>' + txt + '</b>' + cs + '</span></span>';
+    return '<span class="' + cls.join(' ') + '"' + (o.title ? ' title="' + esc(o.title) + '"' : '') + '><span class="ci tl"><b>' + txt + '</b>' + cs + '</span><span class="cm' + (o.label ? ' lb' : '') + (o.midSym && o.sym ? ' msym' : '') + '">' + (o.midSym && o.sym ? sym(o.sym) : txt) + '</span>' + (o.label ? '<span class="cn' + (o.label.length > 8 ? ' lg' : '') + (key && X.D.txt[key] ? ' own' : '') + '">' + esc(o.label) + '</span>' : '') + '<span class="ci br"><b>' + txt + '</b>' + cs + '</span></span>';
   }
   const unoName = (c, D) => c === 'W' ? 'Farbwahl' : c === 'F' ? 'Farbwahl plus vier' : (D.games.uno.suits[SUITS.indexOf(c[0])] || { name: '?' }).name + ' ' + ({ S: 'Aussetzen', R: 'Richtungswechsel', D: 'plus zwei' }[c.slice(1)] || c.slice(1));
   const p10Name = (c, D) => c === 'W' ? 'Joker' : c === 'S' ? 'Aussetzen' : D.games.phase10.suits[SUITS.indexOf(c[0])].name + ' ' + c.slice(1);
@@ -7201,7 +7228,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   }
   const WAIT_HTML = '<main class="home"><p class="wait">Die Karten werden ausgeteilt …</p></main>';
   const aroundMe = order => { const mi = order.indexOf(S.pid); return mi >= 0 ? order.slice(mi + 1).concat(order.slice(0, mi)) : order.slice(); };
-  const dzTags = p => { const z = UI.dz; return !z ? '' : (z.st === p ? '<span class="tag gold geb" title="Beginnt diese Runde"><span class="tgl">Startspieler</span><span class="tgs">StartSp.</span></span>' : '') + (z.d === p ? '<span class="tag geb" title="Gibt in dieser Runde">Geber</span>' : ''); };
+  const dzTags = p => { const z = UI.dz; return !z ? '' : (z.st === p ? '<span class="tag' + (z.ng ? '' : ' gold') + ' geb" title="Beginnt diese Runde"><span class="tgl">Startspieler</span><span class="tgs">StartSp.</span></span>' : '') + (z.d === p ? '<span class="tag geb" title="Gibt in dieser Runde">Geber</span>' : ''); };
   const seatTags = p => dzTags(p) + (S.meta.players[p] && S.meta.players[p].auto ? '<span class="tag dim">PC spielt</span>' : offline(p) ? '<span class="tag dim">offline</span>' : '');
   
   function minisHTML(n) {
@@ -7373,7 +7400,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     layer.className = 'dzT';
     const per = Math.max(80, Math.min(2000, st.animMs || 350)) * (UI.lite ? 0.6 : 1) * 1.4, X = tableX();
     list.slice(0, 6).forEach((e, i) => {
-      const a = old[e.f] || now[e.f], b = now[e.t] || old[e.t];
+      const a = old[e.f] || now[e.f]; let b = now[e.t] || old[e.t];
       if (!a || !b) return;
       const w = b.w || a.w, box = document.createElement('div');
       box.className = 'flyp gm-' + k; box.style.width = w + 'px'; box.style.left = (b.x - w / 2) + 'px'; box.style.top = (b.y - w * carH(k) / 2) + 'px';
@@ -7389,7 +7416,13 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         layer.insertBefore(ub, layer.firstChild); setTimeout(() => ub.remove(), delay + per + 120);
       }
       (UI.hideMk = UI.hideMk || []).push({ mk: e.t, t: land });
-      box.animate([{ transform: 'translate(' + (a.x - b.x) + 'px,' + (a.y - b.y) + 'px) scale(' + sc + ')' }, { transform: 'translate(0,0) scale(1)' }], { duration: per, delay: delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' });
+      const mkf = (bx, by) => [{ transform: 'translate(' + (a.x - bx) + 'px,' + (a.y - by) + 'px) scale(' + sc + ')' }, { transform: 'translate(0,0) scale(1)' }];
+      const an = box.animate(mkf(b.x, b.y), { duration: per, delay: delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' });
+      // Ziel nachmessen: verschiebt sich das Layout nach dem Zeichnen noch, landet die Karte trotzdem genau dort, wo sie liegen bleibt
+      const refit = () => { let t = null; try { t = document.querySelector('main.game [data-mk="' + CSS.escape(e.t) + '"]'); } catch (er) { t = null; } if (!t || !an.effect || !an.effect.setKeyframes) return; const c = t.querySelector('.card') || t, r = c.getBoundingClientRect(); if (!r.width) return;
+        const nx = r.left + r.width / 2, ny = r.top + r.height / 2; if (Math.abs(nx - b.x) < 1 && Math.abs(ny - b.y) < 1) return;
+        b = Object.assign({}, b, { x: nx, y: ny }); box.style.left = (nx - w / 2) + 'px'; box.style.top = (ny - w * carH(k) / 2) + 'px'; an.effect.setKeyframes(mkf(nx, ny)); };
+      setTimeout(refit, delay + 30); setTimeout(refit, delay + per * 0.6);
       setTimeout(applyHide, delay + per + 2);
       setTimeout(() => box.remove(), delay + per + 120);
     });
@@ -8068,7 +8101,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       center = '<div class="summary"><h2>' + (s.winner === me ? 'Du gewinnst' : esc(pname(s.winner)) + ' gewinnt') + '</h2><div class="tablewrap"><table><thead><tr><th scope="col">Platz</th><th scope="col">Handkarten</th></tr></thead><tbody>' + rank.map((p, i) => '<tr class="' + (p === me ? 'me' : '') + (i === 0 ? ' win' : '') + '"><th scope="row">' + (i + 1) + '. ' + esc(pname(p)) + '</th><td><b>' + s.hands[p].length + '</b></td></tr>').join('') + '</tbody></table></div><div class="sumfoot">' + lobbyFoot() + '</div></div>';
     } else {
       const t = s.pile[s.pile.length - 1];
-      center = '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="unoDraw" aria-label="' + (pend ? pend + ' Karten ziehen' : 'Karte ziehen') + '">' + backHTML(X, 'uno') + '<span class="who">' + (pend ? '<b>' + pend + ' ziehen</b>' : 'Ziehen · ' + s.draw.length) + '</span></button><div class="bp drawp">' + unoCardHTML(t, X) + '<span class="who"><i class="dot" style="background:var(--s' + s.color + ')"></i> ' + esc(suitName(X, s.color, 'uno')) + ' gilt</span></div></div>' +
+      center = unoDir(s.dir) + '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="unoDraw" aria-label="' + (pend ? pend + ' Karten ziehen' : 'Karte ziehen') + '">' + backHTML(X, 'uno') + '<span class="who">' + (pend ? '<b>' + pend + ' ziehen</b>' : 'Ziehen · ' + s.draw.length) + '</span></button><div class="bp drawp">' + unoCardHTML(t, X) + '<span class="who"><i class="dot" style="background:var(--s' + s.color + ')"></i> ' + esc(suitName(X, s.color, 'uno')) + ' gilt</span></div></div>' +
         (pend ? '<p class="pendnote">Es liegen <b>+' + pend + '</b> an.</p>' : '') +
         (myTurn && S.unoPick !== null && S.unoPick !== undefined ? '<div class="pickbox"><p>Welche Farbe soll gelten?</p><div class="picks">' + SUITS.map(c => '<button class="pick s-' + c + '" data-act="unoColor" data-c="' + c + '">' + esc(suitName(X, c, 'uno')) + '</button>').join('') + '</div></div>' : '') +
         (ask !== null ? '<div class="pickbox"><p>Du hast ' + esc(unoName(myHand[ask], X.D)) + ' zweimal auf der Hand. Beide zusammen legen?</p><div class="picks"><button class="btn primary" data-act="unoDbl" data-v="1">Beide legen</button><button class="btn" data-act="unoDbl" data-v="0">Nur eine legen</button></div></div>' : '');
@@ -8076,9 +8109,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const mineGot = gotN ? (gotN > 4 ? 'Du hast ' + gotN + ' Karten gezogen, sie sind in der Hand markiert. ' : (s.got.forced ? 'Du hast ' + gotN + ' Karten gezogen: ' : 'Gezogen: ') + myHand.slice(-gotN).map(c => esc(unoName(c, X.D))).join(', ') + '. ') : '';
       if (myTurn) {
         const canStack = pend && myHand.some(c => UN.can(s, c));
-        status = '<b>Du bist am Zug.</b> ' + (pend ? 'Ziehe ' + pend + ' Karten' + (canStack ? ' oder erhöhe mit ' + (s.pendKind === 'D' ? '+2 oder +4' : '+4') : '') + '. ' + (s.rules && s.rules.stay === false ? 'Danach ist der Nächste dran.' : 'Danach spielst du normal weiter.') : s.drawn ? mineGot + 'Spiele die gezogene Karte oder gib weiter.' : mineGot + 'Lege eine passende Karte oder ziehe.');
-      } else status = nm(cur) + ' ist am Zug …' + (seated && mineGot ? ' <small>' + mineGot + '</small>' : '');
-      status += ' <small>Richtung ' + (s.dir === 1 ? '↻' : '↺') + (last ? ' · ' + last : '') + '</small>';
+        status = (pend ? 'Ziehe ' + pend + ' Karten' + (canStack ? ' oder erhöhe mit ' + (s.pendKind === 'D' ? '+2 oder +4' : '+4') : '') + '. ' + (s.rules && s.rules.stay === false ? 'Danach ist der Nächste dran.' : 'Danach spielst du normal weiter.') : s.drawn ? mineGot + 'Spiele die gezogene Karte oder gib weiter.' : mineGot + 'Lege eine passende Karte oder ziehe.');
+      } else status = seated && mineGot ? mineGot : last;
+      // nur eine Zeile: immer die neueste Info (wer dran ist, zeigt der Rahmen)
     }
     let mine;
     if (seated) {
@@ -8102,8 +8135,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   function p10HTML(X) {
     const s = xState('phase10');
     if (!s) return WAIT_HTML;
-    UI.dz = typeof s.dealer === 'number' ? { d: s.order[s.dealer], st: s.order[(s.dealer + 1) % s.order.length] } : null;
+    UI.dz = typeof s.dealer === 'number' ? { d: s.order[s.dealer], st: s.order[(s.dealer + 1) % s.order.length], ng: s.round > 1 } : null;
     const choosing = PT.choosing(s);
+    // Auswahl gilt nur für den laufenden Zug – sonst wirkte eine alte Auswahl wie eine vorgewählte Karte
+    const tk = S.code + ':' + s.g + ':' + s.round + ':' + s.turn; if (UI.p10TK !== tk) { UI.p10TK = tk; S.p10Sel = null; }
     const me = S.pid, seated = s.order.indexOf(me) >= 0, cur = s.order[s.turn], myTurn = seated && xTurn(s) && !choosing;
     const nm = p => p === me ? 'Du' : esc(pname(p));
     const hand0 = s.hands[me] || [], sel = myTurn && S.p10Sel !== null && S.p10Sel !== undefined && S.p10Sel < hand0.length ? S.p10Sel : null;
@@ -8111,7 +8146,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const sn = c => esc(suitName(X, c, 'phase10'));
     const gLabel = g => g.t === 'set' ? g.cards.length + '× die ' + g.v : g.t === 'cset' ? g.cards.length + '× ' + sn(g.c) + ' ' + g.v : g.t === 'fix' ? '3, 6, 9, 12' : g.t === 'wild' ? g.cards.length + '× Joker' : g.t === 'col' ? g.cards.length + '× ' + sn(g.c) + (g.ev ? ', gerade' : '') : (g.st === 2 ? 'Ungerade Folge ' : 'Folge ') + (g.t === 'cr' ? sn(g.c) + ' ' : g.t === 'arun' ? sn(g.ca) + '/' + sn(g.cb) + ' ' : g.t === 'r2c' ? sn(g.cs[0]) + '/' + sn(g.cs[1]) + ' ' : '') + PT.wv(g.lo) + ' bis ' + PT.wv(g.hi);
     const groups = p => (s.laid[p] || []).map((g, gi) => '<button class="pg' + (canHitNow && PT.canHit(g, hand0[sel]) ? ' ok' : '') + '" data-act="p10Hit" data-o="' + esc(p) + '" data-g="' + gi + '" aria-label="' + gLabel(g) + '"><span class="pgc">' + g.cards.map(c => p10CardHTML(c, X, { cls: 'tiny' })).join('') + '</span><span class="who">' + gLabel(g) + '</span></button>').join('');
-    const seats = aroundMe(s.order).map(p => { const n = (s.hands[p] || []).length; return '<div class="seat p10seat' + (cur === p && !s.over ? ' turn' : '') + (offline(p) ? ' off' : '') + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + seatTags(p) + minisHTML(n) + '</div><div class="ss"><span>' + (s.free ? (s.done[p] || []).length + '/' + s.goal + ' · ' + (s.phase[p] ? 'Phase <b>' + s.phase[p] + '</b>: ' + esc(PT.text(s, s.phase[p])) : 'wählt …') : s.phase[p] > s.goal ? 'Phase: <b>✓</b>' : 'Phase <b>' + s.phase[p] + '</b>: ' + esc(PT.text(s, s.phase[p]))) + '</span>' + (s.nopts ? '' : '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>') + (s.laid[p] ? '<span class="tag gold">' + (n ? 'ausgelegt' : 'fertig') + '</span>' : '') + '</div>' + (s.laid[p] ? '<div class="pgs">' + groups(p) + '</div>' : '') + '</div>'; }).join('');
+    const seats = aroundMe(s.order).map(p => { const n = (s.hands[p] || []).length; return '<div class="seat p10seat' + (cur === p && !s.over ? ' turn' : '') + (offline(p) ? ' off' : '') + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + seatTags(p) + (s.laid[p] ? '<span class="tag gold">' + (n ? 'ausgelegt' : 'fertig') + '</span>' : '') + minisHTML(n) + '</div><div class="ss"><span>' + (s.free ? (s.done[p] || []).length + '/' + s.goal + ' · ' + (s.phase[p] ? 'Phase <b>' + s.phase[p] + '</b>: ' + esc(PT.text(s, s.phase[p])) : 'wählt …') : s.phase[p] > s.goal ? 'Phase: <b>✓</b>' : 'Phase <b>' + s.phase[p] + '</b>: ' + esc(PT.text(s, s.phase[p]))) + '</span>' + (s.nopts ? '' : '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>') + '</div><div class="pgs' + (s.laid[p] ? '' : ' pgempty') + '">' + (s.laid[p] ? groups(p) : '') + '</div></div>'; }).join('');
     const cw = cardW();
     
     const gotMine = s.got && s.got.p === me ? s.got : null, gotI = gotMine ? hand0.lastIndexOf(gotMine.c) : -1;
@@ -8310,7 +8345,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const dis = myTurn ? '' : ' tabindex="-1"';
       mine = '<div class="mebar' + (myTurn ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + '<span class="nm">' + esc(pname(me)) + '</span><span class="ss"><span>Stapel: <b>' + stock.length + '</b></span></span>' +
         (S.meta.players[me] && S.meta.players[me].auto ? '<span class="blindnote">Der Computer spielt gerade für dich. <button class="btn small" data-act="selfPlay">Wieder selbst spielen</button></span>' : '') + '</div>' +
-        '<div class="sbmine" style="--cw:' + cw + 'px"><div class="sbcol"><button class="hc ok sbst' + isSel('stock', 0) + '" data-act="sbSrc" data-t="stock"' + dis + ' aria-label="Dein Stapel">' + (stock.length ? sbCardHTML(stock[stock.length - 1], X) : '<span class="card slot"></span>') + '</button><span class="who">Dein Stapel</span></div>' +
+        '<div class="sbmine" style="--cw:' + Math.round(cw * 0.78) + 'px"><div class="sbcol"><button class="hc ok sbst' + isSel('stock', 0) + '" data-act="sbSrc" data-t="stock"' + dis + ' aria-label="Dein Stapel">' + (stock.length ? sbCardHTML(stock[stock.length - 1], X) : '<span class="card slot"></span>') + '</button><span class="who">Dein Stapel</span></div>' +
         '<div class="sbdp">' + K.PILES.map(i => {
           const d = s.disc[me][i] || [], show = d.slice(-4);
           return '<div class="sbcol"><button class="dp' + isSel('disc', i) + (sel && sel.t === 'hand' ? ' ok' : '') + '" data-act="sbDisc" data-i="' + i + '"' + dis + ' aria-label="Ablagestapel ' + (i + 1) + '"><span class="stack">' + (show.length ? show.map(v => sbCardHTML(v, X)).join('') : '<span class="card slot"></span>') + '</span></button><span class="who">' + (d.length ? d.length + (d.length === 1 ? ' Karte' : ' Karten') : 'Ablage ' + (i + 1)) + '</span></div>';
@@ -8670,6 +8705,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const xNext = (s, i, ok, dir) => { const n = s.order.length; for (let k = 1; k <= n; k++) { const j = (((i + k * (dir || 1)) % n) + n) % n; if (!ok || ok(s.order[j])) return j; } return i; };
   const xLog = (s, t) => { s.log = (Array.isArray(s.log) ? s.log : []).concat([t]).slice(-4); s.seq = (s.seq || 0) + 1; };
   const xNm = p => p === S.pid ? 'Du' : esc(pname(p));
+  // Uno-Varianten: Spielrichtung über den Karten
+  // Person wählen (gezielte +2, Tausch): Rahmen der wählbaren Personen markieren und anklickbar machen
+  const xPickSeats = (html, ps, a) => html.replace(/<div class="seat([^"]*)" data-p="([^"]+)"/g, (m, c, p) => ps.indexOf(p) >= 0 || ps.map(esc).indexOf(p) >= 0 ? '<div class="seat' + c + ' tgt" data-p="' + p + '" data-act="xg" data-a="' + a + '" role="button" tabindex="0" title="Diese Person wählen"' : m);
+  const unoDir = d => '<p class="unodir" aria-label="Spielrichtung ' + (d === 1 ? 'im Uhrzeigersinn' : 'gegen den Uhrzeigersinn') + '">Richtung <b>' + (d === 1 ? '↻' : '↺') + '</b></p>';
   const xLogHTML = s => (s.log || []).length ? '<p class="xlog">' + s.log.slice(-3).map(esc).join('<br>') + '</p>' : '';
   function xCard(g, id, ci, txt, X, o) {
     o = Object.assign({}, o || {});
@@ -8683,6 +8722,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const xSeat = (p, turn, info, extra) => '<div class="seat' + (turn ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + seatTags(p) + '</div><div class="ss">' + info + '</div>' + (extra || '') + '</div>';
   const xMe = (me, turn, info, extra) => '<div class="mebar' + (turn ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + '<span class="nm">' + esc(pname(me)) + '</span>' + dzTags(me) + '<span class="ss">' + info + '</span>' + (extra || '') + autoNote(me) + '</div>';
   const xBtn = (a, label, attrs, cls) => '<button class="btn ' + (cls || '') + '" data-act="xg" data-a="' + a + '"' + (attrs || '') + '>' + label + '</button>';
+  // Dalmuti/Arschloch: gelegte Mehrlinge nebeneinander mit 70 % Überlappung; bei „im Kreis“ leicht im Bogen
+  const xSet = (cards, cw, fn) => { const n = cards.length, arc = typeof pileOn === 'function' && pileOn();
+    return '<div class="dmset' + (arc ? ' arc' : '') + '" style="--cw:' + cw + 'px">' + cards.map((c, i) => { const o = i - (n - 1) / 2, st = arc && n > 1 ? ' style="transform:translateY(' + (o * o * cw * 0.05).toFixed(1) + 'px) rotate(' + (o * 7).toFixed(1) + 'deg)"' : ''; return '<div class="tc"' + st + '>' + fn(c) + '</div>'; }).join('') + '</div>'; };
   const xFan = (n, cw, fn) => n ? fanHTML(n, cw, (k, ml) => { const b = fn(k); return '<button class="hc' + (b.c ? ' ' + b.c : '') + '" style="margin-left:' + ml + 'px" data-act="xg" ' + b.a + '>' + b.h + '</button>'; }) : emptyHand();
   const xTable = (head, rows) => '<div class="tablewrap"><table><thead><tr>' + head.map(h => '<th scope="col">' + h + '</th>').join('') + '</tr></thead><tbody>' + rows.map(r => '<tr class="' + (r.p === S.pid ? 'me' : '') + (r.win ? ' win' : '') + '"><th scope="row">' + r.cells[0] + '</th>' + r.cells.slice(1).map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
   const xSum = (s, title, body, nextLabel) => (s.winner ? endGate : (x => x))('<div class="summary"><h2>' + title + '</h2>' + body + (s.winner && CHART_X[S.meta && S.meta.game] ? ptChart(s.order || [], xChartRows(s), S.meta.game === 'cabo' ? 'Punkte im Verlauf (wenige sind gut)' : 'Punkteverlauf') : '') + '<div class="sumfoot">' + (s.winner ? lobbyFoot() : dealBtn('x' + s.round, xBtn('next', nextLabel || 'Nächste Runde', '', 'primary'))) + '</div></div>');
@@ -9334,7 +9376,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           else status = wait.length ? 'Warte auf die Abgaben von ' + wait.join(' und ') + ' …' : 'Es wird getauscht …';
         }
         else {
-          center = (s.table ? '<div class="trick" style="--cw:' + Math.round(cw * .8) + 'px">' + s.table.cards.map(c => '<div class="tc">' + card(c, X) + '</div>').join('') + '</div><p class="xlog">' + s.table.n + '× ' + RN[s.table.rank] + (s.table.rank < 13 ? ' (' + s.table.rank + ')' : '') + ' von ' + xNm(s.table.by) + '</p>' : '<p class="xlog">Neuer Stich: ' + xNm(cur) + (cur === me ? ' spielst' : ' spielt') + ' aus.</p>') + xLogHTML(s);
+          center = (s.table ? xSet(s.table.cards, Math.round(cw * .8), c => card(c, X)) + '<p class="xlog">' + s.table.n + '× ' + RN[s.table.rank] + (s.table.rank < 13 ? ' (' + s.table.rank + ')' : '') + ' von ' + xNm(s.table.by) + '</p>' : '<p class="xlog">Neuer Stich: ' + xNm(cur) + (cur === me ? ' spielst' : ' spielt') + ' aus.</p>') + xLogHTML(s);
           status = myTurn ? '<b>Du bist am Zug.</b> ' + (s.table ? (dmCanPlay(s, me) ? 'Lege ' + s.table.n + (s.table.n === 1 ? ' Karte' : ' Karten') + ' mit niedrigerer Zahl oder passe.' : 'Du kannst nicht höher legen – du wirst in wenigen Sekunden automatisch übersprungen.') : 'Spiele eine Karte oder mehrere mit demselben Rang.') : xNm(cur) + ' ist am Zug …';
         }
         let mine;
@@ -9355,7 +9397,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const rk = c => +String(c).slice(1), su = c => String(c)[0];
     const rtx = r => RT[r] || String(r), rnm = r => RW[r] || String(r);
     const colOf = id => Math.max(0, SU.indexOf(su(id)));
-    const card = (id, X, o) => xCard(K, String(id), colOf(id), rtx(rk(id)), X, o || {});
+    // Arschloch: in der Kartenmitte das Farbsymbol (dick) statt der Zahl; die Zahl steht in den Ecken
+    const card = (id, X, o) => xCard(K, String(id), colOf(id), rtx(rk(id)), X, Object.assign({ midSym: true }, o || {}));
     const ALL = []; SU.forEach(s => { for (let r = 2; r <= 14; r++) ALL.push(s + r); });
     const deckOf = s => { const d = ALL.filter(c => !s.skat || rk(c) >= 7); return s.dbl ? d.concat(d) : d; };
     const RANKS = s => s.skat ? [7, 8, 9, 10, 11, 12, 13, 14] : [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
@@ -9425,12 +9468,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       s.over = { order: s.fin.slice() }; s.phase = 'over';
       if (s.round >= s.rounds) { const best = Math.max.apply(null, s.order.map(q => s.scores[q])); s.winner = s.over.order.find(q => s.scores[q] === best); }
     }
+    // Zugrecht im Uhrzeigersinn: Jeder muss höher legen oder passen – auch wer vorher gepasst hat, darf später wieder legen.
+    // Der Stich endet, wenn nach dem letzten Ausspielen alle anderen (mit Karten) gepasst haben.
     function advance(s) {
-      const P = s.order.length; s.passed = s.passed || {};
-      for (let k = 1; k <= P; k++) {
+      const P = s.order.length, others = s.order.filter(q => q !== s.table.by && s.hands[q].length).length;
+      if (s.passes < others) for (let k = 1; k <= P; k++) {
         const i = (s.turn + k) % P, q = s.order[i];
         if (q === s.table.by) break;
-        if (s.hands[q].length && !s.passed[q]) { s.turn = i; return; }
+        if (s.hands[q].length) { s.turn = i; return; }
       }
       const bi = s.order.indexOf(s.table.by);
       s.clr = { id: 'c' + (s.g || 0) + ':' + s.round + ':' + (s.seq || 0), p: s.table.by };
@@ -9444,7 +9489,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (s0.table && (v.n !== s0.table.n || !better(s0, v.rank, s0.table.rank))) return null;
       const s = xClone(s0), h = s.hands[p];
       for (const c of cards) { const k = h.indexOf(c); if (k < 0) return null; h.splice(k, 1); }
-      s.table = { cards: cards.slice(), n: v.n, rank: v.rank, by: p }; s.passes = 0; s.seq = (s.seq || 0) + 1; s.played = (s.played || []).concat(cards);
+      s.table = { cards: cards.slice(), n: v.n, rank: v.rank, by: p }; s.passes = 0; s.passed = {}; s.seq = (s.seq || 0) + 1; s.played = (s.played || []).concat(cards);
       if (s.recv && s.recv[p] && s.recv[p].length) s.recv[p] = [];
       if (s.revoOn && v.n === 4) { s.revo = !s.revo; xLog(s, pname(p) + ' ruft die Revolution aus: ' + (s.revo ? 'Jetzt ist die niedrigste Karte die höchste!' : 'Die Reihenfolge gilt wieder normal.')); }
       if (!h.length) { s.fin.push(p); xLog(s, pname(p) + ' ist fertig (Platz ' + s.fin.length + ').'); }
@@ -9534,7 +9579,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const outIdx = []; (outT ? (s.guess ? taxQ(s, s.order[outT.from]).got.slice() : taxBest(s, outT)) : []).concat(s.phase === 'tax' ? (s.taxSub || {})[me] || [] : []).forEach(c => { const k = hand.findIndex((x, j) => x === c && outIdx.indexOf(j) < 0); if (k >= 0) outIdx.push(k); });
         const gotIdx = []; (s.phase === 'play' && s.recv ? s.recv[me] || [] : []).forEach(c => { const k = hand.findIndex((x, j) => x === c && gotIdx.indexOf(j) < 0); if (k >= 0) gotIdx.push(k); });
         const gold = p => s.ranked && s.order.indexOf(p) < (s.order.length >= 4 ? 2 : 1);
-        const seats = aroundMe(s.order).map(p => xSeat(p, cur === p || taxTurn(p), '<span class="tag' + (gold(p) ? ' gold' : '') + '">' + title(s, p) + '</span>' + (s.phase === 'play' && s.table && (s.passed || {})[p] ? '<span class="tag dim">gepasst</span>' : '') + (s.hands[p].length ? minisHTML(s.hands[p].length) : '<span class="tag gold">fertig, Platz ' + (s.fin.indexOf(p) + 1) + '</span>') + '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>'));
+        const seats = aroundMe(s.order).map(p => xSeat(p, cur === p || taxTurn(p), '<span class="tag' + (gold(p) ? ' gold' : '') + '">' + title(s, p) + '</span>' + (s.phase === 'play' && s.table && (s.passed || {})[p] ? '<span class="tag dim">gepasst</span>' : '') + (s.hands[p].length ? minisHTML(s.hands[p].length) : '<span class="tag gold">fertig, Platz ' + (s.fin.indexOf(p) + 1) + '</span>') + '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>')).join('');
         let center, status = '';
         if (s.over) center = xSum(s, s.winner ? xWin(s, me) : 'Runde ' + s.round + ' ist gespielt', xTable(['Neues Amt', 'Runde', 'Gesamt'], s.over.order.map((p, i) => ({ p: p, win: s.winner === p, cells: [(i + 1) + '. ' + esc(pname(p)), '+' + (s.order.length - 1 - i), '<b>' + s.scores[p] + '</b>'] }))), 'Nächste Runde austeilen');
         else if (s.phase === 'tax') {
@@ -9548,7 +9593,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           else if (outT) status = 'Du musst drücken: Die markierten (höchsten) Karten gehen gleich an ' + esc(pname(s.order[outT.from])) + '. Warte auf ' + wait.join(' und ') + ' …';
           else status = wait.length ? 'Warte auf ' + wait.join(' und ') + ' …' : 'Es wird gedrückt …';
         } else {
-          center = (s.table ? '<div class="trick" style="--cw:' + Math.round(cw * .8) + 'px">' + s.table.cards.map(c => '<div class="tc">' + card(c, X) + '</div>').join('') + '</div><p class="xlog">' + s.table.n + '× ' + rnm(s.table.rank) + ' von ' + xNm(s.table.by) + '</p>' : '<p class="xlog">Neuer Stich: ' + xNm(cur) + (cur === me ? ' spielst' : ' spielt') + ' aus.</p>') + xLogHTML(s);
+          center = (s.table ? xSet(s.table.cards, Math.round(cw * .8), c => card(c, X)) + '<p class="xlog">' + s.table.n + '× ' + rnm(s.table.rank) + ' von ' + xNm(s.table.by) + '</p>' : '<p class="xlog">Neuer Stich: ' + xNm(cur) + (cur === me ? ' spielst' : ' spielt') + ' aus.</p>') + xLogHTML(s);
           status = myTurn ? '<b>Du bist am Zug.</b> ' + (s.table ? (canPlayP(s, me) ? 'Lege ' + s.table.n + (s.table.n === 1 ? ' Karte' : ' Karten') + ' mit ' + (s.revo ? 'niedrigerem' : 'höherem') + ' Wert oder passe.' : 'Du kannst nicht höher legen – du wirst in wenigen Sekunden automatisch übersprungen.') : 'Spiele eine Karte oder mehrere mit demselben Wert.') : xNm(cur) + ' ist am Zug …';
         }
         let mine;
@@ -9559,7 +9604,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       },
       rules: '<h3>Ziel</h3><p>Werde deine Karten möglichst schnell los. Wer zuerst fertig ist, wird König, wer als Letzter übrig bleibt, ist das Arschloch. Nach der eingestellten Rundenzahl gewinnt, wer die meisten Punkte hat (je Runde ein Punkt für jede Person, die nach dir fertig wird).</p>' +
         '<h3>Karten</h3><p>Pokerblatt mit 52 Karten (2 bis Ass) oder auf Wunsch Skatblatt mit 32 Karten (7 bis Ass). Die Farbe spielt keine Rolle, nur der Wert: 2 ist am niedrigsten, Ass am höchsten. Alle Karten werden möglichst gleichmäßig verteilt.</p>' +
-        '<h3>Ausspielen</h3><p>Wer herauskommt, legt eine Karte oder mehrere mit demselben Wert. Reihum legt man genauso viele Karten mit einem höheren Wert oder passt. Wer gepasst hat, ist bis zum Ende des Stichs raus. Haben alle anderen gepasst, gewinnt der Höchste den Stich und kommt neu heraus. Wer mit seinen letzten Karten den Stich holt, gibt das Ausspielen an den Nächsten weiter. Wer nicht legen kann, wird nach ein paar Sekunden automatisch übersprungen.</p>' +
+        '<h3>Ausspielen</h3><p>Wer herauskommt, legt eine Karte oder mehrere mit demselben Wert. Reihum im Uhrzeigersinn muss der Nächste genauso viele Karten mit einem höheren Wert legen oder passen. Wer gepasst hat, darf in derselben Runde später wieder legen, wenn er erneut dran ist. Haben alle anderen gepasst, gewinnt der Höchste den Stich und kommt neu heraus. Wer mit seinen letzten Karten den Stich holt, gibt das Ausspielen an den Nächsten weiter. Wer nicht legen kann, wird nach ein paar Sekunden automatisch übersprungen.</p>' +
         '<h3>Ämter</h3><p>Die Reihenfolge, in der ihr fertig werdet, bestimmt die Ämter der nächsten Runde: König, Vizekönig, Bürger, Vize-Arschloch, Arschloch (bei 3 Personen nur König, Bürger, Arschloch). Ihr sitzt in dieser Reihenfolge.</p>' +
         '<h3>Drücken</h3><p>Ab der zweiten Runde gibt das Arschloch seine zwei höchsten Karten an den König, das Vize-Arschloch seine höchste an den Vizekönig (bei 3 Personen: nur eine Karte zwischen Arschloch und König). Dafür sucht sich der König zwei, der Vizekönig eine Karte aus, die sie zurückgeben. Das Arschloch beginnt die Runde.</p>' +
         '<h3>Karten erraten (optional)</h3><p>Statt automatisch zu bekommen, rät der König bis zu dreimal einen Wert (höchstens 2 Karten), der Vizekönig bis zu zweimal (1 Karte). Für jeden Treffer gibt es eine solche Karte; zurückgegeben werden genauso viele.</p><h3>Doppeltes Blatt (optional)</h3><p>Jede Karte gibt es zweimal – so können bis zu 16 Personen mitspielen (ab 9 Personen automatisch).</p><h3>Revolution (optional)</h3><p>Wer vier Karten mit demselben Wert legt, dreht die Reihenfolge bis zum Rundenende um: Dann ist die niedrigste Karte die höchste. Noch einmal vier Gleiche drehen es zurück.</p>'
@@ -9783,6 +9828,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const U = UI.x, seated = s.order.indexOf(me) >= 0, cur = s.swap || s.roul || s.order[s.turn], myTurn = seated && !s.winner && !s.swap && !s.roul && cur === me, cw = cardW(), pend = s.pend || 0, hand = s.hands[me] || [];
         const D = X.D, cn = c => esc(D.games[K].cols[COL.indexOf(c)].name);
         const seats = aroundMe(s.order).map(p => { const n = (s.hands[p] || []).length; return xSeat(p, cur === p && !s.winner, s.out[p] ? '<span class="tag dim">ausgeschieden</span>' : minisHTML(n) + (n === 1 ? '<span class="tag gold">Uno</span>' : '') + (n >= s.rules.mercy - 5 ? '<span class="tag">' + n + ' von ' + s.rules.mercy + '</span>' : '')); }).join('');
+        const seatsP = s.swap === me ? xPickSeats(seats, s.order.filter(q => q !== me && !s.out[q]), 'swap') : seats;
         if (s.uno && UI.unoSeq !== K + s.uno.seq) { UI.unoSeq = K + s.uno.seq; UI.unoUntil = Date.now() + 2800; setTimeout(requestRender, 2900); }
         const flash = !s.winner && s.uno && Date.now() < (UI.unoUntil || 0) ? '<div class="unoflash" role="alert"><b>UNO!</b><span>' + (s.uno.p === me ? 'Du hast' : esc(pname(s.uno.p)) + ' hat') + ' nur noch eine Karte</span></div>' : '';
         const gotN = s.got && s.got.p === me ? Math.min(s.got.n || 0, hand.length) : 0;
@@ -9790,15 +9836,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         if (s.winner) center = '<div class="summary"><h2>' + xWin(s, me) + '</h2>' + XG[K].score(s) + '<div class="sumfoot">' + lobbyFoot() + '</div></div>';
         else {
           const t = s.pile[s.pile.length - 1], colBtns = a => COL.map(c => '<button class="pick s-x' + COL.indexOf(c) + '" data-act="xg" data-a="' + a + '" data-c="' + c + '">' + cn(c) + '</button>').join('');
-          center = '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="xg" data-a="draw" aria-label="Ziehen">' + backHTML(X, K) + '<span class="who">' + (pend ? '<b>' + pend + ' ziehen</b>' : 'Ziehen · ' + s.draw.length) + '</span></button><div class="bp drawp">' + card(t, X) + '<span class="who"><i class="dot" style="background:var(--sx' + COL.indexOf(s.color) + ')"></i> ' + cn(s.color) + ' gilt</span></div></div>' +
+          center = unoDir(s.dir) + '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="xg" data-a="draw" aria-label="Ziehen">' + backHTML(X, K) + '<span class="who">' + (pend ? '<b>' + pend + ' ziehen</b>' : 'Ziehen · ' + s.draw.length) + '</span></button><div class="bp drawp">' + card(t, X) + '<span class="who"><i class="dot" style="background:var(--sx' + COL.indexOf(s.color) + ')"></i> ' + cn(s.color) + ' gilt</span></div></div>' +
             (pend ? '<p class="pendnote">Es liegen <b>+' + pend + '</b> an. Erhöhen geht ab +' + s.pendMin + '.</p>' : '') +
             (myTurn && U.pick !== undefined ? xPick('Welche Farbe soll gelten?', colBtns('col')) : '') +
             (myTurn && U.ask !== undefined && hand[U.ask] !== undefined ? xPick('Du hast ' + esc(name(hand[U.ask], D)) + ' zweimal auf der Hand. Beide zusammen legen?', xBtn('dbl', 'Beide legen', ' data-v="1"', 'primary') + xBtn('dbl', 'Nur eine legen', ' data-v="0"')) : '') +
             (s.swap === me ? xPick('Du hast eine 7 gespielt: Mit wem tauschst du deine Hand?', s.order.filter(q => q !== me && !s.out[q]).map(q => xBtn('swap', esc(pname(q)) + ' (' + s.hands[q].length + ')', ' data-p="' + esc(q) + '"')).join('')) : '') +
-            (s.roul === me ? xPick('Farbroulette: Nenne eine Farbe. Du ziehst, bis du eine Karte dieser Farbe aufdeckst' + (s.rules.stay ? ', und spielst dann weiter.' : ', und setzt dann aus.'), colBtns('roul')) : '') + xLogHTML(s);
+            (s.roul === me ? xPick('Farbroulette: Nenne eine Farbe. Du ziehst, bis du eine Karte dieser Farbe aufdeckst' + (s.rules.stay ? ', und spielst dann weiter.' : ', und setzt dann aus.'), colBtns('roul')) : '');
           status = s.swap ? (s.swap === me ? '<b>Wähle, mit wem du tauschst.</b>' : xNm(s.swap) + ' wählt einen Tauschpartner …') : s.roul ? (s.roul === me ? '<b>Wähle eine Farbe.</b>' : xNm(s.roul) + ' wählt eine Farbe für das Roulette …') :
-            myTurn ? '<b>Du bist am Zug.</b> ' + (pend ? 'Ziehe ' + pend + ' Karten' + (s.rules.stay ? '' : ' und setze aus') + ', oder erhöhe.' : s.drawn ? 'Spiele die gezogene Karte oder gib weiter.' : 'Lege eine passende Karte oder ziehe.') : xNm(cur) + ' ist am Zug …';
-          status += ' <small>Richtung ' + (s.dir === 1 ? '↻' : '↺') + (gotN ? ' · Du hast ' + gotN + (gotN === 1 ? ' Karte' : ' Karten') + ' gezogen (markiert).' : '') + '</small>';
+            gotN && myTurn ? 'Du hast ' + gotN + (gotN === 1 ? ' Karte' : ' Karten') + ' gezogen (markiert).' : myTurn && pend ? 'Ziehe ' + pend + ' Karten' + (s.rules.stay ? '' : ' und setze aus') + ', oder erhöhe.' : esc((s.log || []).slice(-1)[0] || '');
         }
         let mine;
         if (seated) {
@@ -9807,7 +9852,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           mine = xMe(me, myTurn, '<span>Karten: <b>' + hand.length + '</b> · Grenze ' + s.rules.mercy + '</span>', (s.out[me] ? '<span class="tag dim">ausgeschieden</span>' : '') + (myTurn && s.drawn ? xBtn('pass', 'Weitergeben', '', 'small') : '')) +
             xFan(hs.length, cw, k => { const h = hs[k], ok = myTurn && can(s, h.c) && (!s.drawn || h.i === hand.length - 1); return { c: (myTurn ? (ok ? 'ok' : 'no') : '') + (U.pick === h.i || U.ask === h.i ? ' sel' : '') + (gotN && h.i >= hand.length - gotN ? ' got' : ''), a: 'data-a="c" data-i="' + h.i + '"', h: card(h.c, X) }; });
         } else mine = specBar(s.order);
-        return xMain(K, { chips: '<span class="chip">Gnade ab ' + s.rules.mercy + (s.rules.late ? ', spät' : '') + '</span>' + (s.rules.till ? '<span class="chip">Ziehen, bis es passt</span>' : '') + (s.rules.dbl ? '<span class="chip">Doppeln</span>' : '') + (s.rules.stay ? '<span class="chip">nach dem Ziehen weiterspielen</span>' : ''), flash: flash, seats: seats, center: center, status: status, mine: mine });
+        return xMain(K, { chips: '<span class="chip">Gnade ab ' + s.rules.mercy + (s.rules.late ? ', spät' : '') + '</span>' + (s.rules.till ? '<span class="chip">Ziehen, bis es passt</span>' : '') + (s.rules.dbl ? '<span class="chip">Doppeln</span>' : '') + (s.rules.stay ? '<span class="chip">nach dem Ziehen weiterspielen</span>' : ''), flash: flash, seats: seatsP, center: center, status: status, mine: mine });
       },
       rules: '<h3>Ziel</h3><p>Werde als Erster alle Karten los oder bleibe als Letzter übrig.</p><h3>Dein Zug</h3><p>Lege eine Karte, die in Farbe, Zahl oder Zeichen passt, oder einen Joker. Kannst du nicht, ziehst du (üblich: so lange, bis eine Karte passt); die gezogene Karte darfst du spielen.</p><h3>Erhöhen</h3><p>Auf eine Ziehkarte (+2, +4, +6, +10) darf der Nächste eine Ziehkarte mit gleichem oder höherem Wert legen; die Strafen addieren sich. Wer nicht erhöht, zieht alles; ob er danach setzt aus oder weiterspielt, stellt die Spielleitung ein.</p><h3>Gnade</h3><p>Wer 25 oder mehr Karten hat (einstellbar), scheidet aus. Mit „Gnade erst nach eigenem Zug“ scheidet man erst aus, wenn man nach einem eigenen Zug mit Legemöglichkeit immer noch zu viele Karten hat.</p><h3>Sonderkarten</h3><ul><li><b>7 Tauschen:</b> Tausche deine Hand mit einer Person deiner Wahl.</li><li><b>0 Weitergeben:</b> Alle geben ihre Hand in Spielrichtung weiter.</li><li><b>⊘ Aussetzen</b>, <b>⇄ Retour</b> (zu zweit wie Aussetzen), <b>+2</b> und farbige <b>+4</b>: wie gewohnt, wer zieht, setzt aus.</li><li><b>▤ Alle ablegen:</b> Lege alle Karten dieser Farbe aus deiner Hand mit ab.</li><li><b>⊘⊘ Alle aussetzen:</b> Du bist sofort wieder dran.</li><li><b>Joker +4 mit Retour:</b> Die Richtung dreht sich, dann zieht der Nächste 4. Zu zweit trifft es dich selbst, außer du erhöhst.</li><li><b>Joker +6</b> und <b>Joker +10</b>: Du wählst die Farbe.</li><li><b>◔ Farbroulette:</b> Der Nächste nennt eine Farbe und zieht, bis er eine Karte dieser Farbe aufdeckt. Diese Farbe gilt; danach setzt er aus (oder spielt weiter, wenn „Nach dem Ziehen weiterspielen“ an ist).</li></ul><h3>So ist es hier umgesetzt</h3><p>„Uno“ wird automatisch gemeldet. Gespielt wird eine Runde ohne Punktewertung. Beim Doppeln zählt die Wirkung doppelt; 7 und 0 wirken nur einmal.</p>'
     });
@@ -9881,7 +9926,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       else if (c === 'S2') step = 3;
       else if (c === 'D2' || c === 'D4') {
         const q = s.order[seat(s, s.turn, s.dir)], n = take(s, q, c === 'D2' ? 2 : 4);
-        s.got = { p: q, n: n, forced: true }; xLog(s, pname(q) + ' zieht ' + n + ' Karten und setzt aus.'); step = 2;
+        // Einstellung „Nach dem Ziehen weiterspielen“ (Standard an): Wer zieht, ist danach selbst dran und darf legen
+        const stay = s.rules.stay !== false;
+        s.got = { p: q, n: n, forced: true }; xLog(s, pname(q) + ' zieht ' + n + ' Karten' + (stay ? ' und spielt weiter.' : ' und setzt aus.')); step = stay ? 1 : 2;
         if (s.uno && s.uno.p === q) s.uno = null;
       }
       s.turn = seat(s, s.turn, s.dir * step);
@@ -9976,14 +10023,15 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       cols: [['All Wild', '#22202e', '']],
       cards: KINDS.slice(), sample: ['W', 'S2', 'D4', 'T2', 'X'],
       colOf: () => 0, label: name, card: card,
-      def: Object.assign({ awHand: 7, awPts: false, awGoal: 500, awDbl: false, awAny: false }, CNT), nums: ['awHand', 'awGoal'].concat(Object.keys(CNT)), togs: ['awPts', 'awDbl', 'awAny'],
+      def: Object.assign({ awHand: 7, awPts: false, awGoal: 500, awDbl: false, awAny: false, awStay: true }, CNT), nums: ['awHand', 'awGoal'].concat(Object.keys(CNT)), togs: ['awPts', 'awDbl', 'awAny', 'awStay'],
       lobby: (st, h) => '<h3>Karten auf der Hand</h3>' + h.stepper('Startkarten je Person', 'awHand', Math.max(3, Math.min(15, st.awHand || 7)), 1, 3, 15) +
         '<h3>Wertung</h3>' + h.toggle('Mit Punkten über mehrere Runden', 'Wer eine Runde gewinnt, bekommt die Karten der anderen gutgeschrieben: Joker 20, jede Aktionskarte 50 Punkte. Aus: Wer zuerst keine Karten mehr hat, gewinnt sofort.', 'awPts', !!st.awPts) +
         (st.awPts ? h.stepper('Spielende bei Punkten', 'awGoal', Math.max(100, Math.min(2000, st.awGoal || 500)), 50, 100, 2000) : '') +
         '<h3>Regeln</h3>' + h.toggle('Doppeln', 'Wer denselben Joker oder Richtungswechsel zweimal hat, darf beide zusammen ablegen. Beenden darf man damit nicht.', 'awDbl', !!st.awDbl) + h.toggle('Nach dem Ziehen alles spielbar', 'Wer eine Karte gezogen hat, darf danach jede Karte der Hand legen, nicht nur die gezogene.', 'awAny', !!st.awAny) +
+          h.toggle('Nach +2/+4 weiterspielen', st.awStay !== false ? 'An: Wer durch +2 oder +4 ziehen muss, ist danach trotzdem dran und darf legen.' : 'Aus: Wer durch +2 oder +4 ziehen muss, setzt aus.', 'awStay', st.awStay !== false) +
         '<h3>Karten im Stapel</h3><div class="step2">' + STEPS.map(x => h.stepper(x[1], x[0], cntOf(st, x[0]), 1, 0, 40)).join('') + '</div>' + '<p class="fine">Im Stapel sind damit ' + deck(st).length + ' Karten. Voreingestellt sind 112 Karten; die Aufteilung auf die Kartenarten ist geschätzt und lässt sich hier anpassen.</p>',
       create(seats, st) {
-        const s = { order: seats.slice(), dealer: Math.floor(rnd() * seats.length), handSize: Math.max(3, Math.min(15, st.awHand || 7)), hands: {}, pile: [], draw: [], dir: 1, scores: {}, round: 1, log: [], seq: 0, winner: null, cfg: {}, rules: { dbl: !!st.awDbl, any: !!st.awAny, pts: !!st.awPts, goal: Math.max(100, Math.min(2000, st.awGoal || 500)) } };
+        const s = { order: seats.slice(), dealer: Math.floor(rnd() * seats.length), handSize: Math.max(3, Math.min(15, st.awHand || 7)), hands: {}, pile: [], draw: [], dir: 1, scores: {}, round: 1, log: [], seq: 0, winner: null, cfg: {}, rules: { dbl: !!st.awDbl, any: !!st.awAny, stay: st.awStay !== false, pts: !!st.awPts, goal: Math.max(100, Math.min(2000, st.awGoal || 500)) } };
         Object.keys(CNT).forEach(k => { s.cfg[k] = cntOf(st, k); });
         seats.forEach(p => { s.scores[p] = 0; });
         deal(s);
@@ -10010,6 +10058,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       html(X, s, me) {
         const seated = s.order.indexOf(me) >= 0, cur = s.pick ? s.pick.p : s.order[s.turn], myTurn = seated && !s.winner && !s.over && !s.pick && cur === me, cw = cardW(), hand = s.hands[me] || [];
         const seats = aroundMe(s.order).map(p => { const n = (s.hands[p] || []).length; return xSeat(p, cur === p && !s.winner && !s.over, minisHTML(n) + (n === 1 ? '<span class="tag gold">Uno</span>' : '') + (s.rules.pts ? '<span>Gesamt: <b>' + s.scores[p] + ' P</b></span>' : '')); }).join('');
+        const seatsP = s.pick && s.pick.p === me ? xPickSeats(seats, s.order.filter(q => q !== me), 'tg') : seats;
         if (s.uno && UI.unoSeq !== K + s.uno.seq) { UI.unoSeq = K + s.uno.seq; UI.unoUntil = Date.now() + 2800; setTimeout(requestRender, 2900); }
         const flash = !s.winner && !s.over && s.uno && Date.now() < (UI.unoUntil || 0) ? '<div class="unoflash" role="alert"><b>UNO!</b><span>' + (s.uno.p === me ? 'Du hast' : esc(pname(s.uno.p)) + ' hat') + ' nur noch eine Karte</span></div>' : '';
         const gotN = s.got && s.got.p === me ? Math.min(s.got.n || 0, hand.length) : 0;
@@ -10018,11 +10067,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         else if (s.over) center = xSum(s, s.winner ? xWin(s, me) : 'Runde ' + s.round + ': ' + xNm(s.over.win) + (s.over.win === me ? ' gewinnst' : ' gewinnt') + ' ' + s.over.got + ' Punkte', XG[K].score(s));
         else {
           const t = s.pile[s.pile.length - 1];
-          center = '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="xg" data-a="draw" aria-label="Ziehen">' + backHTML(X, K) + '<span class="who">Ziehen · ' + s.draw.length + '</span></button><div class="bp drawp">' + card(t, X) + '<span class="who">Ablage</span></div></div>' +
+          center = unoDir(s.dir) + '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="xg" data-a="draw" aria-label="Ziehen">' + backHTML(X, K) + '<span class="who">Ziehen · ' + s.draw.length + '</span></button><div class="bp drawp">' + card(t, X) + '<span class="who">Ablage</span></div></div>' +
             (myTurn && UI.x.ask !== undefined && (s.hands[me] || [])[UI.x.ask] !== undefined ? xPick('Du hast ' + esc(name(s.hands[me][UI.x.ask])) + ' zweimal auf der Hand. Beide zusammen legen?', xBtn('dbl', 'Beide legen', ' data-v="1"', 'primary') + xBtn('dbl', 'Nur eine legen', ' data-v="0"')) : '') +
-            (s.pick && s.pick.p === me ? xPick(s.pick.k === 'X' ? 'Zwangstausch: Mit wem tauschst du deine Hand?' : 'Gezielte +2: Wer zieht 2 Karten?', s.order.filter(q => q !== me).map(q => xBtn('tg', esc(pname(q)) + ' (' + s.hands[q].length + ')', ' data-p="' + esc(q) + '"')).join('')) : '') + xLogHTML(s);
-          status = s.pick ? (s.pick.p === me ? '<b>Wähle eine Person.</b>' : xNm(s.pick.p) + ' wählt eine Person …') : myTurn ? '<b>Du bist am Zug.</b> ' + (s.drawn ? 'Spiele die gezogene Karte oder gib weiter.' : 'Lege eine beliebige Karte – oder ziehe, wenn du lieber nichts legen willst.') : xNm(cur) + ' ist am Zug …';
-          status += ' <small>Richtung ' + (s.dir === 1 ? '↻' : '↺') + (gotN ? ' · Du hast ' + gotN + (gotN === 1 ? ' Karte' : ' Karten') + ' gezogen (markiert).' : '') + '</small>';
+            (s.pick && s.pick.p === me ? xPick(s.pick.k === 'X' ? 'Zwangstausch: Mit wem tauschst du deine Hand?' : 'Gezielte +2: Wer zieht 2 Karten?', s.order.filter(q => q !== me).map(q => xBtn('tg', esc(pname(q)) + ' (' + s.hands[q].length + ')', ' data-p="' + esc(q) + '"')).join('')) : '');
+          status = s.pick ? (s.pick.p === me ? '<b>Wähle eine Person.</b>' : xNm(s.pick.p) + ' wählt eine Person …') : gotN && myTurn ? 'Du hast ' + gotN + (gotN === 1 ? ' Karte' : ' Karten') + ' gezogen (markiert).' : esc((s.log || []).slice(-1)[0] || '');
         }
         let mine;
         if (seated) {
@@ -10031,9 +10079,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           mine = xMe(me, myTurn, '<span>Karten: <b>' + hand.length + '</b>' + (s.rules.pts ? ' · Gesamt: <b>' + s.scores[me] + ' P</b>' : '') + '</span>', myTurn && s.drawn ? xBtn('pass', 'Weitergeben', '', 'small') : '') +
             xFan(hs.length, cw, k => { const h = hs[k], ok = myTurn && (!s.drawn || h.i === hand.length - 1); return { c: (myTurn ? (ok ? 'ok' : 'no') : '') + (gotN && h.i >= hand.length - gotN ? ' got' : ''), a: 'data-a="c" data-i="' + h.i + '"', h: card(h.c, X) }; });
         } else mine = specBar(s.order);
-        return xMain(K, { chips: (s.rules.pts ? '<span class="chip">Runde ' + s.round + ' · bis ' + s.rules.goal + ' Punkte</span>' : '<span class="chip">Wer zuerst fertig ist, gewinnt</span>'), flash: flash, seats: seats, center: center, status: status, mine: mine });
+        return xMain(K, { chips: (s.rules.pts ? '<span class="chip">Runde ' + s.round + ' · bis ' + s.rules.goal + ' Punkte</span>' : '<span class="chip">Wer zuerst fertig ist, gewinnt</span>'), flash: flash, seats: seatsP, center: center, status: status, mine: mine });
       },
-      rules: '<h3>Ziel</h3><p>Werde als Erstes alle Handkarten los.</p><h3>Dein Zug</h3><p>Jede Karte ist ein Joker: Du legst einfach eine beliebige Karte auf die Ablage. Farben und Zahlen gibt es nicht.</p><h3>Aktionskarten</h3><p><b>Retour</b> dreht die Richtung (zu zweit: die andere Person setzt aus). <b>Aussetzen</b>: Die nächste Person setzt aus. <b>Zweimal aussetzen</b>: Die nächsten beiden setzen aus. <b>+2</b> und <b>+4</b>: Die nächste Person zieht 2 bzw. 4 Karten und setzt aus. <b>Gezielte +2</b>: Eine Person deiner Wahl zieht 2 Karten, setzt aber nicht aus. <b>Zwangstausch</b>: Du musst mit einer anderen Person die ganze Hand tauschen.</p><h3>Lieber ziehen</h3><p>Statt zu legen, darfst du eine Karte ziehen – etwa wenn die nächste Person gleich fertig ist. Die gezogene Karte darfst du sofort spielen oder du gibst weiter.</p><h3>Punkte (wahlweise)</h3><p>Wer eine Runde gewinnt, bekommt für die Karten der anderen Punkte: Joker 20, jede Aktionskarte 50. Wer zuerst 500 Punkte hat, gewinnt.</p>'
+      rules: '<h3>Ziel</h3><p>Werde als Erstes alle Handkarten los.</p><h3>Dein Zug</h3><p>Jede Karte ist ein Joker: Du legst einfach eine beliebige Karte auf die Ablage. Farben und Zahlen gibt es nicht.</p><h3>Aktionskarten</h3><p><b>Retour</b> dreht die Richtung (zu zweit: die andere Person setzt aus). <b>Aussetzen</b>: Die nächste Person setzt aus. <b>Zweimal aussetzen</b>: Die nächsten beiden setzen aus. <b>+2</b> und <b>+4</b>: Die nächste Person zieht 2 bzw. 4 Karten. Je nach Einstellung darf sie danach legen (Standard) oder setzt aus. <b>Gezielte +2</b>: Eine Person deiner Wahl zieht 2 Karten, setzt aber nicht aus. <b>Zwangstausch</b>: Du musst mit einer anderen Person die ganze Hand tauschen.</p><h3>Lieber ziehen</h3><p>Statt zu legen, darfst du eine Karte ziehen – etwa wenn die nächste Person gleich fertig ist. Die gezogene Karte darfst du sofort spielen oder du gibst weiter.</p><h3>Punkte (wahlweise)</h3><p>Wer eine Runde gewinnt, bekommt für die Karten der anderen Punkte: Joker 20, jede Aktionskarte 50. Wer zuerst 500 Punkte hat, gewinnt.</p>'
     });
   })();
 
@@ -10200,7 +10248,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       score: s => xTable(['', 'Auslage', 'Hand', 'Runde', 'Gesamt'], s.order.slice().sort((a, b) => s.scores[b] - s.scores[a]).map(p => { const r = s.over ? s.over.r[p] : roundPts(s, p); return { p: p, win: s.winner === p, cells: [esc(pname(p)), '+' + r.plus, '−' + r.minus, (r.sum >= 0 ? '+' : '') + r.sum, '<b>' + s.scores[p] + '</b>'] }; })),
       html(X, s, me) {
         const U = UI.x, D = X.D, seated = s.order.indexOf(me) >= 0, cur = s.order[s.turn], myTurn = seated && !s.winner && !s.over && cur === me, cw = cardW(), hand = s.hands[me] || [];
-        const dispRow = (p, act) => '<div class="pnrow" style="--cw:' + (act ? Math.round(cw * 0.8) : 34) + 'px">' + COL.map((c, i) => { const st = s.disp[p][c]; if (!st.length) return '<span class="pnslot s-x' + i + '"></span>'; const t = st[st.length - 1], ok = act && fits(s, t), lmv = s.lm && s.lm.p === p && s.lm.to === c; const inner = card(t, X, { cls: act ? '' : 'tiny' }) + (st.length > 1 ? '<span class="pncnt">' + st.length + '</span>' : ''); return act ? '<button class="pnst' + (ok ? ' ok' : '') + (lmv ? ' lastmv' : '') + '" data-act="xg" data-a="dp" data-c="' + c + '" aria-label="' + esc(name(t, D)) + ' aus der Auslage legen">' + inner + '</button>' : '<span class="pnst' + (lmv ? ' lastmv' : '') + '">' + inner + '</span>'; }).join('') + '</div>';
+        // Eigene Auslage immer gleich groß (vorher wurde sie im eigenen Zug größer und alles darunter verschob sich)
+        const dispRow = (p, act, big) => '<div class="pnrow" style="--cw:' + (act || big ? Math.round(cw * 0.8) : 34) + 'px">' + COL.map((c, i) => { const st = s.disp[p][c]; if (!st.length) return '<span class="pnslot s-x' + i + '"></span>'; const t = st[st.length - 1], ok = act && fits(s, t), lmv = s.lm && s.lm.p === p && s.lm.to === c; const inner = card(t, X, { cls: act || big ? '' : 'tiny' }) + (st.length > 1 ? '<span class="pncnt">' + st.length + '</span>' : ''); return act ? '<button class="pnst' + (ok ? ' ok' : '') + (lmv ? ' lastmv' : '') + '" data-act="xg" data-a="dp" data-c="' + c + '" aria-label="' + esc(name(t, D)) + ' aus der Auslage legen">' + inner + '</button>' : '<span class="pnst' + (lmv ? ' lastmv' : '') + '">' + inner + '</span>'; }).join('') + '</div>';
         const seats = aroundMe(s.order).map(p => xSeat(p, cur === p && !s.winner && !s.over, minisHTML(s.hands[p].length) + '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>', dispRow(p, false))).join('');
         let center, status = '';
         if (s.over) center = xSum(s, s.winner ? (s.winners && s.winners.length > 1 ? 'Es gewinnen ' + s.winners.map(xNm).join(' und ') : xWin(s, me)) : 'Runde ' + s.round + ' ist vorbei – ' + xNm(s.over.by) + (s.over.by === me ? ' hast' : ' hat') + ' keine Handkarten mehr', XG[K].score(s));
@@ -10216,7 +10265,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           handSort(hs, (a, b) => rank(a.c) - rank(b.c), c => isJ(c) ? [1, 0, 0] : [0, COL.indexOf(c[0]), val(c)], x => x.c);
           const r = roundPts(s, me), fz = myTurn && forced(s, me);
           mine = xMe(me, myTurn, '<span>Auslage: <b>+' + r.plus + ' P</b></span><span>Hand: <b>' + (r.minus ? '−' + r.minus : '0') + ' P</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span>') +
-            '<div class="pnmine"><span class="pnlab">Deine Auslage</span>' + dispRow(me, myTurn) + '</div>' +
+            '<div class="pnmine"><span class="pnlab">Deine Auslage</span>' + dispRow(me, myTurn, true) + '</div>' +
             xFan(hs.length, cw, k => { const h = hs[k], f = myTurn && fits(s, h.c), ok = myTurn && (f || (!isJ(h.c) && !fz)); return { c: (myTurn ? (ok ? 'ok' : 'no') : '') + (U.j === h.i ? ' sel' : '') + (s.got && s.got.p === me && h.i === hand.length - 1 ? ' got' : ''), a: 'data-a="c" data-i="' + h.i + '"', h: card(h.c, X) }; });
         } else mine = specBar(s.order);
         return xMain(K, { chips: '<span class="chip">Runde ' + s.round + ' · bis ' + s.goal + ' Punkte</span>', seats: seats, center: center, status: status, mine: mine });
