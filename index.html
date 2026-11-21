@@ -1120,7 +1120,7 @@ main.game .seats > .seat > * { zoom: var(--seatz, 1); }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '2619e4b1';
+var APP_V = '6511bb55';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -4642,7 +4642,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   function sigCheck(meta) {
     const tw = meta && meta.status === 'playing' ? meta.tw : null, k = tw ? tw.k : null;
     if (k !== UI.twSeenK) {
-      UI.twSeenK = k; UI.twAt = tw && typeof tw.at === 'number' ? tw.at - (runsGame() ? 0 : UI.clkOff || 0) : Date.now(); UI.tlWarned = false;
+      UI.twSeenK = k; wakeBump(); UI.twAt = tw && typeof tw.at === 'number' ? tw.at - (runsGame() ? 0 : UI.clkOff || 0) : Date.now(); UI.tlWarned = false;
       if (myTurnNow() && document.hidden) { titleMark(true); if (sigOn() && sndOn()) beep(); }
       if (myTurnNow() && !document.hidden && flashOn()) turnFlash();
     }
@@ -4686,8 +4686,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     else if (!need && UI.tlI) { clearInterval(UI.tlI); UI.tlI = null; tlTick(); }
   }
   // ---- Bildschirm bei der Spielleitung wach halten ----
+  // nach 30 min ohne Eingabe und ohne Spielzug darf der Bildschirm wieder ausgehen
+  const WAKE_IDLE = 30 * 60 * 1000;
+  UI.wkAct = Date.now();
+  function wakeBump() { const was = Date.now() - UI.wkAct >= WAKE_IDLE; UI.wkAct = Date.now(); if (was) syncWake(); }
+  ['pointerdown', 'keydown', 'touchstart', 'wheel'].forEach(ev => document.addEventListener(ev, wakeBump, { passive: true, capture: true }));
+  setInterval(() => { if (UI.wl && Date.now() - UI.wkAct >= WAKE_IDLE) syncWake(); }, 60000);
   function syncWake() {
-    const want = !!(navigator.wakeLock && S.code && S.mode === 'peer' && backend && backend.isHost && backend.isHost() && S.meta && S.meta.status === 'playing' && !document.hidden);
+    const want = !!(navigator.wakeLock && Date.now() - UI.wkAct < WAKE_IDLE && S.code && S.mode === 'peer' && backend && backend.isHost && backend.isHost() && S.meta && S.meta.status === 'playing' && !document.hidden);
     if (want && !UI.wl && !UI.wlReq) {
       UI.wlReq = true;
       navigator.wakeLock.request('screen').then(l => {
