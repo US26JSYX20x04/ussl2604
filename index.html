@@ -1109,6 +1109,16 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 .sumfoot > .abortgrp { order: 99; margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 .btn.abortb { color: #ff6b6b; }
 .btn.abortb.armed { color: #ff6b6b; outline: 2px solid #ff6b6b; outline-offset: 3px; }
+/* Spielverlauf: kleine Kartenbilder, Zeile wird kaum höher */
+.histimg { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--mist); margin: 0 0 8px; cursor: pointer; }
+.histlist li.hcd { display: flex; align-items: center; gap: 8px; padding-top: 3px; padding-bottom: 3px; }
+.histlist .hcard { flex: none; display: flex; --cw: 22px; margin: -2px 0; }
+.histlist .hcard .card { --cw: 22px; box-shadow: 0 1px 3px rgba(0, 0, 0, .45); }
+.histlist .hcard .card .cn, .histlist .hcard .card .cm { font-size: 9px; }
+/* Witches: Sonderkarten neben dem Namen */
+.witsp { display: inline-flex; flex: none; gap: 2px; margin-left: 6px; align-self: center; --cw: 18px; }
+.witsp .card { --cw: 18px; box-shadow: 0 1px 3px rgba(0, 0, 0, .45); }
+.witsp .card .cn, .witsp .card .cm { font-size: 8px; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1126,7 +1136,7 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '69613279';
+var APP_V = '0d1e6971';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3797,7 +3807,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const isHost = () => !!S.meta && S.meta.host === S.pid;
   const gamePath = () => 'games/' + S.code;
   const players = () => Object.entries((S.meta && S.meta.players) || {}).filter(e => e[1]).map(e => Object.assign({ id: e[0] }, e[1])).sort((a, b) => (a.at || 0) - (b.at || 0));
-  const pname = id => { const p = (S.meta && S.meta.players && S.meta.players[id]) || (S.meta && S.meta.watchers && S.meta.watchers[id]); return p && p.name ? String(p.name).slice(0, 6) : 'Jemand'; };
+  const pname = id => { const p = (S.meta && S.meta.players && S.meta.players[id]) || (S.meta && S.meta.watchers && S.meta.watchers[id]); return p && p.name ? String(p.name).slice(0, 8) : 'Jemand'; };
   const isBot = id => { if (UI.probe) return id === UI.probe; const p = S.meta && S.meta.players && S.meta.players[id]; return !!(p && (p.bot || p.auto)); };
   const isRealBot = id => { const p = S.meta && S.meta.players && S.meta.players[id]; return !!(p && p.bot); };
   const seatCap = () => Math.max(2, Math.min(18, settings().seats || 6));
@@ -4230,7 +4240,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     return { code, host: S.pid, status: 'lobby', g: 0, at: Date.now(), rid: genId(), designId: 'default', settings: { variant: 'hidden', blind: true, rounds: 0, botMin: 15 }, players: { [S.pid]: { name: S.name, av: S.av, at: Date.now() } } };
   }
   function needName() {
-    S.name = S.name.trim().slice(0, 6);
+    S.name = S.name.trim().slice(0, 8);
     if (!S.name) { S.err = 'Bitte gib zuerst deinen Namen ein.'; render(); return true; }
     LS.set('wiz.name', S.name);
     return false;
@@ -4380,7 +4390,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     return pools.some(pl => Object.keys(pl).some(id => id !== self && pl[id] && String(pl[id].name || '').trim().toLowerCase() === n && !(pl === m.watchers && (m.players || {})[id])));
   }
   function uniqName(name, self) {
-    name = String(name || '').trim().slice(0, 6); if (!nameTaken(name, self)) return name;
+    name = String(name || '').trim().slice(0, 8); if (!nameTaken(name, self)) return name;
     for (let i = 2; i < 99; i++) { const c = name.slice(0, 6 - String(i).length - 1) + ' ' + i; if (!nameTaken(c, self)) return c; }
     return name;
   }
@@ -4507,9 +4517,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   function logLine(g, lg, X) {
     if (!lg || typeof lg !== 'object' || !lg.p) return '';
     const n = lg.p === S.pid ? 'Du' : pname(lg.p), du = lg.p === S.pid;
-    if (g === 'uno') return n + (lg.a === 'draw' ? (du ? ' ziehst ' : ' zieht ') + (lg.n > 1 ? lg.n + ' Karten' : 'eine Karte') : lg.a === 'penalty' ? (du ? ' musst ' : ' muss ') + lg.n + ' Karten ziehen' : lg.a === 'pass' ? (du ? ' gibst' : ' gibt') + ' weiter' : lg.a === 'play' ? (du ? ' legst ' : ' legt ') + (lg.two ? 'zweimal ' : '') + unoName(lg.c, X.D) : '');
-    if (g === 'phase10') return n + (lg.a === 'take' ? (du ? ' nimmst ' : ' nimmt ') + p10Name(lg.c, X.D) + ' von der Ablage' : lg.a === 'draw' ? (du ? ' ziehst' : ' zieht') + ' vom Stapel' : lg.a === 'lay' ? (du ? ' legst' : ' legt') + ' Phase ' + lg.n + ' aus' : lg.a === 'hit' ? (du ? ' legst' : ' legt') + ' an' : lg.a === 'discard' ? (du ? ' wirfst ' : ' wirft ') + p10Name(lg.c, X.D) + ' ab' : lg.a === 'nodraw' ? (du ? ' ziehst' : ' zieht') + ' nicht' : '');
-    if (g === 'skipbo') return n + (lg.a === 'play' ? (du ? ' legst ' : ' legt ') + (lg.wild ? 'ein ' + X.D.sb.wname + ' als ' + lg.v : 'eine ' + lg.v) + (lg.from === 'stock' ? ' vom eigenen Stapel' : '') : lg.a === 'discard' ? (du ? ' legst' : ' legt') + ' eine ' + lg.v + ' ab' : lg.a === 'pass' ? (du ? ' beendest' : ' beendet') + ' den Zug' : '');
+    if (g === 'uno') return n + (lg.a === 'draw' ? (du ? ' ziehst ' : ' zieht ') + (lg.n > 1 ? lg.n + ' Karten' : 'eine Karte') : lg.a === 'penalty' ? (du ? ' musst ' : ' muss ') + lg.n + ' Karten ziehen' : lg.a === 'pass' ? (du ? ' gibst' : ' gibt') + ' weiter' : lg.a === 'play' ? hc((du ? ' legst ' : ' legt ') + (lg.two ? 'zweimal ' : '') + unoName(lg.c, X.D), 'u', lg.c) : '');
+    if (g === 'phase10') return n + (lg.a === 'take' ? hc((du ? ' nimmst ' : ' nimmt ') + p10Name(lg.c, X.D) + ' von der Ablage', 'p', lg.c) : lg.a === 'draw' ? (du ? ' ziehst' : ' zieht') + ' vom Stapel' : lg.a === 'lay' ? (du ? ' legst' : ' legt') + ' Phase ' + lg.n + ' aus' : lg.a === 'hit' ? (du ? ' legst' : ' legt') + ' an' : lg.a === 'discard' ? hc((du ? ' wirfst ' : ' wirft ') + p10Name(lg.c, X.D) + ' ab', 'p', lg.c) : lg.a === 'nodraw' ? (du ? ' ziehst' : ' zieht') + ' nicht' : '');
+    if (g === 'skipbo') return n + (lg.a === 'play' ? hc((du ? ' legst ' : ' legt ') + (lg.wild ? 'ein ' + X.D.sb.wname + ' als ' + lg.v : 'eine ' + lg.v) + (lg.from === 'stock' ? ' vom eigenen Stapel' : ''), 's', lg.wild ? 0 : lg.v) : lg.a === 'discard' ? hc((du ? ' legst' : ' legt') + ' eine ' + lg.v + ' ab', 's', lg.v) : lg.a === 'pass' ? (du ? ' beendest' : ' beendet') + ' den Zug' : '');
     return '';
   }
   // Stichspiele ohne eigenes Protokoll (Skull King, Druids, Texas Showdown): Zeilen aus den Stichen ableiten
@@ -4523,7 +4533,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     }
     const prevT = first ? [] : h.ttrick || [];
     // Überschrift „Stich n“ vor der ersten Karte eines Stichs
-    const play = (arr, n) => { if (arr.length && h.thead !== s.round + ':' + n) { h.thead = s.round + ':' + n; out.push('· Stich ' + n + ' ·'); } arr.forEach(e => out.push(who(e.p) + v(e.p, ' legst ', ' legt ') + lab(e.c))); };
+    const play = (arr, n) => { if (arr.length && h.thead !== s.round + ':' + n) { h.thead = s.round + ':' + n; out.push('· Stich ' + n + ' ·'); } arr.forEach(e => out.push(hc(who(e.p) + v(e.p, ' legst ', ' legt ') + lab(e.c), 'x', e.c))); };
     if (!first && done > h.tdone && s.last && Array.isArray(s.last.cards)) {
       play(s.last.cards.slice(prevT.length), done);
       if (s.last.win) out.push(who(s.last.win) + v(s.last.win, ' bekommst', ' bekommt') + ' den Stich' + (s.last.note ? ' (' + s.last.note + ')' : ''));
@@ -4560,7 +4570,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     }
   }
   // Wizard und Witches: Verlauf lässt sich vollständig aus den Runden ablesen
-  function trickHist(rs, der, nameOf, header) {
+  // Karte zum Verlaufseintrag: Text + Marker \u0001<Art>:<Karte> (wird im Verlauf als kleines Bild gezeigt)
+  const hc = (t, k, c) => c == null || c === '?' || c === -1 ? t : t + '\u0001' + k + ':' + JSON.stringify(c);
+  function trickHist(rs, der, nameOf, header, ck) {
     const out = [], who = p => p === S.pid ? 'Du' : pname(p), v = (p, a, b) => p === S.pid ? a : b;
     rs.forEach(rd => {
       const d = der(rd); if (!d) return;
@@ -4569,7 +4581,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (d.bids) (d.order || []).forEach(p => { if (d.hasBid && d.hasBid(p)) out.push(who(p) + (d.bids[p] === -1 ? v(p, ' hast', ' hat') + ' angesagt' : v(p, ' sagst ', ' sagt ') + d.bids[p] + ' an')); });
       (d.tricks || []).concat(d.cur && d.cur.cards && d.cur.cards.length ? [d.cur] : []).forEach((t, i) => {
         out.push('· Stich ' + (i + 1) + ' ·');
-        t.cards.forEach(pl => out.push(who(pl.p) + v(pl.p, ' legst ', ' legt ') + nameOf(pl.c)));
+        t.cards.forEach(pl => out.push(hc(who(pl.p) + v(pl.p, ' legst ', ' legt ') + nameOf(pl.c), ck, pl.c)));
         if (t.winner) out.push(who(t.winner) + v(t.winner, ' bekommst', ' bekommt') + ' den Stich');
       });
     });
@@ -4577,10 +4589,29 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   }
   function histLines() {
     const g = (S.meta && S.meta.game) || 'wizard', X = tableX();
-    if (g === 'wizard') { const c = ctx(); return c ? trickHist(c.rs, rd => E.deriveRound(rd, c.variant), id => id === '?' || id === -1 ? 'eine verdeckte Karte' : cardName(id, X.D), rd => 'Runde ' + rd.n) : []; }
-    if (g === 'witches') { const c = wctx(); return c ? trickHist(c.rs, rd => HX.derive(rd), id => id === '?' ? 'eine Karte' : witName(id, X.D), rd => 'Runde ' + rd.n) : []; }
+    if (g === 'wizard') { const c = ctx(); return c ? trickHist(c.rs, rd => E.deriveRound(rd, c.variant), id => id === '?' || id === -1 ? 'eine verdeckte Karte' : cardName(id, X.D), rd => 'Runde ' + rd.n, 'w') : []; }
+    if (g === 'witches') { const c = wctx(); return c ? trickHist(c.rs, rd => HX.derive(rd), id => id === '?' ? 'eine Karte' : witName(id, X.D), rd => 'Runde ' + rd.n, 'h') : []; }
     histTick();
     return UI.hist && UI.hist.key === histKey() ? UI.hist.lines.slice() : [];
+  }
+  const histImgOn = () => LS.get('wiz.histimg') !== '0';
+  function histCard(m) {
+    const i = m.indexOf(':'), k = m.slice(0, i), X = tableX(), g = (S.meta && S.meta.game) || 'wizard';
+    let c; try { c = JSON.parse(m.slice(i + 1)); } catch (e) { return ''; }
+    try {
+      if (k === 'w') return cardHTML(c, X);
+      if (k === 'h') return witCardHTML(c, X);
+      if (k === 'u') return unoCardHTML(c, X);
+      if (k === 'p') return p10CardHTML(c, X);
+      if (k === 's') return sbCardHTML(c, X);
+      if (k === 'x' && XG[g]) return XG[g].card(c, X);
+    } catch (e) { if (typeof __kw === 'function') __kw(e); }
+    return '';
+  }
+  function histLi(t) {
+    const i = t.indexOf('\u0001'); if (i < 0) return '<li>' + esc(t) + '</li>';
+    const im = histImgOn() ? histCard(t.slice(i + 1)) : '';
+    return '<li' + (im ? ' class="hcd"' : '') + '><span>' + esc(t.slice(0, i)) + '</span>' + (im ? '<span class="hcard">' + im + '</span>' : '') + '</li>';
   }
   function histHTML() {
     let l = [];
@@ -4594,8 +4625,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       else { const ps = rounds[rounds.length - 1].parts; ps[ps.length - 1].l.push(t); }
     });
     const html = rounds.filter(r => r.hd || r.parts.some(p => p.l.length || p.hd)).reverse().map(r => (r.hd ? '<li class="hh">' + esc(r.hd) + '</li>' : '') +
-      r.parts.filter(p => p.l.length || p.hd).reverse().map(p => (p.hd ? '<li class="hs">' + esc(p.hd) + '</li>' : '') + p.l.slice().reverse().map(t => '<li>' + esc(t) + '</li>').join('')).join('')).join('');
-    return '<ol class="histlist">' + html + '</ol>' +
+      r.parts.filter(p => p.l.length || p.hd).reverse().map(p => (p.hd ? '<li class="hs">' + esc(p.hd) + '</li>' : '') + p.l.slice().reverse().map(histLi).join('')).join('')).join('');
+    const g = (S.meta && S.meta.game) || 'wizard';
+    return '<label class="histimg"><input type="checkbox" data-act="histImg"' + (histImgOn() ? ' checked' : '') + '> Kartenbilder zeigen</label>' +
+      '<div class="dzT' + scopeCls(tableX().D) + ' gm-' + g + '"><ol class="histlist">' + html + '</ol></div>' +
       (l.length >= HIST_MAX ? '<p class="fine">Es werden die letzten ' + HIST_MAX + ' Einträge gezeigt.</p>' : '');
   }
   // ---- Wer ist dran? (nur auf dem Gerät, das das Spiel führt) ----
@@ -5467,6 +5500,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const g = S.meta.game || 'wizard', go = () => { S.sel = null; S.sbSel = null; S.unoPick = null; S.p10Sel = null; S.witSel = []; startGame(); };
       if (settings().game !== g) w(backend.update(gamePath(), { settings: { game: g } })).then(go); else go();
     },
+    witSpTog() { LS.set('wiz.witsp', witSpOn() ? '0' : '1'); renderModal(true); requestRender(); },
+    histImg() { LS.set('wiz.histimg', histImgOn() ? '0' : '1'); renderModal(true); },
     abortArm(el) {
       if (!isHost()) return;
       const v = el.dataset.v;
@@ -5603,7 +5638,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     cropFit(el) { CR.ox = 0; CR.oy = 0; cropSet('zoom', el.dataset.v === 'fit' ? cropFitZoom() : 1); },
     rename(el) { if (S.meta && S.meta.status === 'playing') return; UI.rename = el.dataset.id; UI.rnErr = ''; S.modal = 'rename'; renderModal(true); setTimeout(() => { const i = $('#rn-name'); if (i) { i.focus(); i.select(); } }, 30); },
     renameSave() {
-      const i = $('#rn-name'), v = i ? i.value.trim().slice(0, 6) : '', id = UI.rename;
+      const i = $('#rn-name'), v = i ? i.value.trim().slice(0, 8) : '', id = UI.rename;
       if (v && nameTaken(v, id)) { UI.rnErr = 'Den Namen „' + v + '“ gibt es im Raum schon.'; renderModal(true); return; }
       UI.rnErr = '';
       if (v && isHost() && isRealBot(id)) w(backend.update(gamePath(), { players: { [id]: { name: v } } }));
@@ -6775,7 +6810,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const dis = S.busy || S.mode === 'none' ? ' disabled' : '';
     return '<main class="home">' + banner() +
       '<header class="brand"><div class="fan" aria-hidden="true">' + fan + '</div><h1>Kartenrunde</h1><p class="sub">Dreizehn Kartenspiele, online zusammen von verschiedenen Orten.</p></header>' +
-      '<section class="panel start"><label for="in-name">Dein Name und dein Bild</label><div class="namerow"><button class="avbtn" data-act="modal" data-m="avatar" aria-label="Dein Bild wählen">' + avHTML(S.av, S.name, 'me', 'me', ' big') + '</button><input id="in-name" type="text" maxlength="6" autocomplete="off" placeholder="z. B. Kai" value="' + esc(S.name) + '"><button class="btn small" data-act="modal" data-m="avatar">Bild wählen</button></div>' +
+      '<section class="panel start"><label for="in-name">Dein Name und dein Bild</label><div class="namerow"><button class="avbtn" data-act="modal" data-m="avatar" aria-label="Dein Bild wählen">' + avHTML(S.av, S.name, 'me', 'me', ' big') + '</button><input id="in-name" type="text" maxlength="8" autocomplete="off" placeholder="z. B. Kai" value="' + esc(S.name) + '"><button class="btn small" data-act="modal" data-m="avatar">Bild wählen</button></div>' +
       '<div class="startrow"><button class="btn primary" data-act="create"' + dis + '>' + (S.busy ? 'Einen Moment …' : 'Neuen Raum erstellen') + '</button>' +
       '<div class="joinbox"><label class="vh" for="in-code">Raumcode</label><input id="in-code" type="text" maxlength="12" autocapitalize="characters" autocomplete="off" placeholder="Raumcode" value="' + esc(S.joinCode) + '"><button class="btn" data-act="join"' + dis + '>Beitreten</button></div></div>' +
       (S.err ? '<p class="err" role="alert">' + esc(S.err) + '</p>' : '') + '</section>' +
@@ -8016,6 +8051,15 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     return '<main class="game gm-phase10">' + banner() + topbarHTML('Phase 10', '<span class="chip">Runde ' + s.round + '</span><span class="chip">' + s.goal + (s.goal === 1 ? ' Phase' : ' Phasen') + '</span>' + (s.nopts ? '<span class="chip">ohne Punkte</span>' : '') + (s.free ? '<span class="chip">freie Reihenfolge</span>' : '')) + '<section class="seats">' + seats + '</section><section class="center">' + center + (status ? '<p class="status" aria-live="polite">' + status + '</p>' : '') + '</section><section class="mine">' + mine + '</section></main>';
   }
 
+  // Witches: Sonderkarten (die vier Hexen und die Königin) aus den gewonnenen Stichen neben dem Namen (abschaltbar, nur dieses Gerät)
+  const witSpOn = () => LS.get('wiz.witsp') !== '0';
+  const WIT_SP = ['a11', 'b11', 'c11', 'd11', 'c12'];
+  function witSpecial(d, p, X) {
+    if (!witSpOn() || !d || d.phase === 'pass') return '';
+    const got = [];
+    (d.tricks || []).forEach(t => { if (t.winner === p) t.cards.forEach(pl => { if (WIT_SP.indexOf(pl.c) >= 0) got.push(pl.c); }); });
+    return got.length ? '<span class="witsp" title="Sonderkarten in den Stichen">' + got.sort((a, b) => WIT_SP.indexOf(a) - WIT_SP.indexOf(b)).map(c => witCardHTML(c, X)).join('') + '</span>' : '';
+  }
   function witHTML(X) {
     const c = wctx();
     if (!c) return WAIT_HTML;
@@ -8025,7 +8069,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const live = p => d.live && d.phase !== 'pass' ? '<span class="fire" title="Feuerpunkte in den eigenen Stichen dieser Runde">Feuer: <b>' + d.live.pts[p] + '</b></span>' : '';
     const seats = aroundMe(m.order).map(p => {
       const turn = (d.phase === 'play' && d.turn === p) || (d.phase === 'pass' && !d.passed(p));
-      return '<div class="seat' + (turn ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + dealTags(d, p) + seatTags(p) + minisHTML((d.left[p] || []).length) + '</div><div class="ss">' + (d.phase === 'pass' ? '<span class="pst">' + (d.passed(p) ? 'hat geschoben' : 'wählt Karten') + '</span>' : '<span>Stiche: <b>' + d.won[p] + '</b></span>' + live(p)) + '<span class="pts">Gesamt: <b>' + c.tot.total[p] + ' P</b></span></div></div>';
+      return '<div class="seat' + (turn ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + witSpecial(d, p, X) + dealTags(d, p) + seatTags(p) + minisHTML((d.left[p] || []).length) + '</div><div class="ss">' + (d.phase === 'pass' ? '<span class="pst">' + (d.passed(p) ? 'hat geschoben' : 'wählt Karten') + '</span>' : '<span>Stiche: <b>' + d.won[p] + '</b></span>' + live(p)) + '<span class="pts">Gesamt: <b>' + c.tot.total[p] + ' P</b></span></div></div>';
     }).join('');
     const dirText = { l: 'nach links', r: 'nach rechts', x: 'gegenüber' }[d.passDir];
     let center = '', status = '';
@@ -8065,7 +8109,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const legal = myTurn ? HX.legal(cards, d.cur.cards.map(x => x.c)) : [], sel = S.witSel || [];
       // Schon abgegebene Weitergabe-Karten bleiben bis zum Tausch ausgegraut in der Hand
       const given = d.phase === 'pass' && !needPass ? (((c.rd || {}).pass || {})[me] || []) : [];
-      mine = '<div class="mebar' + (myTurn || needPass ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + '<span class="nm">' + esc(pname(me)) + '</span>' + dealTags(d, me) + '<span class="ss">' + (d.phase === 'pass' ? '' : '<span>Stiche: <b>' + d.won[me] + '</b></span>' + live(me)) + '<span class="pts">Gesamt: <b>' + c.tot.total[me] + ' P</b></span></span>' + (recv.length ? '<small class="blindnote">Die markierten Karten hast du <span class="gotnote">von ' + esc(pname(giver)) + ' bekommen</span>.</small>' : '') + autoNote(me) + '</div>' +
+      mine = '<div class="mebar' + (myTurn || needPass ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + '<span class="nm">' + esc(pname(me)) + '</span>' + witSpecial(d, me, X) + dealTags(d, me) + '<span class="ss">' + (d.phase === 'pass' ? '' : '<span>Stiche: <b>' + d.won[me] + '</b></span>' + live(me)) + '<span class="pts">Gesamt: <b>' + c.tot.total[me] + ' P</b></span></span>' + (recv.length ? '<small class="blindnote">Die markierten Karten hast du <span class="gotnote">von ' + esc(pname(giver)) + ' bekommen</span>.</small>' : '') + autoNote(me) + '</div>' +
         (cards.length ? fanHTML(cards.length, cardW(), (k, ml) => {
           const card = cards[k];
           if (d.phase === 'pass') return '<button class="hc' + (needPass ? ' ok' : '') + (needPass && sel.indexOf(card) >= 0 ? ' sel passsel' : '') + (!needPass && given.indexOf(card) >= 0 ? ' no passgone' : '') + '" style="margin-left:' + ml + 'px" data-act="witToggle" data-c="' + card + '"' + (needPass ? '' : ' tabindex="-1"') + '>' + witCardHTML(card, X) + '</button>';
@@ -8218,6 +8262,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     let u = '<button class="btn" data-act="confTog">Kartenbestätigung: ' + (confOn() ? 'an (Karte zweimal antippen)' : 'aus (einmal tippen spielt sofort)') + '</button>';
     if (game === 'wizard' || game === 'skullking') u += '<button class="btn" data-act="bidSlTog">Tipp abgeben: ' + (bidSlider() ? 'Schieberegler mit − und + (wechseln)' : 'Zahlenknöpfe (wechseln)') + '</button>';
     u += '<div class="animctl"><b>Meine Kartenreihenfolge</b>' + Object.keys(HAND_MODES).map(k => '<button class="btn small' + (handMode() === k ? ' on' : '') + '" data-act="hsortSet" data-v="' + k + '">' + HAND_MODES[k] + '</button>').join('') + '<button class="btn small' + (LS.get('wiz.hrev') === '1' ? ' on' : '') + '" data-act="hrevTog">⇄ umgedreht</button></div>';
+    if (game === 'witches') u += '<button class="btn" data-act="witSpTog">Sonderkarten neben dem Namen: ' + (witSpOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>';
     if (playing) u += '<button class="btn" data-act="viewTog">Ansicht: ' + (viewRound() ? 'um den Tisch' : 'alle oben') + ' (wechseln)</button>';
     if (playing && !S.joined && st.spec === true) u += '<button class="btn" data-act="specView">Handkarten der Spieler: ' + (specAtSeat() ? 'beim Spieler' : 'unten') + ' (wechseln)</button>';
     h += sec('Bedienung <small>nur auf diesem Gerät</small>', u);
@@ -8441,7 +8486,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     else if (S.modal === 'avatar') { title = 'Dein Bild'; body = avatarModalHTML(); cls += ' mid'; }
     else if (S.modal === 'rename') {
       title = UI.rename === S.pid ? 'Deinen Namen ändern' : 'Computergegner umbenennen'; cls += ' narrow';
-      body = '<div class="field"><label for="rn-name">Neuer Name</label><input id="rn-name" type="text" maxlength="6" value="' + esc(UI.rename === S.pid ? (S.name || pname(UI.rename)) : pname(UI.rename)) + '"></div>' + (UI.rnErr ? '<p class="err" role="alert">' + esc(UI.rnErr) + '</p>' : '') + '<div class="sumfoot"><button class="btn primary" data-act="renameSave">Speichern</button><button class="btn" data-act="closeModal">Abbrechen</button></div>';
+      body = '<div class="field"><label for="rn-name">Neuer Name</label><input id="rn-name" type="text" maxlength="8" value="' + esc(UI.rename === S.pid ? (S.name || pname(UI.rename)) : pname(UI.rename)) + '"></div>' + (UI.rnErr ? '<p class="err" role="alert">' + esc(UI.rnErr) + '</p>' : '') + '<div class="sumfoot"><button class="btn primary" data-act="renameSave">Speichern</button><button class="btn" data-act="closeModal">Abbrechen</button></div>';
     }
     else if (S.modal === 'confirm') {
       const c = UI.confirm || {};
