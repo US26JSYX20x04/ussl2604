@@ -1145,7 +1145,7 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = 'a57cfbe6';
+var APP_V = 'e7a806dc';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -5320,6 +5320,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     xg(el) {
       const k = S.meta && S.meta.game, G = XG[k], s = G && xState(k);
       if (!s) return;
+      if (el.dataset.a === 'c' && PRE_X[k] && preIs(el.dataset.c)) { S.pre = null; render(); return; }
       if (el.dataset.a === 'c' && PRE_X[k] && s.order.indexOf(S.pid) >= 0 && !s.over && !(s.order[s.turn] === S.pid && PRE_X[k](s) && !(UI.trickHold > Date.now()))) { preToggleX(s, el.dataset.c); return; }
       const r = G.act(el.dataset.a, el.dataset, s, S.pid);
       if (r && typeof r === 'object') xgWrite(k, r); else render();
@@ -5405,6 +5406,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       S.witSel = [];
     },
     witCard(el) {
+      if (preIs(el.dataset.c)) { S.pre = null; render(); return; }
       const c = wctx();
       if (c && c.seated && c.d.phase === 'play' && (c.d.turn !== c.me || lingerTrick(c))) { preToggle(c, el.dataset.c); return; }
       if (!c || !c.seated || c.d.phase !== 'play' || c.d.turn !== c.me || lingerTrick(c)) return;
@@ -5516,6 +5518,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     },
     pick(el) { const c = ctx(); if (c && c.d.phase === 'trump' && c.d.dealer === c.me && SUITS.indexOf(el.dataset.s) >= 0) w(backend.update(c.path, { pick: el.dataset.s })); },
     card(el) {
+      if (preIs(el.dataset.c)) { S.pre = null; render(); return; }
       const c = ctx();
       if (c && c.seated && c.d.phase !== 'done' && !(c.d.phase === 'play' && c.d.turn === c.me && !lingerTrick(c))) { if (el.dataset.c !== 'blind') preToggle(c, el.dataset.c); return; }
       if (!c || !c.seated || c.d.phase !== 'play' || c.d.turn !== c.me || lingerTrick(c)) return;
@@ -5746,7 +5749,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (!f) return;
     ev.preventDefault();
     const tap = cardTap(el), key = el.dataset.act + ':' + (el.dataset.i || '') + ':' + (el.dataset.c || '');
-    if (tap === 'single' && confOn() && el.classList.contains('ok')) {
+    if (tap === 'single' && confOn() && el.classList.contains('ok') && !el.classList.contains('pre')) {
       if (UI.cfKey !== key) { UI.cfKey = key; document.querySelectorAll('.hc.cfsel').forEach(x => x.classList.remove('cfsel', 'sel')); el.classList.add('cfsel', 'sel'); return; }
       UI.cfKey = null;
     }
@@ -6752,6 +6755,39 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     renderModal(false);
     syncImgNeed();
     if (S.pre) { clearTimeout(UI.preT); UI.preT = setTimeout(preTick, 250); }
+    try { lastAuto(); } catch (e) { if (typeof __kw === 'function') __kw(e); }
+  }
+  // Stichspiele: Wer nur noch eine Karte hat und dran ist, legt sie nach 2 s automatisch
+  function lastAutoState() {
+    const g = (S.meta && S.meta.game) || 'wizard';
+    if (!S.meta || S.meta.status !== 'playing' || !runsGame()) return null;
+    if (g === 'wizard' || g === 'witches') {
+      const c = g === 'witches' ? wctx() : ctx(); if (!c || !c.d) return null;
+      const d = c.d, p = d.turn, hand = (d.left || {})[p] || [];
+      if (d.phase !== 'play' || !p || isBot(p) || hand.length !== 1) return null;
+      return { k: g + ':' + S.meta.g + ':' + c.rd.n + ':' + d.playCount, run: () => w(backend.update(c.path, { plays: { [d.playCount]: { p, c: hand[0] } } })) };
+    }
+    if (PRE_X[g] && XG[g] && XG[g].bot) {
+      const s = xState(g); if (!s || s.over || !PRE_X[g](s)) return null;
+      const p = s.order[s.turn], hand = (s.hands || {})[p] || [];
+      if (!p || isBot(p) || hand.length !== 1) return null;
+      return { k: g + ':' + S.meta.g + ':' + s.round + ':' + p + ':' + JSON.stringify(s.trick || []).length + ':' + (s.done || 0), run: () => { const r = XG[g].bot(s, q => q === p, () => 1, rnd); if (r) xgWrite(g, r); } };
+    }
+    return null;
+  }
+  function lastAuto() {
+    const a = lastAutoState();
+    if (!a) { UI.laK = null; clearTimeout(UI.laT); return; }
+    if (UI.laK === a.k) return;
+    UI.laK = a.k; clearTimeout(UI.laT);
+    const fire = () => {
+      const b = lastAutoState(); if (!b || b.k !== a.k) return;
+      const wait = Math.max(UI.trickHold || 0, UI.dealUntil || 0) - Date.now();
+      if (wait > 0 || document.body.classList.contains('tricklock')) { UI.laT = setTimeout(fire, Math.max(300, wait + 50)); return; }
+      b.run();
+    };
+    // 2 s ab dann, wenn der vorige Stich fertig gezeigt ist
+    UI.laT = setTimeout(fire, Math.max(0, Math.max(UI.trickHold || 0, UI.dealUntil || 0) - Date.now()) + 2000);
   }
   
   
@@ -6967,7 +7003,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const showWon = d.phase === 'play' || d.phase === 'done';
     return '<div class="seat' + (turn ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '">' +
       '<div class="st">' + ordNum(p) + avatar(p) + suitDot(d, p) + '<span class="nm">' + esc(pname(p)) + '</span>' + dealTags(d, p) + (S.meta.players[p] && S.meta.players[p].auto ? '<span class="tag dim">PC spielt</span>' : offline(p) ? '<span class="tag dim">offline</span>' : '') + cards + '</div>' +
-      '<div class="ss"><span>Angesagt: <b>' + bv.text + '</b></span>' + '<span>Stiche: <b>' + (showWon ? d.won[p] : '–') + '</b></span>' + '<span class="pts">Gesamt: <b>' + (c.table.total[p] || 0) + ' P</b></span></div></div>';
+      '<div class="ss"><span>Stiche: <b>' + (showWon ? d.won[p] : '–') + '</b></span>' + '<span>Angesagt: <b>' + bv.text + '</b></span>' + '<span class="pts">Gesamt: <b>' + (c.table.total[p] || 0) + ' P</b></span></div></div>';
   }
   const cardScale = () => { const v = +LS.get('wiz.cscale'); return v >= 50 && v <= 200 ? v : 100; };
   // Karten in der Mitte (Kreis-Ansicht): ohne eigenen Wert automatisch so groß, dass der freie Bereich gefüllt ist
@@ -7003,7 +7039,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     let rows = '', row = '';
     cards.forEach((card, i) => {
       const key = hide ? 'blind' : card, ok = legal.indexOf(card) >= 0;
-      row += '<button class="hc' + (myTurn ? (ok ? ' ok' : ' no') : '') + (S.sel === key && myTurn ? ' sel' : '') + (!myTurn && preIs(card) ? ' pre' : '') + '" style="margin-left:' + (i % per ? Math.round(step - cw) : 0) + 'px" data-act="card" data-c="' + key + '"' + (myTurn ? '' : ' tabindex="-1"') + ' aria-label="' + (hide ? 'Verdeckte Karte' : esc(cardName(card, X.D))) + '">' + cardHTML(hide ? null : card, X) + '</button>';
+      row += '<button class="hc' + (myTurn ? (ok ? ' ok' : ' no') : '') + (S.sel === key && myTurn ? ' sel' : '') + (preIs(card) ? ' pre' : '') + '" style="margin-left:' + (i % per ? Math.round(step - cw) : 0) + 'px" data-act="card" data-c="' + key + '"' + (myTurn ? '' : ' tabindex="-1"') + ' aria-label="' + (hide ? 'Verdeckte Karte' : esc(cardName(card, X.D))) + '">' + cardHTML(hide ? null : card, X) + '</button>';
       if ((i + 1) % per === 0 || i === n - 1) { rows += '<div class="hrow">' + row + '</div>'; row = ''; }
     });
     return '<div class="hand" style="--cw:' + cw + 'px">' + rows + '</div>';
@@ -7071,7 +7107,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const bv = bidView(c, me);
       mine = '<div class="mebar' + ((d.phase === 'play' && d.turn === me && !lt) || canBid ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + suitDot(d, me) + '<span class="nm">' + esc(pname(me)) + '</span>' + dealTags(d, me) +
         (d.trump && d.trump !== 'none' && SUITS.indexOf(d.trump) >= 0 ? '<span class="trm"><i class="dot" style="background:var(--s' + d.trump + ')"></i>Trumpf ' + esc(X.D.suits[SUITS.indexOf(d.trump)].name) + '</span>' : '') +
-        '<span class="ss"><span>Angesagt: <b>' + bv.text + '</b></span>' + (d.phase === 'play' || d.phase === 'done' ? '<span>Stiche: <b>' + d.won[me] + '</b></span>' : '') + '<span class="pts">Gesamt: <b>' + (c.table.total[me] || 0) + ' P</b></span></span>' +
+        '<span class="ss">' + (d.phase === 'play' || d.phase === 'done' ? '<span>Stiche: <b>' + d.won[me] + '</b></span>' : '') + '<span>Angesagt: <b>' + bv.text + '</b></span>' + '<span class="pts">Gesamt: <b>' + (c.table.total[me] || 0) + ' P</b></span></span>' +
         '<small class="blindnote"' + (d.blind ? '' : ' style="visibility:hidden" aria-hidden="true"') + '>Blinde Runde: Deine Karte kennen nur die anderen.</small>' +
         (m.players[me] && m.players[me].auto ? '<span class="blindnote">Der Computer spielt gerade für dich. <button class="btn small" data-act="selfPlay">Wieder selbst spielen</button></span>' : '') + '</div>';
     } else {
@@ -8124,6 +8160,13 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     S.pre = preIs(card) ? null : { c: card, k: preKey() };
     render();
   }
+  // Vorauswahl wird erst 2 s nach Zugbeginn gespielt – so lange lässt sie sich noch zurücknehmen
+  function preWait() {
+    if (!S.pre.at) S.pre.at = Date.now() + 2000;
+    const left = S.pre.at - Date.now();
+    if (left > 0) { clearTimeout(UI.preT); UI.preT = setTimeout(preTick, left + 20); return true; }
+    return false;
+  }
   function preTick() {
     if (!S.pre) return;
     const g = (S.meta && S.meta.game) || 'wizard';
@@ -8132,8 +8175,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const s = xState(g), me = S.pid; if (!s) return;
       const hand = s.hands[me] || [], card = hand.find(x => String(x) === S.pre.c);
       if (card === undefined || s.over) { S.pre = null; return; }
-      if (s.order[s.turn] !== me || !PRE_X[g](s) || (S.meta.players[me] || {}).auto) return;
+      if (s.order[s.turn] !== me || !PRE_X[g](s) || (S.meta.players[me] || {}).auto) { S.pre.at = 0; return; }
       if (document.body.classList.contains('tricklock') || (UI.trickHold || 0) > Date.now()) { clearTimeout(UI.preT); UI.preT = setTimeout(preTick, 400); return; }
+      if (preWait()) return;
       S.pre = null; UI.x = UI.x || {}; UI.x.sel = null;
       // wie zweimal Antippen: erst wählen, dann spielen (Tigress/Gaia fragen danach wie gewohnt nach)
       const G = XG[g], dd = { c: String(card) };
@@ -8146,9 +8190,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (!c || !c.seated || !c.d) { S.pre = null; return; }
     const d = c.d, hand = d.left[c.me] || [], card = S.pre.c;
     if (hand.indexOf(card) < 0 || d.phase === 'done') { S.pre = null; return; }
-    if (d.phase !== 'play' || d.turn !== c.me || (S.meta.players[c.me] || {}).auto) return;
+    if (d.phase !== 'play' || d.turn !== c.me || (S.meta.players[c.me] || {}).auto) { S.pre.at = 0; return; }
     // Ich bin dran, aber der letzte Stich wird noch gezeigt/eingesammelt: gleich noch einmal versuchen
     if (lingerTrick(c) || document.body.classList.contains('tricklock')) { clearTimeout(UI.preT); UI.preT = setTimeout(preTick, 400); return; }
+    if (preWait()) return;
     S.pre = null;
     const led = d.cur.cards.map(x => x.c), legal = g === 'witches' ? HX.legal(hand, led) : E.legalCards(hand, led, d.mono);
     if (legal.indexOf(card) < 0) { toast('Deine vorgewählte Karte darfst du nicht spielen – du musst bedienen. Bitte neu wählen.'); requestRender(); return; }
@@ -8209,7 +8254,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           const card = cards[k];
           if (d.phase === 'pass') return '<button class="hc' + (needPass ? ' ok' : '') + (needPass && sel.indexOf(card) >= 0 ? ' sel passsel' : '') + (!needPass && given.indexOf(card) >= 0 ? ' no passgone' : '') + '" style="margin-left:' + ml + 'px" data-act="witToggle" data-c="' + card + '"' + (needPass ? '' : ' tabindex="-1"') + '>' + witCardHTML(card, X) + '</button>';
           const ok = legal.indexOf(card) >= 0;
-          return '<button class="hc' + (myTurn ? (ok ? ' ok' : ' no') : '') + (S.sel === card && myTurn ? ' sel' : '') + (!myTurn && preIs(card) ? ' pre' : (recv.indexOf(card) >= 0 ? ' got' : '')) + '" style="margin-left:' + ml + 'px" data-act="witCard" data-c="' + card + '"' + (myTurn ? '' : ' tabindex="-1"') + '>' + witCardHTML(card, X) + '</button>';
+          return '<button class="hc' + (myTurn ? (ok ? ' ok' : ' no') : '') + (S.sel === card && myTurn ? ' sel' : '') + (preIs(card) ? ' pre' : (recv.indexOf(card) >= 0 ? ' got' : '')) + '" style="margin-left:' + ml + 'px" data-act="witCard" data-c="' + card + '"' + (myTurn ? '' : ' tabindex="-1"') + '>' + witCardHTML(card, X) + '</button>';
         }) : emptyHand());
     } else mine = specBar(m.order);
     return '<main class="game gm-witches">' + banner() + topbarHTML('Witches', '<span class="chip">Runde ' + c.rd.n + '</span><span class="chip">bis ' + c.goal + ' Feuerpunkte</span>') + '<section class="seats">' + seats + '</section><section class="center">' + center + (status ? '<p class="status" aria-live="polite">' + status + '</p>' : '') + '</section><section class="mine">' + mine + '</section></main>';
@@ -9015,7 +9060,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         let mine;
         if (seated) {
           const hand = s.hands[me] || [], lg = myTurn ? legal(s, me) : [];
-          mine = xMe(me, myTurn, '<span>Stiche: <b>' + s.won[me] + '</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span>') + xFan(hand.length, cw, k => ({ c: (myTurn ? (lg.indexOf(hand[k]) >= 0 ? 'ok' : 'no') : '') + (UI.x.sel === hand[k] && myTurn ? ' sel' : '') + (!myTurn && preIs(hand[k]) ? ' pre' : ''), a: 'data-a="c" data-c="' + hand[k] + '"', h: card(hand[k], X) }));
+          mine = xMe(me, myTurn, '<span>Stiche: <b>' + s.won[me] + '</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span>') + xFan(hand.length, cw, k => ({ c: (myTurn ? (lg.indexOf(hand[k]) >= 0 ? 'ok' : 'no') : '') + (UI.x.sel === hand[k] && myTurn ? ' sel' : '') + (preIs(hand[k]) ? ' pre' : ''), a: 'data-a="c" data-c="' + hand[k] + '"', h: card(hand[k], X) }));
         } else mine = specBar(s.order);
         return xMain(K, { chips: '<span class="chip">Runde ' + s.round + '</span><span class="chip">bis ' + s.goal + ' Minuspunkte</span>', seats: seats, center: center, status: status, mine: mine });
       },
@@ -10371,7 +10416,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         let mine;
         if (seated) {
           const rank = c => isNum(c) ? SU.indexOf(c[0]) * 20 + val(c) : 100 + power(c), hand = handSort((s.hands[me] || []).slice(), (a, b) => rank(a) - rank(b), c => isNum(c) ? [0, SU.indexOf(c[0]), val(c)] : [1, 0, power(c)]), lg = myTurn ? legal(hand, s.trick) : [];
-          mine = xMe(me, myTurn, '<span>Ansage: <b>' + (typeof bids[me] === 'number' ? bids[me] : '–') + '</b></span><span>Stiche: <b>' + s.won[me] + '</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span>') + xFan(hand.length, cw, k => ({ c: (myTurn ? (lg.indexOf(hand[k]) >= 0 ? 'ok' : 'no') : '') + (U.sel === hand[k] && myTurn ? ' sel' : '') + (!myTurn && preIs(hand[k]) ? ' pre' : ''), a: 'data-a="c" data-c="' + hand[k] + '"', h: card(hand[k], X) }));
+          mine = xMe(me, myTurn, '<span>Ansage: <b>' + (typeof bids[me] === 'number' ? bids[me] : '–') + '</b></span><span>Stiche: <b>' + s.won[me] + '</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span>') + xFan(hand.length, cw, k => ({ c: (myTurn ? (lg.indexOf(hand[k]) >= 0 ? 'ok' : 'no') : '') + (U.sel === hand[k] && myTurn ? ' sel' : '') + (preIs(hand[k]) ? ' pre' : ''), a: 'data-a="c" data-c="' + hand[k] + '"', h: card(hand[k], X) }));
         } else mine = specBar(s.order);
         return xMain(K, { chips: '<span class="chip">Durchgang ' + s.round + ' von ' + s.rounds + '</span><span class="chip">' + s.cards + (s.cards === 1 ? ' Karte' : ' Karten') + '</span>' + (allBid(s) || s.over ? '<span class="chip">Stiche angesagt: ' + s.order.reduce((x, q) => x + (+((s.over && s.over.bids) || bids)[q] || 0), 0) + '/' + s.cards + '</span>' : ''), seats: seats, center: center, status: status, mine: mine });
       },
@@ -10539,7 +10584,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         let mine;
         if (seated) {
           const rank = c => isDom(c) ? DO.indexOf(c[0]) * 20 + val(c) : 200, hand = handSort((s.hands[me] || []).slice(), (a, b) => rank(a) - rank(b), c => isDom(c) ? [0, DO.indexOf(c[0]), val(c)] : [1, 0, 0]), lg = myTurn ? legal(s, me) : [];
-          mine = xMe(me, myTurn, '<span class="dline"><span>Runde: <b>' + sum(me) + ' P</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span></span>' + pilesHTML(s, me)) + xFan(hand.length, cw, k => ({ c: (myTurn ? (lg.indexOf(hand[k]) >= 0 ? 'ok' : 'no') : '') + (U.sel === hand[k] && myTurn ? ' sel' : '') + (!myTurn && preIs(hand[k]) ? ' pre' : ''), a: 'data-a="c" data-c="' + hand[k] + '"', h: card(hand[k], X) }));
+          mine = xMe(me, myTurn, '<span class="dline"><span>Runde: <b>' + sum(me) + ' P</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span></span>' + pilesHTML(s, me)) + xFan(hand.length, cw, k => ({ c: (myTurn ? (lg.indexOf(hand[k]) >= 0 ? 'ok' : 'no') : '') + (U.sel === hand[k] && myTurn ? ' sel' : '') + (preIs(hand[k]) ? ' pre' : ''), a: 'data-a="c" data-c="' + hand[k] + '"', h: card(hand[k], X) }));
         } else mine = specBar(s.order);
         return xMain(K, { chips: '<span class="chip">Runde ' + s.round + ' von ' + s.rounds + '</span>' + (s.sun ? '<span class="chip">Sonnen-Regel</span>' : ''), seats: seats, center: center, status: status, mine: mine });
       },
