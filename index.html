@@ -1169,7 +1169,7 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '0293a4b8';
+var APP_V = '886dac39';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -7107,10 +7107,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     } else if (d.phase === 'bid') {
       if (d.simultaneous) {
         const missing = d.order.filter(p => !d.hasBid(p));
-        status = 'Alle tippen verdeckt. ' + (d.hasBid(me) || !c.seated ? 'Es fehlt noch: ' + missing.map(nm).join(', ') : 'Gib deinen Tipp ab.');
+        status = d.hasBid(me) || !c.seated ? '' : 'Alle tippen verdeckt. Gib deinen Tipp ab.';
       } else {
         const sum = d.order.reduce((s, p) => s + (d.hasBid(p) ? d.bids[p] : 0), 0);
-        status = (d.bidTurn === me ? 'Du sagst an.' : esc(pname(d.bidTurn)) + ' sagt an …') + ' <small>Bisher angesagt: ' + sum + ' von ' + d.n + '</small>';
+        status = '<small>Bisher angesagt: ' + sum + ' von ' + d.n + '</small>';
       }
     }
     if (showTrick && !(d.phase === 'done' && !lt)) {
@@ -7139,7 +7139,6 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       mine = '<div class="mebar' + ((d.phase === 'play' && d.turn === me && !lt) || canBid ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + suitDot(d, me) + '<span class="nm">' + esc(pname(me)) + '</span>' + dealTags(d, me) +
         (d.trump && d.trump !== 'none' && SUITS.indexOf(d.trump) >= 0 ? '<span class="trm"><i class="dot" style="background:var(--s' + d.trump + ')"></i>Trumpf ' + esc(X.D.suits[SUITS.indexOf(d.trump)].name) + '</span>' : '') +
         '<span class="ss">' + (d.phase === 'play' || d.phase === 'done' ? '<span>Stiche: <b>' + d.won[me] + '</b></span>' : '') + '<span>Angesagt: <b>' + bv.text + '</b></span>' + '<span class="pts">Gesamt: <b>' + (c.table.total[me] || 0) + ' P</b></span></span>' +
-        '<small class="blindnote"' + (d.blind ? '' : ' style="visibility:hidden" aria-hidden="true"') + '>Blinde Runde: Deine Karte kennen nur die anderen.</small>' +
         (m.players[me] && m.players[me].auto ? '<span class="blindnote">Der Computer spielt gerade für dich. <button class="btn small" data-act="selfPlay">Wieder selbst spielen</button></span>' : '') + '</div>';
     } else {
       const humans = m.order.filter(p => !isRealBot(p));
@@ -7273,7 +7272,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const used = new Set();
     const oc = ownCards(), ocr = oc.slice().reverse();
     oc.forEach(el => el.classList.remove('arriving'));
-    UI.hideMine.forEach(x => { const el = ocr.find(e => !used.has(e) && cardKey(e) === x.k); if (el) { used.add(el); el.classList.add('arriving'); } });
+    UI.hideMine.forEach(x => { const l = ocr.filter(e => !used.has(e) && cardKey(e) === x.k), el = l.find(e => e.classList.contains('got')) || l[0]; if (el) { used.add(el); el.classList.add('arriving'); } });
     const hs = UI.hideSeat || {}, main = $('main.game');
     if (!main || !S.meta || !S.meta.order) return;
     const seatEls = main.querySelectorAll('.seats > .seat'), around = aroundMe(S.meta.order);
@@ -7419,9 +7418,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const mkf = (bx, by) => [{ transform: 'translate(' + (a.x - bx) + 'px,' + (a.y - by) + 'px) scale(' + sc + ')' }, { transform: 'translate(0,0) scale(1)' }];
       const an = box.animate(mkf(b.x, b.y), { duration: per, delay: delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' });
       // Ziel nachmessen: verschiebt sich das Layout nach dem Zeichnen noch, landet die Karte trotzdem genau dort, wo sie liegen bleibt
-      const refit = () => { let t = null; try { t = document.querySelector('main.game [data-mk="' + CSS.escape(e.t) + '"]'); } catch (er) { t = null; } if (!t || !an.effect || !an.effect.setKeyframes) return; const c = t.querySelector('.card') || t, r = c.getBoundingClientRect(); if (!r.width) return;
-        const nx = r.left + r.width / 2, ny = r.top + r.height / 2; if (Math.abs(nx - b.x) < 1 && Math.abs(ny - b.y) < 1) return;
-        b = Object.assign({}, b, { x: nx, y: ny }); box.style.left = (nx - w / 2) + 'px'; box.style.top = (ny - w * carH(k) / 2) + 'px'; an.effect.setKeyframes(mkf(nx, ny)); };
+      const t0f = Date.now();
+      const refit = () => { let t = null; try { t = document.querySelector('main.game [data-mk="' + CSS.escape(e.t) + '"]'); } catch (er) { t = null; } if (!t) return; const c = t.querySelector('.card') || t, r = c.getBoundingClientRect(); if (!r.width) return;
+        flyNudge(box.firstChild, r.left + r.width / 2 - b.x, r.top + r.height / 2 - b.y, delay + per - (Date.now() - t0f)); };
       setTimeout(refit, delay + 30); setTimeout(refit, delay + per * 0.6);
       setTimeout(applyHide, delay + per + 2);
       setTimeout(() => box.remove(), delay + per + 120);
@@ -7494,6 +7493,13 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     box.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + sc0.toFixed(3) + ')', opacity: .9 }, { transform: 'translate(0,0) scale(1)', opacity: 1 }], { duration: per, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both' });
     setTimeout(() => { box.remove(); document.querySelectorAll('main.game .pnst.lastmv').forEach(e => { e.style.visibility = ''; }); }, per + 20);
   }
+  // Fliegende Karte sanft um (dx, dy) verschieben – relativ zum bisherigen Ziel, bis zur Landung
+  function flyNudge(el, dx, dy, ms) {
+    if (!el || !el.animate) return;
+    const pv = el.__nudge || [0, 0]; if (Math.abs(dx - pv[0]) < 1 && Math.abs(dy - pv[1]) < 1) return;
+    el.__nudge = [dx, dy];
+    el.animate([{ transform: 'translate(' + pv[0] + 'px,' + pv[1] + 'px)' }, { transform: 'translate(' + dx + 'px,' + dy + 'px)' }], { duration: Math.max(60, ms), easing: 'ease-out', fill: 'forwards' });
+  }
   function flyPlay(order, p, items, st, gone) {
     const main = $('main.game'); if (!main) return;
     const seatEls = main.querySelectorAll('.seats > .seat'), around = aroundMe(order);
@@ -7537,10 +7543,12 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const pkf = (ddx, ddy) => [{ transform: 'translate(' + ddx + 'px,' + ddy + 'px) rotate(' + (p === S.pid ? 0 : -10) + 'deg) scale(' + s0 + ')', opacity: .9 }, { transform: 'translate(0,0) rotate(' + rEnd + 'deg) scale(1)', opacity: 1 }];
       const pan = box.animate(pkf(dx, dy), { duration: per, delay: delay, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both' });
       // Ziel während des Flugs nachmessen: verschiebt sich die Auslage noch (z. B. iPad), landet die Karte trotzdem genau
-      const refit = () => { if (!it.el.isConnected || !pan.effect || !pan.effect.setKeyframes) return; let r = it.el.getBoundingClientRect(); if (!r.width) return; if (ptc && it.el.offsetWidth) { const w0 = it.el.offsetWidth, h0 = it.el.offsetHeight, mx = r.left + r.width / 2, my = r.top + r.height / 2; r = { left: mx - w0 / 2, top: my - h0 / 2, width: w0 }; }
-        const ox = r.left - parseFloat(box.style.left), oy = r.top - parseFloat(box.style.top); if (Math.abs(ox) < 1 && Math.abs(oy) < 1) return;
-        box.style.left = r.left + 'px'; box.style.top = r.top + 'px'; pan.effect.setKeyframes(pkf(sxp - (r.left + b.width / 2), syp - (r.top + b.height / 2))); };
-      setTimeout(refit, delay + per * 0.5); setTimeout(refit, delay + per * 0.85);
+      // Sanft nachführen (ohne Sprung): die Karte im Flug gleitet bis zur Landung um die Abweichung weiter
+      const t0f = Date.now();
+      const refit = () => { if (!it.el.isConnected) return; let r = it.el.getBoundingClientRect(); if (!r.width) return; if (ptc && it.el.offsetWidth) { const w0 = it.el.offsetWidth, h0 = it.el.offsetHeight, mx = r.left + r.width / 2, my = r.top + r.height / 2; r = { left: mx - w0 / 2, top: my - h0 / 2, width: w0 }; }
+        const left = delay + per - (Date.now() - t0f), a = -rEnd * Math.PI / 180, ox = r.left - b.left, oy = r.top - b.top;
+        flyNudge(cl, ox * Math.cos(a) - oy * Math.sin(a), ox * Math.sin(a) + oy * Math.cos(a), left); };
+      setTimeout(refit, delay + per * 0.35); setTimeout(refit, delay + per * 0.75);
       
       setTimeout(() => box.remove(), delay + per + 120);
     });
@@ -7648,10 +7656,12 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       clearTimeout(UI.dealT); UI.dealT = setTimeout(() => { document.body.classList.remove('dealing'); dealDeck(false); botTick(); }, UI.dealUntil - Date.now());
     }
     const usedOwn = new Set(), ownList = ownCards().reverse();
-    const occ = {}, ownSpot = k => { const el = ownList.find(e => !usedOwn.has(e) && cardKey(e) === k); if (!el) return null; usedOwn.add(el); const r = el.getBoundingClientRect(); if (!r.width) return null; const o = occ[k] = (occ[k] || 0) + 1; return { left: r.left, top: r.top, width: r.width, height: r.height, k, o: o - 1, el }; };
+    // Doppelte Karten: zuerst die neu bekommene (markierte) nehmen – sonst landet der Flug auf der alten gleichen Karte und springt
+    const gotFirst = l => l.filter(e => e.classList.contains('got')).concat(l.filter(e => !e.classList.contains('got')));
+    const occ = {}, ownSpot = k => { const el = gotFirst(ownList.filter(e => !usedOwn.has(e) && cardKey(e) === k))[0]; if (!el) return null; usedOwn.add(el); const r = el.getBoundingClientRect(); if (!r.width) return null; const o = occ[k] = (occ[k] || 0) + 1; return { left: r.left, top: r.top, width: r.width, height: r.height, k, o: o - 1, el }; };
     // Zielplatz erst beim Losfliegen noch einmal messen: Am Spielanfang verschiebt sich die Hand oft noch (Stapel, Hinweise, Bilder)
     const ownAnySpot = () => { const el = ownList.find(e => !usedOwn.has(e)); if (!el) return null; return ownSpot(cardKey(el)); };
-    const spotNow = sp => { const l = ownCards().reverse().filter(e => cardKey(e) === sp.k), el = l[sp.o]; if (!el) return null; const r = el.getBoundingClientRect(); return r.width ? r : null; };
+    const spotNow = sp => { const l = gotFirst(ownCards().reverse().filter(e => cardKey(e) === sp.k)), el = l[sp.o]; if (!el) return null; const r = el.getBoundingClientRect(); return r.width ? r : null; };
     jobs.forEach((j, n) => {
       const tr = target(j.p);
       if (!tr) return;
@@ -7678,7 +7688,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const kf = (x, y, sc) => [{ transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 }, { transform: 'translate(' + (x - sx) + 'px,' + (y - sy) + 'px) rotate(' + (j.p === S.pid || j.mini ? 0 : 12) + 'deg) scale(' + sc + ')', opacity: .95 }];
       const an = box.animate(kf(tx, ty, j.sc ? j.sc.toFixed(3) : j.p === S.pid ? Math.max(.5 * 96 / bw, cardW() / bw) : .32 * 96 / bw), { duration: per, delay: delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' });
       if (!j.spot && j.mini && an.effect && an.effect.setKeyframes) {
-        const refit = () => { const r = target(j.p); if (!r || !r.mini) return; const nx = r.left + r.width / 2, ny = r.top + r.height / 2; if (Math.abs(nx - tx) < 1 && Math.abs(ny - ty) < 1) return; an.effect.setKeyframes(kf(nx, ny, (r.width / bw).toFixed(3))); };
+        const t0f = Date.now(), scE = +(j.sc || 1) || 1;
+        const refit = () => { const r = target(j.p); if (!r || !r.mini) return; const nx = r.left + r.width / 2, ny = r.top + r.height / 2; flyNudge(front ? box.querySelector('.flipc') && null : box.firstChild, (nx - tx) / scE, (ny - ty) / scE, delay + per - (Date.now() - t0f)); };
         setTimeout(refit, delay + per * 0.5); setTimeout(refit, delay + per * 0.85);
       }
       if (j.spot && an.effect && an.effect.setKeyframes) {
@@ -8260,7 +8271,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const needPass = c.seated && d.phase === 'pass' && !d.passed(me), selN = (S.witSel || []).length;
     if (d.phase === 'pass') {
       if (needPass) center = '<div class="pickbox"><p>Wähle ' + d.passN + ' Karten für ' + esc(pname(HX.target(c.rd, me))) + ' (' + dirText + ').</p><div class="picks"><button class="btn primary" data-act="witPass"' + (selN === d.passN ? '' : ' disabled') + '>' + selN + ' von ' + d.passN + ' gewählt: weitergeben</button></div></div>';
-      else status = 'Warte auf: ' + d.order.filter(p => !d.passed(p)).map(nm).join(', ');
+      else status = '';  // wer noch schiebt, zeigt der Rahmen
     } else if (d.phase === 'done' && !lt) {
       const rank = m.order.slice().sort((a, b) => c.tot.total[a] - c.tot.total[b]), res = d.result;
       const note = p => { const i = res.info[p] || {}; if (i.spell) return res.spell.p === p ? 'Feuerzauber' : ''; return [i.fire ? i.fire + ' Feuerkarten' : '', i.fw ? 'Feuerhexe verdoppelt' : '', i.ww ? (i.aw ? 'Wasserhexe aufgehoben' : 'Wasserhexe +5') : '', i.pq ? (i.aw ? 'Königin aufgehoben' : 'Königin +10') : '', i.ew ? 'Erdhexe −5' : ''].filter(Boolean).join(', '); };
@@ -9106,7 +9117,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         if (s.over) center = xSum(s, s.winner ? (s.winners.length > 1 ? 'Es gewinnen ' + s.winners.map(xNm).join(' und ') : xWin(s, me)) : 'Runde ' + s.round + ' ist gespielt', xTable(['', 'Stiche', 'Gesamt'], s.order.slice().sort((a, b) => s.scores[a] - s.scores[b]).map(p => ({ p: p, win: s.winner && s.winners.indexOf(p) >= 0, cells: [esc(pname(p)), '+' + s.over.won[p], '<b>' + s.scores[p] + '</b>'] }))), 'Nächste Runde austeilen');
         else {
           center = xTrick(s, c => card(c, X), P) + (s.choose === me ? xPick('Du hast mit der höchsten Karte einer Farbe gewonnen. Wer eröffnet den nächsten Stich?', s.order.map(q => xBtn('lead', q === me ? 'Ich selbst' : esc(pname(q)), ' data-p="' + esc(q) + '"')).join('')) : '');
-          status = s.choose ? (s.choose === me ? '<b>Wähle, wer ausspielt.</b>' : xNm(s.choose) + ' bestimmt, wer den nächsten Stich eröffnet …') : (!s.trick.length && s.last ? '<b>' + xNm(s.last.win) + '</b> ' + (s.last.win === me ? 'bekommst' : 'bekommt') + ' den Stich. ' : '') + (myTurn ? '<b>Du bist am Zug.</b>' : xNm(cur) + ' ist am Zug …');
+          status = s.choose ? (s.choose === me ? '<b>Wähle, wer ausspielt.</b>' : xNm(s.choose) + ' bestimmt, wer den nächsten Stich eröffnet …') : (!s.trick.length && s.last ? '<b>' + xNm(s.last.win) + '</b> ' + (s.last.win === me ? 'bekommst' : 'bekommt') + ' den Stich. ' : '');  // wer dran ist, zeigt der Rahmen
         }
         let mine;
         if (seated) {
@@ -10466,10 +10477,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           if (bidSlider()) btns = bidSliderHTML(s.cards, null, (v, dis) => xBtn('bid', v + ' ansagen', ' data-v="' + v + '"' + (dis ? ' disabled' : ''), 'primary'), bidModeBtn());
           else for (let v = 0; v <= s.cards; v++) btns += xBtn('bid', String(v), ' data-v="' + v + '"');
           center = mineOpen ? xPick('Wie viele Stiche machst du in diesem Durchgang? Alle sagen gleichzeitig an.', btns + (bidSlider() ? '' : bidModeBtn())) : '';
-          status = (mineOpen ? '<b>Sag deine Stiche an.</b> ' : '') + 'Es fehlen noch: ' + s.order.filter(q => typeof bids[q] !== 'number').map(xNm).join(', ');
+          status = mineOpen ? '<b>Sag deine Stiche an.</b>' : '';
         } else {
           center = xTrick(s, (c, e) => card(c, X, null, e), P) + (myTurn && U.tig ? xPick('Als was spielst du die Tigress?', xBtn('tig', 'Als Piratin', ' data-v="P"', 'primary') + xBtn('tig', 'Als Flucht', ' data-v="F"')) : '');
-          status = (!s.trick.length && s.last ? (s.last.note ? esc(s.last.note) + ' ' : '') + (s.last.win ? '<b>' + xNm(s.last.win) + '</b> ' + (s.last.win === me ? 'bekommst' : 'bekommt') + ' den Stich. ' : '') : '') + (myTurn ? '<b>Du bist am Zug.</b>' : xNm(cur) + ' ist am Zug …');
+          status = (!s.trick.length && s.last ? (s.last.note ? esc(s.last.note) + ' ' : '') + (s.last.win ? '<b>' + xNm(s.last.win) + '</b> ' + (s.last.win === me ? 'bekommst' : 'bekommt') + ' den Stich. ' : '') : '');  // wer dran ist, zeigt der Rahmen
         }
         let mine;
         if (seated) {
@@ -10637,7 +10648,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         else {
           center = xTrick(s, c => card(c, X), P) + (L ? '<p class="xlog"><i class="dot" style="background:var(--sx' + DO.indexOf(L) + ')"></i> ' + esc(D.games[K].cols[DO.indexOf(L)].name) + ' muss bedient werden.</p>' : '') +
             (myTurn && U.gaia ? xPick('Welche Farbe nimmt Gaia in diesem Stich an?', DO.map((d, i) => '<button class="pick s-x' + i + '" data-act="xg" data-a="gaia" data-d="' + d + '">' + esc(D.games[K].cols[i].name) + '</button>').join('')) : '');
-          status = (!s.trick.length && s.last ? '<b>' + xNm(s.last.win) + '</b> ' + (s.last.win === me ? 'bekommst' : 'bekommt') + ' den Stich. ' : '') + (myTurn ? '<b>Du bist am Zug.</b>' : xNm(cur) + ' ist am Zug …');
+          status = (!s.trick.length && s.last ? '<b>' + xNm(s.last.win) + '</b> ' + (s.last.win === me ? 'bekommst' : 'bekommt') + ' den Stich. ' : '');  // wer dran ist, zeigt der Rahmen
         }
         let mine;
         if (seated) {
