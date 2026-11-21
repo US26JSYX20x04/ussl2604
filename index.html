@@ -1128,6 +1128,10 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 .hc.pre { transform: translateY(-12px); }
 .hc.pre .card { outline: 3px dashed var(--brass-2); outline-offset: 1px; }
 .hc.pre::after { content: "nächste"; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); color: var(--ink); font: 700 .68rem var(--body); padding: 0 6px; border-radius: 99px; pointer-events: none; background: var(--brass-2); white-space: nowrap; z-index: 2; }
+/* Geber/Startspieler wieder ganz rechts im Rahmen (Name ist jetzt in der Breite begrenzt) */
+.seat > .st > .nm { margin-right: auto; }
+.seat > .st > .nm:has(+ .witsp) { margin-right: 0; }
+.seat > .st > .witsp { margin-right: auto; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1145,7 +1149,7 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = 'e7a806dc';
+var APP_V = '6e15f7ab';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -7580,7 +7584,11 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (p === S.pid) el = mineEl(main, ['.hand', '.fan', '.cbmine']);
       else {
         // Andere Spieler: genau auf ihren kleinen Kartenstapel fliegen (nicht in die Feldmitte), sonst springt die Karte am Ende
-        const se = seatEls[around.indexOf(p)], mc = se && se.querySelector('.minis .card, .minis i');
+        // Blinde Runde: Die Karte liegt offen beim Spieler – genau dorthin fliegen und dabei umdrehen
+        const se = seatEls[around.indexOf(p)], scd = se && se.querySelector('.seatcard .card');
+        const sr0 = scd && scd.getBoundingClientRect();
+        if (sr0 && sr0.width) return { left: sr0.left, top: sr0.top, width: sr0.width, height: sr0.height, mini: true, face: scd };
+        const mc = se && se.querySelector('.minis .card, .minis i');
         const mr = mc && mc.getBoundingClientRect();
         if (mr && mr.width) return { left: mr.left, top: mr.top, width: mr.width, height: mr.height, mini: true };
         el = se;
@@ -7623,6 +7631,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       // Eigene Karten fliegen verdeckt an und drehen sich in der Hand um
       let front = null;
       if (j.p === S.pid && spot && spot.el && flipOk()) { const fe = spot.el.querySelector('.card') || spot.el; if (fe && !fe.classList.contains('back')) { front = fe.cloneNode(true); front.classList.remove('arriving', 'sel', 'ok'); front.removeAttribute('style'); } }
+      else if (tr.face && flipOk() && !tr.face.classList.contains('back')) { front = tr.face.cloneNode(true); front.classList.remove('arriving', 'seatc'); front.removeAttribute('style'); }
       if (front) { box.innerHTML = '<div class="flipc"><div class="ff fb">' + backHTML(X, g) + '</div><div class="ff ffr"></div></div>'; box.querySelector('.ffr').appendChild(front); box.classList.add('flipbox'); }
       else box.innerHTML = backHTML(X, g);
       if (pl) { box.style.width = bw + 'px'; box.style.setProperty('--cw', bw + 'px'); box.style.left = sr.left + 'px'; box.style.top = sr.top + 'px'; const c0 = box.firstChild; if (c0 && c0.style) { c0.style.setProperty('--cw', bw + 'px'); c0.style.boxShadow = 'none'; } }
