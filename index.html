@@ -1067,7 +1067,9 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
   .cbc { transition: transform .12s; }
 }
 /* Wizard: Stichansage direkt über dem eigenen Platz, mit etwas Abstand */
-section.mine > .bidbar { margin: 0 auto 10px; }
+/* schwebt über dem eigenen Platz, ohne den Tisch zu verkleinern – sonst springt die Tischmitte beim Ansagen */
+section.mine { position: relative; }
+section.mine > .bidbar { position: absolute; left: 50%; bottom: calc(100% + 10px); transform: translateX(-50%); margin: 0; z-index: 5; }
 /* Gespielte Karten im Kreis übereinander (Darstellung, nur dieses Gerät) */
 .trick.pile { position: relative; display: block; width: calc(var(--cw, 72px) * 2.2); height: calc(var(--cw, 72px) * 1.5625 * 1.9); margin: 0 auto; }
 .trick.pile > .tc { position: absolute; left: 50%; top: 50%; margin: 0 !important; transform: translate(-50%, -50%) translate(var(--px, 0px), var(--py, 0px)) rotate(var(--pr, 0deg)); }
@@ -1099,7 +1101,7 @@ body.dealing main.game .center:has(> .dealdeck) > :not(.dealdeck), body.dealing 
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = 'b494c4e0';
+var APP_V = 'eebf8037';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -6889,7 +6891,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       mine = '<div class="mebar' + ((d.phase === 'play' && d.turn === me && !lt) || canBid ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + suitDot(d, me) + '<span class="nm">' + esc(pname(me)) + '</span>' + dealTags(d, me) +
         (d.trump && d.trump !== 'none' && SUITS.indexOf(d.trump) >= 0 ? '<span class="trm"><i class="dot" style="background:var(--s' + d.trump + ')"></i>Trumpf ' + esc(X.D.suits[SUITS.indexOf(d.trump)].name) + '</span>' : '') +
         '<span class="ss"><span>Angesagt: <b>' + bv.text + '</b></span>' + (d.phase === 'play' || d.phase === 'done' ? '<span>Stiche: <b>' + d.won[me] + '</b></span>' : '') + '<span class="pts">Gesamt: <b>' + (c.table.total[me] || 0) + ' P</b></span></span>' +
-        (d.blind ? '<small class="blindnote">Blinde Runde: Deine Karte kennen nur die anderen.</small>' : '') +
+        '<small class="blindnote"' + (d.blind ? '' : ' style="visibility:hidden" aria-hidden="true"') + '>Blinde Runde: Deine Karte kennen nur die anderen.</small>' +
         (m.players[me] && m.players[me].auto ? '<span class="blindnote">Der Computer spielt gerade für dich. <button class="btn small" data-act="selfPlay">Wieder selbst spielen</button></span>' : '') + '</div>';
     } else {
       const humans = m.order.filter(p => !isRealBot(p));
@@ -7481,6 +7483,22 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     });
   }
   // Gespielte Karten wahlweise im Kreis übereinander: jede Karte leicht zu ihrem Spieler hin versetzt (nur dieses Gerät)
+  // Kreis-Geometrie (in Kartenbreiten/-höhen): kleinster Abstand, bei dem für jeden Startspieler von jeder Karte eine Ecke mit Zahl frei bleibt
+  const PILE_GEO = {};
+  function pileGeo(P) {
+    if (PILE_GEO[P]) return PILE_GEO[P];
+    const mk = f => Array.from({ length: P }, (_, k) => { const a = Math.PI / 2 + k * 2 * Math.PI / P, ux = Math.cos(a), uy = Math.sin(a); return { ux, uy, dx: ux * 0.5 * f, dy: uy * 0.42 * f }; });
+    const box = o => ({ x0: o.dx - .5, y0: o.dy - .5, x1: o.dx + .5, y1: o.dy + .5 });
+    const hit = (a, q) => a.x0 < q.x1 - .01 && a.x1 > q.x0 + .01 && a.y0 < q.y1 - .01 && a.y1 > q.y0 + .01;
+    const ok = sl => { for (let st = 0; st < P; st++) { const ord = Array.from({ length: P }, (_, i) => sl[(st + i) % P]); for (let i = 0; i < P - 1; i++) { const b = box(ord[i]), tl = { x0: b.x0, y0: b.y0, x1: b.x0 + .3, y1: b.y0 + .22 }, br = { x0: b.x1 - .3, y0: b.y1 - .22, x1: b.x1, y1: b.y1 }, up = ord.slice(i + 1).map(box); if (up.some(q => hit(tl, q)) && up.some(q => hit(br, q))) return false; } } return true; };
+    // Bis 4 Spieler geht es ohne Auseinanderziehen. Ab 5 würde die Bedingung die Karten fast in eine Reihe legen –
+    // dort bleibt der Kreis kompakt (feste Werte); selten kann dann eine Karte beide Ecken verdeckt haben.
+    let f = 1, sl = mk(f);
+    if (P <= 4) { while (f < 2.6 && !ok(sl)) { f += .05; sl = mk(f); } }
+    else { const kx = P === 5 ? 1.22 : 1.36, ky = P === 5 ? 1.2 : 1.33; sl = sl.map(o => ({ ux: o.ux, uy: o.uy, dx: o.ux * 0.5 * kx, dy: o.uy * 0.42 * ky })); }
+    const w = Math.max(1.1 * 2, 2 * Math.max.apply(null, sl.map(o => Math.abs(o.dx) + .5))), h = Math.max(.95 * 2, 2 * Math.max.apply(null, sl.map(o => Math.abs(o.dy) + .5)));
+    return (PILE_GEO[P] = { slots: sl, w, h });
+  }
   function layoutPile() {
     const main = $('main.game'); if (!main) return;
     const tr = main.querySelector('.center .trick:not(.lasttrick)'); if (!tr) return;
@@ -7491,35 +7509,18 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (!on) { tr.style.width = tr.style.height = ''; tcs.forEach(t => { ['--px', '--py', '--pr'].forEach(k => t.style.removeProperty(k)); t.style.zIndex = ''; }); return; }
     const cw = parseFloat(tr.style.getPropertyValue('--cw')) || 72, ch = cw * 1.5625;
     const ring = [S.pid].concat(Array.from(main.querySelectorAll('.seats > .seat[data-p]')).map(e => e.dataset.p)), P = Math.max(2, ring.length);
-    const kx = P <= 4 ? 0.5 : P === 5 ? 0.6 : 0.68, ky = P <= 4 ? 0.42 : P === 5 ? 0.5 : 0.56;
+    // Feste Plätze je Spielerzahl: unabhängig davon, welche Karten schon liegen – so springt nichts, und der Bereich ist von Anfang an gleich groß
+    const G = pileGeo(P);
     const L = tcs.map((t, i) => {
-      // Jede Karte liegt vor ihrem Spieler: Kreis in Sitzreihenfolge (ich unten, dann im Uhrzeigersinn wie die Plätze).
-      // Die erste Karte liegt so vor dem Startspieler, die weiteren folgen im Uhrzeigersinn.
       const p = t.dataset.p, k = ring.indexOf(p) >= 0 ? ring.indexOf(p) : i;
-      let ux = 0, uy = 0;
-      if (p) { const ang = Math.PI / 2 + k * 2 * Math.PI / P; ux = Math.cos(ang); uy = Math.sin(ang); }
-      return { t, p, ux, uy, f: 1, dx: ux * cw * kx, dy: uy * ch * ky };
+      return { t, p, sl: p ? G.slots[k % P] : { ux: 0, uy: 0, dx: 0, dy: 0 } };
     });
-    // Von jeder Karte muss eine Ecke mit der Zahl (oben links oder unten rechts) frei bleiben: sonst Karte etwas weiter nach außen
-    const box = o => ({ x0: o.dx - cw / 2, y0: o.dy - ch / 2, x1: o.dx + cw / 2, y1: o.dy + ch / 2 });
-    const hit = (a, q) => a.x0 < q.x1 && a.x1 > q.x0 && a.y0 < q.y1 && a.y1 > q.y0;
-    for (let i = L.length - 2; i >= 0; i--) {
-      const o = L[i]; if (!o.p) continue;
-      for (let n = 0; n < 6; n++) {
-        const b = box(o), tl = { x0: b.x0, y0: b.y0, x1: b.x0 + cw * .3, y1: b.y0 + ch * .22 }, br = { x0: b.x1 - cw * .3, y0: b.y1 - ch * .22, x1: b.x1, y1: b.y1 };
-        const above = L.slice(i + 1).map(box);
-        if (!above.some(q => hit(tl, q)) || !above.some(q => hit(br, q))) break;
-        o.f *= 1.15; o.dx = o.ux * cw * kx * o.f; o.dy = o.uy * ch * ky * o.f;
-      }
-    }
-    let mx = cw / 2, my = ch / 2;
     L.forEach((o, i) => {
-      const rot = Math.max(-6, Math.min(6, o.ux * 6));
-      o.t.style.setProperty('--px', o.dx.toFixed(1) + 'px'); o.t.style.setProperty('--py', o.dy.toFixed(1) + 'px'); o.t.style.setProperty('--pr', rot.toFixed(1) + 'deg');
+      const dx = o.sl.dx * cw, dy = o.sl.dy * ch, rot = Math.max(-6, Math.min(6, o.sl.ux * 6));
+      o.t.style.setProperty('--px', dx.toFixed(1) + 'px'); o.t.style.setProperty('--py', dy.toFixed(1) + 'px'); o.t.style.setProperty('--pr', rot.toFixed(1) + 'deg');
       o.t.style.zIndex = String(i + 1);
-      mx = Math.max(mx, Math.abs(o.dx) + cw / 2 + 6); my = Math.max(my, Math.abs(o.dy) + ch / 2 + 10);
     });
-    const W = Math.ceil(Math.max(mx, cw * 1.1) * 2), H = Math.ceil(Math.max(my, ch * .95) * 2);
+    const W = Math.ceil(G.w * cw + 12), H = Math.ceil(G.h * ch + 16);
     tr.style.width = W + 'px'; tr.style.height = H + 'px';
   }
   // Ankerelement der Tischmitte: Ablagestapel bzw. Stich (nicht Hinweistexte)
@@ -7589,6 +7590,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const ct = ce.offsetTop, cl = sw + 20, sum = ce.querySelector('.summary');
       let need = 0;
       bs.forEach(b => { if (b.y + b.h / 2 < cy && b.x + b.w > cl && b.x < mr.width - cl) need = Math.max(need, b.y + b.h - ct + 10); });
+      // Größten bisher nötigen Abstand behalten (gleiches Spiel, gleiche Fenstergröße): wächst ein oberer Platz kurz, springt die Mitte nicht hin und her
+      { const nk = ((S.meta && S.meta.game) || '') + ':' + seats.length + ':' + window.innerWidth + 'x' + window.innerHeight; if (UI.needK !== nk) { UI.needK = nk; UI.needMax = 0; } UI.needMax = Math.max(UI.needMax || 0, need); need = UI.needMax; }
       ce.classList.toggle('sumover', !!sum);
       if (sum) { ce.style.paddingLeft = ce.style.paddingRight = '12px'; return; }
       ce.style.paddingLeft = ce.style.paddingRight = cl + 'px';
