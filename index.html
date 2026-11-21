@@ -1069,9 +1069,15 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 /* Wizard: Stichansage direkt über dem eigenen Platz, mit etwas Abstand */
 section.mine > .bidbar { margin: 0 auto 10px; }
 /* Gespielte Karten im Kreis übereinander (Darstellung, nur dieses Gerät) */
-.trick.pile { position: relative; display: block; width: calc(var(--cw, 72px) * 2.3); height: calc(var(--cw, 72px) * 2.6); margin: 0 auto; }
+.trick.pile { position: relative; display: block; width: calc(var(--cw, 72px) * 2.2); height: calc(var(--cw, 72px) * 1.5625 * 1.9); margin: 0 auto; }
 .trick.pile > .tc { position: absolute; left: 50%; top: 50%; margin: 0 !important; transform: translate(-50%, -50%) translate(var(--px, 0px), var(--py, 0px)) rotate(var(--pr, 0deg)); }
 .trick.pile > .tc .who { display: none; }
+.trick.pile > .pilelab { position: absolute; z-index: 40; transform: translate(-50%, -50%); font: 700 11px/1 var(--body); color: var(--parch); background: rgba(10, 8, 26, .82); border: 1px solid var(--line); border-radius: 99px; padding: 3px 7px; white-space: nowrap; pointer-events: none; }
+.trick.pile > .pilelab.win { color: var(--brass-2); border-color: var(--brass); }
+/* Kartenrücken-Anzeige an den Plätzen mit fester Breite (1 bis 5 Rückseiten + Zahl), leer als unsichtbarer Platzhalter */
+.minis { min-width: 84px; justify-content: flex-end; }
+.minis.mempty { visibility: hidden; }
+.seat .ss .pst { display: inline-block; min-width: 7.2em; }
 /* Handy-Ansicht: Tischmitte wie beim Rundtisch um --cdy verschieben, damit der Stapel ruhig liegen bleibt */
 .game:not(.round) .center > *:not(.dealdeck) { position: relative; top: var(--cdy, 0px); }
 /* Austeilen vom Stapel: erst wenn alles verteilt ist, erscheinen Text, Ansage-Leiste und Co. (Platz bleibt reserviert, nichts springt) */
@@ -1093,7 +1099,7 @@ body.dealing main.game .center:has(> .dealdeck) > :not(.dealdeck), body.dealing 
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '9ac187ae';
+var APP_V = 'ad154d1a';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3638,7 +3644,6 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     joined: false, leaving: false, readonly: false, online: null, connected: true, modal: null, sel: null, toast: null
   };
   const UI = { linger: {}, seen: {}, toastT: null, renderQ: false, botT: null, colT: null };
-  UI.pile = LS.get('wiz.pile') === '1';
   UI.lite = LS.get('wiz.lite') === '1'; try { document.body.classList.toggle('lite', UI.lite); } catch (e) { if (typeof __kw === 'function') __kw(e); }
   const ED = { id: 'default', pick: null };
   const CR = { on: false, drag: null };
@@ -5114,7 +5119,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     sndTog() { LS.set('wiz.snd', sndOn() ? '0' : '1'); if (sndOn()) { audioCtx(); beep(); } toast(sndOn() ? 'Ton an: Ist dein Tab im Hintergrund, hörst du einen kurzen Ton, wenn du dran bist.' : 'Ton aus.'); renderModal(true); },
     lbReset() { if (!isHost()) return; confirmBox('Rangliste zurücksetzen? Alle Punkte und Siege werden für alle gelöscht.', 'Zurücksetzen', () => w(backend.update(gamePath(), { lb: null }))); },
     lbTab(el) { UI.lbTab = el.dataset.v || 'all'; render(); renderModal(true); },
-    pileTog() { UI.pile = !UI.pile; LS.set('wiz.pile', UI.pile ? '1' : '0'); layoutPile(); renderModal(true); },
+    pileTog() { LS.set('wiz.pile', pileOn() ? '0' : '1'); layoutPile(); renderModal(true); },
     liteTog() { UI.lite = !UI.lite; LS.set('wiz.lite', UI.lite ? '1' : '0'); document.body.classList.toggle('lite', UI.lite); toast(UI.lite ? 'Leistungsmodus an: weniger Effekte, kürzere Animationen.' : 'Leistungsmodus aus.'); renderModal(true); },
     tbTog() { LS.set('wiz.tbc', LS.get('wiz.tbc') !== '0' ? '0' : '1'); render(); },
     gCompact() { LS.set('wiz.gcompact', LS.get('wiz.gcompact') !== '0' ? '0' : '1'); render(); },
@@ -5529,6 +5534,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const CONF_GAMES = { wizard: 1, witches: 1, texas: 1, skullking: 1, druids: 1 };
   const curGame = () => (S.meta && S.meta.status === 'playing' && S.meta.game) || 'wizard';
   
+  // Stichkarten im Kreis: Standard an, auf dem Handy aus – jeder kann es im Menü für sich umstellen
+  const pileOn = () => { const v = LS.get('wiz.pile'); return v === '1' ? true : v === '0' ? false : !(isPhone() || window.innerWidth <= 600); };
   const isPhone = () => { try { return matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 600; } catch (e) { return false; } };
   const confOn = () => { const v = LS.get('wiz.conf'); return v === '1' ? true : v === '0' ? false : isPhone(); };
   function cardTap(el) {
@@ -6561,9 +6568,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     
     morph(root, html);
     seatMinis(root);
+    layoutPile();
     layoutRound();
     pinCenter();
-    layoutPile();
     specSeatCards();
     animHook();
     autoNext();
@@ -6786,20 +6793,22 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const turn = (d.phase === 'play' && d.turn === p) || (d.phase === 'bid' && (d.simultaneous ? !d.hasBid(p) : d.bidTurn === p)) || (d.phase === 'trump' && d.dealer === p);
     let cards = '';
     if (d.blind && d.phase !== 'done' && c.seated && left.length) cards = '<span class="seatcard">' + cardHTML(left[0], X, { cls: 'seatc' }) + '</span>';
-    else if (left.length) cards = minisHTML(left.length);
+    else cards = minisHTML(left.length);
     const showWon = d.phase === 'play' || d.phase === 'done';
     return '<div class="seat' + (turn ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '">' +
       '<div class="st">' + ordNum(p) + avatar(p) + suitDot(d, p) + '<span class="nm">' + esc(pname(p)) + '</span>' + dealTags(d, p) + (S.meta.players[p] && S.meta.players[p].auto ? '<span class="tag dim">PC spielt</span>' : offline(p) ? '<span class="tag dim">offline</span>' : '') + cards + '</div>' +
-      '<div class="ss"><span>Angesagt: <b>' + bv.text + '</b></span>' + (showWon ? '<span>Stiche: <b>' + d.won[p] + '</b></span>' : '') + '<span class="pts">Gesamt: <b>' + (c.table.total[p] || 0) + ' P</b></span></div></div>';
+      '<div class="ss"><span>Angesagt: <b>' + bv.text + '</b></span>' + '<span>Stiche: <b>' + (showWon ? d.won[p] : '–') + '</b></span>' + '<span class="pts">Gesamt: <b>' + (c.table.total[p] || 0) + ' P</b></span></div></div>';
   }
   const cardScale = () => { const v = +LS.get('wiz.cscale'); return v >= 50 && v <= 200 ? v : 100; };
   const zoomLvl = () => { const v = +LS.get('wiz.zoom'); return v >= 50 && v <= 200 ? v : 100; };
   function applyZoom() { const z = zoomLvl() / 100; ['#app', '#modal'].forEach(q => { const e = $(q); if (e) e.style.zoom = z === 1 ? '' : String(z); }); }
+  // Leere Hand behält die Höhe einer Kartenreihe – sonst rutscht der eigene Platz nach unten, sobald alle Karten gespielt sind
+  const emptyHand = () => '<div class="hand" style="--cw:' + cardW() + 'px"></div>';
   function cardW() { const wv = window.innerWidth; return Math.round((wv < 480 ? 56 : wv < 900 ? 68 : 80) * cardScale() / 100); }
 
   function handHTML(c, X, lt) {
     const d = c.d, me = c.me, cards = handSort((d.left[me] || []).slice(), cardSort, c => E.isJes(c) ? [-1, 0, 0] : E.isWiz(c) ? [1, 0, 0] : [0, SUITS.indexOf(c[0]), E.valOf(c)]), n = cards.length;
-    if (!n) return '<div class="hand"></div>';
+    if (!n) return emptyHand();
     const hide = d.blind && d.phase !== 'done';
     const myTurn = d.phase === 'play' && d.turn === me && !lt;
     const legal = myTurn ? E.legalCards(cards, d.cur.cards.map(x => x.c), d.mono) : [];
@@ -6880,7 +6889,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       mine = '<div class="mebar' + ((d.phase === 'play' && d.turn === me && !lt) || canBid ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + suitDot(d, me) + '<span class="nm">' + esc(pname(me)) + '</span>' + dealTags(d, me) +
         (d.trump && d.trump !== 'none' && SUITS.indexOf(d.trump) >= 0 ? '<span class="trm"><i class="dot" style="background:var(--s' + d.trump + ')"></i>Trumpf ' + esc(X.D.suits[SUITS.indexOf(d.trump)].name) + '</span>' : '') +
         '<span class="ss"><span>Angesagt: <b>' + bv.text + '</b></span>' + (d.phase === 'play' || d.phase === 'done' ? '<span>Stiche: <b>' + d.won[me] + '</b></span>' : '') + '<span class="pts">Gesamt: <b>' + (c.table.total[me] || 0) + ' P</b></span></span>' +
-        (d.blind && d.phase !== 'done' && (d.left[me] || []).length ? '<small class="blindnote">Blinde Runde: Deine Karte kennen nur die anderen.</small>' : '') +
+        (d.blind ? '<small class="blindnote">Blinde Runde: Deine Karte kennen nur die anderen.</small>' : '') +
         (m.players[me] && m.players[me].auto ? '<span class="blindnote">Der Computer spielt gerade für dich. <button class="btn small" data-act="selfPlay">Wieder selbst spielen</button></span>' : '') + '</div>';
     } else {
       const humans = m.order.filter(p => !isRealBot(p));
@@ -6972,8 +6981,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const seatTags = p => dzTags(p) + (S.meta.players[p] && S.meta.players[p].auto ? '<span class="tag dim">PC spielt</span>' : offline(p) ? '<span class="tag dim">offline</span>' : '');
   
   function minisHTML(n) {
-    if (!n) return '';
+    // Platzhalter ohne Karten: Platz bleibt gleich groß, nichts springt beim Austeilen oder nach der letzten Karte
     const X = designX((S.meta && S.meta.designId) || 'default'), g = settings().game || 'wizard', b = '<i>' + backHTML(X, g, { cls: 'mback gm-' + g }) + '</i>';
+    if (!n) return '<span class="minis mempty" aria-hidden="true">' + b + '<small>0</small></span>';
     return '<span class="minis" aria-label="' + n + ' Karten">' + b.repeat(Math.min(n, 5)) + '<small>' + n + '</small></span>';
   }
   
@@ -7240,7 +7250,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       // damit Zielposition und Karte übereinstimmen – sonst endet der Flug zu hoch und die Karte springt nach unten.
       try { (it.el.getAnimations ? it.el.getAnimations() : []).forEach(an => an.finish()); } catch (e) { if (typeof __kw === 'function') __kw(e); }
       it.el.classList.add('flown');
-      const b = it.el.getBoundingClientRect(); if (!b.width) return;
+      let b = it.el.getBoundingClientRect(); if (!b.width) return;
+      // Kreis-Ansicht: Karte ist gedreht – Flug endet mit echter Größe und derselben Drehung, sonst springt sie am Ende
+      const ptc = it.el.closest && it.el.closest('.trick.pile > .tc'), rEnd = ptc ? parseFloat(ptc.style.getPropertyValue('--pr')) || 0 : 0;
+      if (ptc && it.el.offsetWidth) { const w0 = it.el.offsetWidth, h0 = it.el.offsetHeight, mx = b.left + b.width / 2, my = b.top + b.height / 2; b = { left: mx - w0 / 2, top: my - h0 / 2, width: w0, height: h0 }; }
       const box = document.createElement('div'), cl = it.el.cloneNode(true);
       box.className = 'flyp gm-' + g; box.style.left = b.left + 'px'; box.style.top = b.top + 'px'; box.style.width = b.width + 'px';
       cl.style.setProperty('--cw', b.width + 'px'); cl.style.visibility = ''; cl.style.margin = '0'; box.appendChild(cl); layer.appendChild(box);
@@ -7258,7 +7271,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       }
       (UI.hideCen = UI.hideCen || []).push({ k: it.k, t: land });
       setTimeout(applyHide, delay + per + 2);
-      box.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (p === S.pid ? 0 : -10) + 'deg) scale(' + (og ? Math.max(.4, Math.min(1.6, og[i].width / b.width)).toFixed(3) : '.55') + ')', opacity: .9 }, { transform: 'translate(0,0) rotate(0) scale(1)', opacity: 1 }], { duration: per, delay: delay, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both' });
+      box.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (p === S.pid ? 0 : -10) + 'deg) scale(' + (og ? Math.max(.4, Math.min(1.6, og[i].width / b.width)).toFixed(3) : '.55') + ')', opacity: .9 }, { transform: 'translate(0,0) rotate(' + rEnd + 'deg) scale(1)', opacity: 1 }], { duration: per, delay: delay, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both' });
       
       setTimeout(() => box.remove(), delay + per + 120);
     });
@@ -7472,22 +7485,42 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const main = $('main.game'); if (!main) return;
     const tr = main.querySelector('.center .trick:not(.lasttrick)'); if (!tr) return;
     const tcs = Array.from(tr.children).filter(e => e.classList.contains('tc'));
-    tr.classList.toggle('pile', !!UI.pile);
-    if (!UI.pile) { tcs.forEach(t => { ['--px', '--py', '--pr'].forEach(k => t.style.removeProperty(k)); t.style.zIndex = ''; }); return; }
-    const cw = parseFloat(tr.style.getPropertyValue('--cw')) || 72, r = tr.getBoundingClientRect(), cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    const dist = cw * 0.42;
-    tcs.forEach((t, i) => {
-      const p = t.dataset.p;
-      const el = !p ? null : p === S.pid ? main.querySelector('section.mine') : main.querySelector('.seats > .seat[data-p="' + (window.CSS && CSS.escape ? CSS.escape(p) : p) + '"]');
-      let dx = 0, dy = 0, rot = 0;
-      if (el) {
-        const b = el.getBoundingClientRect(), vx = b.left + b.width / 2 - cx, vy = (p === S.pid ? b.top : b.top + b.height / 2) - cy, l = Math.hypot(vx, vy) || 1;
-        dx = vx / l * dist; dy = vy / l * dist * 1.15;
-        rot = Math.max(-14, Math.min(14, Math.atan2(vx, -vy) * 180 / Math.PI / 8));
-      }
-      t.style.setProperty('--px', dx.toFixed(1) + 'px'); t.style.setProperty('--py', dy.toFixed(1) + 'px'); t.style.setProperty('--pr', rot.toFixed(1) + 'deg');
-      t.style.zIndex = String(i + 1);
+    tr.querySelectorAll(':scope > .pilelab').forEach(e => e.remove());
+    const on = pileOn();
+    tr.classList.toggle('pile', on);
+    if (!on) { tr.style.width = tr.style.height = ''; tcs.forEach(t => { ['--px', '--py', '--pr'].forEach(k => t.style.removeProperty(k)); t.style.zIndex = ''; }); return; }
+    const cw = parseFloat(tr.style.getPropertyValue('--cw')) || 72, ch = cw * 1.5625;
+    // Anzahl der Plätze im Kreis = Anzahl der Spieler
+    const ring = [S.pid].concat(Array.from(main.querySelectorAll('.seats > .seat[data-p]')).map(e => e.dataset.p)), P = Math.max(2, ring.length);
+    const kx = P <= 4 ? 0.5 : P === 5 ? 0.6 : 0.68, ky = P <= 4 ? 0.42 : P === 5 ? 0.5 : 0.56;
+    const L = tcs.map((t, i) => {
+      // Erste Karte des Stichs (Startspieler) unten, die weiteren in Spielreihenfolge im Uhrzeigersinn
+      const p = t.dataset.p, k = i;
+      let ux = 0, uy = 0;
+      if (p) { const ang = Math.PI / 2 + k * 2 * Math.PI / P; ux = Math.cos(ang); uy = Math.sin(ang); }
+      return { t, p, ux, uy, f: 1, dx: ux * cw * kx, dy: uy * ch * ky };
     });
+    // Von jeder Karte muss eine Ecke mit der Zahl (oben links oder unten rechts) frei bleiben: sonst Karte etwas weiter nach außen
+    const box = o => ({ x0: o.dx - cw / 2, y0: o.dy - ch / 2, x1: o.dx + cw / 2, y1: o.dy + ch / 2 });
+    const hit = (a, q) => a.x0 < q.x1 && a.x1 > q.x0 && a.y0 < q.y1 && a.y1 > q.y0;
+    for (let i = L.length - 2; i >= 0; i--) {
+      const o = L[i]; if (!o.p) continue;
+      for (let n = 0; n < 6; n++) {
+        const b = box(o), tl = { x0: b.x0, y0: b.y0, x1: b.x0 + cw * .3, y1: b.y0 + ch * .22 }, br = { x0: b.x1 - cw * .3, y0: b.y1 - ch * .22, x1: b.x1, y1: b.y1 };
+        const above = L.slice(i + 1).map(box);
+        if (!above.some(q => hit(tl, q)) || !above.some(q => hit(br, q))) break;
+        o.f *= 1.15; o.dx = o.ux * cw * kx * o.f; o.dy = o.uy * ch * ky * o.f;
+      }
+    }
+    let mx = cw / 2, my = ch / 2;
+    L.forEach((o, i) => {
+      const rot = Math.max(-6, Math.min(6, o.ux * 6));
+      o.t.style.setProperty('--px', o.dx.toFixed(1) + 'px'); o.t.style.setProperty('--py', o.dy.toFixed(1) + 'px'); o.t.style.setProperty('--pr', rot.toFixed(1) + 'deg');
+      o.t.style.zIndex = String(i + 1);
+      mx = Math.max(mx, Math.abs(o.dx) + cw / 2 + 6); my = Math.max(my, Math.abs(o.dy) + ch / 2 + 10);
+    });
+    const W = Math.ceil(Math.max(mx, cw * 1.1) * 2), H = Math.ceil(Math.max(my, ch * .95) * 2);
+    tr.style.width = W + 'px'; tr.style.height = H + 'px';
   }
   // Ankerelement der Tischmitte: Ablagestapel bzw. Stich (nicht Hinweistexte)
   function pinAnchor(kids) { return kids.find(k => k.tagName !== 'P' && !k.classList.contains('status') && !k.classList.contains('summary') && !k.classList.contains('dealdeck') && !k.classList.contains('pendnote')) || null; }
@@ -7574,7 +7607,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       }
     }
   }
-  window.addEventListener('resize', () => { clearTimeout(UI.rzT); UI.rzT = setTimeout(() => { layoutRound(); pinCenter(); layoutPile(); fitNames(document); alignTags(document); }, 120); });
+  window.addEventListener('resize', () => { clearTimeout(UI.rzT); UI.rzT = setTimeout(() => { layoutPile(); layoutRound(); pinCenter(); fitNames(document); alignTags(document); }, 120); });
   
   function specSort(k, cards) {
     const id = c => String(c && typeof c === 'object' ? c.v : c);
@@ -7697,7 +7730,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const rank = c => UN.isWild(c) ? 900 : SUITS.indexOf(c[0]) * 20 + (isNaN(+c.slice(1)) ? 12 : +c.slice(1));
       handSort(hand, (a, b) => rank(a.c) - rank(b.c), c => UN.isWild(c) ? [1, 0, c === 'F' ? 1 : 0] : [0, SUITS.indexOf(c[0]), isNaN(+c.slice(1)) ? 12 + 'SRD'.indexOf(c.slice(1)) : +c.slice(1)], x => x.c);
       mine = '<div class="mebar' + (myTurn ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + '<span class="nm">' + esc(pname(me)) + '</span><span class="ss"><span>Karten: <b>' + hand.length + '</b></span></span>' + (myTurn && s.drawn ? '<button class="btn small" data-act="unoPass">Weitergeben</button>' : '') + autoNote(me) + '</div>' +
-        (hand.length ? fanHTML(hand.length, cw, (k, ml) => { const h = hand[k], ok = myTurn && UN.can(s, h.c) && (!s.drawn || h.i === lastI || (s.rules && s.rules.any)) && !(hand.length === 1 && h.c.slice(1) === 'S'); return '<button class="hc' + (myTurn ? (ok ? ' ok' : ' no') : '') + (S.unoPick === h.i || ask === h.i ? ' sel' : '') + (gotN && h.i >= firstNew ? ' got' : '') + '" style="margin-left:' + ml + 'px" data-act="unoCard" data-i="' + h.i + '"' + (myTurn ? '' : ' tabindex="-1"') + '>' + unoCardHTML(h.c, X) + '</button>'; }) : '<div class="hand"></div>');
+        (hand.length ? fanHTML(hand.length, cw, (k, ml) => { const h = hand[k], ok = myTurn && UN.can(s, h.c) && (!s.drawn || h.i === lastI || (s.rules && s.rules.any)) && !(hand.length === 1 && h.c.slice(1) === 'S'); return '<button class="hc' + (myTurn ? (ok ? ' ok' : ' no') : '') + (S.unoPick === h.i || ask === h.i ? ' sel' : '') + (gotN && h.i >= firstNew ? ' got' : '') + '" style="margin-left:' + ml + 'px" data-act="unoCard" data-i="' + h.i + '"' + (myTurn ? '' : ' tabindex="-1"') + '>' + unoCardHTML(h.c, X) + '</button>'; }) : emptyHand());
     } else mine = specBar(s.order);
     return '<main class="game gm-uno">' + banner() + topbarHTML('Uno', '<span class="chip">' + s.handSize + ' Startkarten</span>' + (s.rules && s.rules.till ? '<span class="chip">Ziehen, bis es passt</span>' : '') + (s.rules && s.rules.dbl ? '<span class="chip">Doppeln</span>' : '')) + flash + '<section class="seats">' + seats + '</section><section class="center">' + center + (status ? '<p class="status" aria-live="polite">' + status + '</p>' : '') + '</section><section class="mine">' + mine + '</section></main>';
   }
@@ -7750,7 +7783,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       mine = '<div class="mebar' + (myTurn ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + '<span class="nm">' + esc(pname(me)) + '</span>' + dzTags(me) + '<span class="p10ph">' + (s.free ? (s.done[me] || []).length + ' von ' + s.goal + ' geschafft' + (ph ? ' · Phase: <b>' + PT.text(s, ph) + '</b>' : '') : ph > s.goal ? 'Alle Phasen geschafft' : 'Phase: <b>' + PT.text(s, ph) + '</b>') + '</span>' + (s.nopts ? '' : '<span class="ss"><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span></span>') +
         (!s.over && !s.laid[me] && ph >= 1 && ph <= s.goal ? '<button class="btn small' + (canLay ? ' primary' : '') + '" data-act="p10Lay"' + (canLay ? '' : ' disabled') + '>Phase auslegen</button>' : '') +  autoNote(me) + '</div>' +
         (s.laid[me] ? '<div class="pgs mineg">' + groups(me) + '</div>' : '') +
-        (hand.length ? fanHTML(hand.length, cw, (k, ml) => { const h = hand[k]; return '<button class="hc' + (myTurn && s.drawn ? ' ok' : '') + (sel === h.i ? ' sel' : '') + (h.i === gotI ? ' got' : '') + '" style="margin-left:' + ml + 'px" data-act="p10Sel" data-i="' + h.i + '"' + (myTurn ? '' : ' tabindex="-1"') + '>' + p10CardHTML(h.c, X) + '</button>'; }) : '<div class="hand"></div>');
+        (hand.length ? fanHTML(hand.length, cw, (k, ml) => { const h = hand[k]; return '<button class="hc' + (myTurn && s.drawn ? ' ok' : '') + (sel === h.i ? ' sel' : '') + (h.i === gotI ? ' got' : '') + '" style="margin-left:' + ml + 'px" data-act="p10Sel" data-i="' + h.i + '"' + (myTurn ? '' : ' tabindex="-1"') + '>' + p10CardHTML(h.c, X) + '</button>'; }) : emptyHand());
     } else mine = specBar(s.order);
     return '<main class="game gm-phase10">' + banner() + topbarHTML('Phase 10', '<span class="chip">Runde ' + s.round + '</span><span class="chip">' + s.goal + (s.goal === 1 ? ' Phase' : ' Phasen') + '</span>' + (s.nopts ? '<span class="chip">ohne Punkte</span>' : '') + (s.free ? '<span class="chip">freie Reihenfolge</span>' : '')) + '<section class="seats">' + seats + '</section><section class="center">' + center + (status ? '<p class="status" aria-live="polite">' + status + '</p>' : '') + '</section><section class="mine">' + mine + '</section></main>';
   }
@@ -7764,7 +7797,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const live = p => d.live && d.phase !== 'pass' ? '<span class="fire" title="Feuerpunkte in den eigenen Stichen dieser Runde">Feuer: <b>' + d.live.pts[p] + '</b></span>' : '';
     const seats = aroundMe(m.order).map(p => {
       const turn = (d.phase === 'play' && d.turn === p) || (d.phase === 'pass' && !d.passed(p));
-      return '<div class="seat' + (turn ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + dealTags(d, p) + seatTags(p) + minisHTML((d.left[p] || []).length) + '</div><div class="ss">' + (d.phase === 'pass' ? '<span>' + (d.passed(p) ? 'hat geschoben' : 'wählt Karten') + '</span>' : '<span>Stiche: <b>' + d.won[p] + '</b></span>' + live(p)) + '<span class="pts">Gesamt: <b>' + c.tot.total[p] + ' P</b></span></div></div>';
+      return '<div class="seat' + (turn ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + dealTags(d, p) + seatTags(p) + minisHTML((d.left[p] || []).length) + '</div><div class="ss">' + (d.phase === 'pass' ? '<span class="pst">' + (d.passed(p) ? 'hat geschoben' : 'wählt Karten') + '</span>' : '<span>Stiche: <b>' + d.won[p] + '</b></span>' + live(p)) + '<span class="pts">Gesamt: <b>' + c.tot.total[p] + ' P</b></span></div></div>';
     }).join('');
     const dirText = { l: 'nach links', r: 'nach rechts', x: 'gegenüber' }[d.passDir];
     let center = '', status = '';
@@ -7810,7 +7843,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           if (d.phase === 'pass') return '<button class="hc' + (needPass ? ' ok' : '') + (needPass && sel.indexOf(card) >= 0 ? ' sel passsel' : '') + (!needPass && given.indexOf(card) >= 0 ? ' no passgone' : '') + '" style="margin-left:' + ml + 'px" data-act="witToggle" data-c="' + card + '"' + (needPass ? '' : ' tabindex="-1"') + '>' + witCardHTML(card, X) + '</button>';
           const ok = legal.indexOf(card) >= 0;
           return '<button class="hc' + (myTurn ? (ok ? ' ok' : ' no') : '') + (S.sel === card && myTurn ? ' sel' : '') + (recv.indexOf(card) >= 0 ? ' got' : '') + '" style="margin-left:' + ml + 'px" data-act="witCard" data-c="' + card + '"' + (myTurn ? '' : ' tabindex="-1"') + '>' + witCardHTML(card, X) + '</button>';
-        }) : '<div class="hand"></div>');
+        }) : emptyHand());
     } else mine = specBar(m.order);
     return '<main class="game gm-witches">' + banner() + topbarHTML('Witches', '<span class="chip">Runde ' + c.rd.n + '</span><span class="chip">bis ' + c.goal + ' Feuerpunkte</span>') + '<section class="seats">' + seats + '</section><section class="center">' + center + (status ? '<p class="status" aria-live="polite">' + status + '</p>' : '') + '</section><section class="mine">' + mine + '</section></main>';
   }
@@ -7959,7 +7992,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     h += sec('Bedienung <small>nur auf diesem Gerät</small>', u);
     // 4. Darstellung (nur dieses Gerät)
     let d = themePickHTML().replace('<span class="fine">nur auf diesem Gerät</span>', '') + loc('cscale', 'Kartengröße', cardScale(), 5) + loc('zoom', 'Zoom gesamt', zoomLvl(), 5);
-    d += '<button class="btn" data-act="pileTog">Gespielte Karten: ' + (UI.pile ? 'im Kreis übereinander (umschalten)' : 'nebeneinander (umschalten)') + '</button>';
+    d += '<button class="btn" data-act="pileTog">Gespielte Karten: ' + (pileOn() ? 'im Kreis übereinander (umschalten)' : 'nebeneinander (umschalten)') + '</button>';
     d += '<button class="btn" data-act="liteTog">Leistungsmodus: ' + (UI.lite ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>';
     if (S.joined) d += '<button class="btn" data-act="modal" data-m="avatar">Mein Bild ändern</button>';
     h += '<details class="mfold mdisp"' + (UI.dispOpen ? ' open' : '') + '><summary class="mhead">Darstellung <small>nur auf diesem Gerät</small></summary><div class="mleadin">' + d + '</div></details>';
@@ -8220,7 +8253,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const xSeat = (p, turn, info, extra) => '<div class="seat' + (turn ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + seatTags(p) + '</div><div class="ss">' + info + '</div>' + (extra || '') + '</div>';
   const xMe = (me, turn, info, extra) => '<div class="mebar' + (turn ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + '<span class="nm">' + esc(pname(me)) + '</span>' + dzTags(me) + '<span class="ss">' + info + '</span>' + (extra || '') + autoNote(me) + '</div>';
   const xBtn = (a, label, attrs, cls) => '<button class="btn ' + (cls || '') + '" data-act="xg" data-a="' + a + '"' + (attrs || '') + '>' + label + '</button>';
-  const xFan = (n, cw, fn) => n ? fanHTML(n, cw, (k, ml) => { const b = fn(k); return '<button class="hc' + (b.c ? ' ' + b.c : '') + '" style="margin-left:' + ml + 'px" data-act="xg" ' + b.a + '>' + b.h + '</button>'; }) : '<div class="hand"></div>';
+  const xFan = (n, cw, fn) => n ? fanHTML(n, cw, (k, ml) => { const b = fn(k); return '<button class="hc' + (b.c ? ' ' + b.c : '') + '" style="margin-left:' + ml + 'px" data-act="xg" ' + b.a + '>' + b.h + '</button>'; }) : emptyHand();
   const xTable = (head, rows) => '<div class="tablewrap"><table><thead><tr>' + head.map(h => '<th scope="col">' + h + '</th>').join('') + '</tr></thead><tbody>' + rows.map(r => '<tr class="' + (r.p === S.pid ? 'me' : '') + (r.win ? ' win' : '') + '"><th scope="row">' + r.cells[0] + '</th>' + r.cells.slice(1).map(c => '<td>' + c + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>';
   const xSum = (s, title, body, nextLabel) => (s.winner ? endGate : (x => x))('<div class="summary"><h2>' + title + '</h2>' + body + (s.winner && CHART_X[S.meta && S.meta.game] ? ptChart(s.order || [], xChartRows(s), S.meta.game === 'cabo' ? 'Punkte im Verlauf (wenige sind gut)' : 'Punkteverlauf') : '') + '<div class="sumfoot">' + (s.winner ? lobbyFoot() : canDeal('x' + s.round) ? xBtn('next', nextLabel || 'Nächste Runde', '', 'primary') : dealWaitHTML()) + '</div></div>');
   const xPick = (text, btns) => '<div class="pickbox"><p>' + text + '</p><div class="picks">' + btns + '</div></div>';
