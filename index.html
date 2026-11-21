@@ -1124,7 +1124,7 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = 'a200d068';
+var APP_V = 'ddcfa467';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3544,9 +3544,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     GAME_KEYS.forEach(g => { css += '.' + scope + ' .gm-' + g + ',.' + scope + '.gm-' + g + '{' + block(g) + '}'; });
     for (const k in X.imgs) if (/^[A-Za-z0-9_]+$/.test(k) && DATA_RE.test(X.imgs[k] || '')) { css += '.' + scope + ' .k-' + k + '{background-image:url("' + blobUrl(X.imgs[k]) + '")}';
       
-      if ((X.imgm || {})[k]) { const z = ((1 + 2 * X.imgm[k]) * 100).toFixed(2) + '%';         css += '.' + scope + ' .card.img.k-' + k + ',.' + scope + ' .k-' + k + '.k-' + k + '{background-size:' + z + ' ' + z + ' !important;background-position:center !important}';
-        // Fliegende Karten werden skaliert – dabei blitzte der gespeicherte Rand als feiner Streifen auf; dort etwas mehr abschneiden
-        if (scope === 'dzT') { const z2 = ((1 + 2 * X.imgm[k]) * 104).toFixed(2) + '%'; css += '#flylayer.dzT .card.img.k-' + k + '.k-' + k + '{background-size:' + z2 + ' ' + z2 + ' !important}'; } } }
+      if ((X.imgm || {})[k]) { const z = 'calc(' + ((1 + 2 * X.imgm[k]) * 100).toFixed(2) + '% + 2px)';         css += '.' + scope + ' .card.img.k-' + k + ',.' + scope + ' .k-' + k + '.k-' + k + '{background-size:' + z + ' ' + z + ' !important;background-position:center !important}';
+ } }
     return css;
   }
   function backHTML(X, game, o) {
