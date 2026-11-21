@@ -1120,7 +1120,7 @@ main.game .seats > .seat > * { zoom: var(--seatz, 1); }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = 'efd90823';
+var APP_V = '2619e4b1';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3465,7 +3465,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   
   const XG = {}, XPRE = {}, XDEF = {}, VAL_KEYS = { animMode: ['seq', 'all'] };
   const SET_KEYS = { botMin: 1, botMs: 1, overlap: 1, animMax: 1, animMs: 1, unoHand: 1, unoD2: 1, unoD4: 1, unoS: 1, unoR: 1, unoW: 1, sbHand: 1, witGoal: 1, seats: 1, p10Hand: 1, tlSec: 1, lbP1: 1, lbP2: 1, lbP3: 1, lbP4: 1, lbP5: 1, lbP6: 1 }, TOG_KEYS = { unoStay: 1, unoTill: 1, unoDbl: 1, unoAny: 1, p10Free: 1, spec: 1, anim: 1, pub: 1, tlOn: 1, backup: 1, lbOwn: 1, tfOn: 1, flipOff: 1 };
-  const GAME_ORDER = ['wizard', 'witches', 'druids', 'skullking', 'uno', 'nomercy', 'allwild', 'passt', 'phase10', 'cabo', 'texas', 'loveletter', 'skipbo', 'dalmuti', 'werwolf'];
+  const GAME_ORDER = ['wizard', 'witches', 'druids', 'skullking', 'uno', 'nomercy', 'allwild', 'passt', 'phase10', 'cabo', 'texas', 'loveletter', 'skipbo', 'dalmuti', 'arschloch', 'werwolf'];
   const gameList = () => GAME_ORDER.filter(k => GAMES[k]).concat(Object.keys(GAMES).filter(k => GAME_ORDER.indexOf(k) < 0));
   const xKey = k => { const m = /^([a-z]{2})_([A-Za-z0-9]+)$/.exec(k || ''), g = m && XPRE[m[1]]; return g ? { g, id: m[2] } : null; };
   const CARD_KEY = { test: k => CARD_RE.test(k) || (x => !!x && XG[x.g].cards.indexOf(x.id) >= 0)(xKey(k)) };
@@ -4000,6 +4000,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       return v;
     },
     dalmuti(s, me) {
+      const v = hideDeck(s);
+      if (ended(s)) return v;
+      v.hands = maskOthers(s.hands, me);
+      if (s.recv) v.recv = onlyMine(s.recv, me, []);
+      if (s.taxSub) v.taxSub = maskOthers(s.taxSub, me);
+      return v;
+    },
+    arschloch(s, me) {
       const v = hideDeck(s);
       if (ended(s)) return v;
       v.hands = maskOthers(s.hands, me);
@@ -8218,7 +8226,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     return [].concat.apply([], SUITS.map((c, i) => ['c_Z' + (i + 1), 'c_N' + (i + 1)].concat(Array.from({ length: 13 }, (_, k) => 'c_' + c + (13 - k)))));
   }
   
-  const ED_FLAT = { wizard: 1, witches: 1, cabo: 1, skipbo: 1, dalmuti: 1, werwolf: 1, allwild: 1 };
+  const ED_FLAT = { wizard: 1, witches: 1, cabo: 1, skipbo: 1, dalmuti: 1, arschloch: 1, werwolf: 1, allwild: 1 };
   function edRows(tab) {
     if (ED_FLAT[tab]) return null;
     const keys = edCards(tab);
@@ -9089,6 +9097,225 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         return xMain(K, { chips: '<span class="chip">Runde ' + s.round + ' von ' + s.rounds + '</span>', seats: seats, center: center, status: status, mine: mine });
       },
       rules: '<h3>Ziel</h3><p>Werde deine Karten möglichst schnell los. Die Reihenfolge, in der ihr fertig werdet, bestimmt den Rang in der nächsten Runde. Nach der eingestellten Rundenzahl gewinnt, wer die meisten Punkte hat.</p><h3>Karten</h3><p>80 Karten: Von jedem Rang gibt es so viele Karten wie seine Zahl (ein Dalmuti, zwei Erzbischöfe … zwölf Tagelöhner) und zwei Narren. Je niedriger die Zahl, desto stärker. Narren sind Joker; allein gespielt haben sie den schlechtesten Rang 13.</p><h3>Abgaben</h3><p>Vor jeder Runde gibt der Große Dalmuti zwei beliebige Karten an den Großen Diener und bekommt dessen zwei beste. Der Kleine Dalmuti tauscht ebenso eine Karte mit dem Kleinen Diener. Narren werden nicht getauscht. Wer beide Narren hält, kann die Revolution ausrufen: Dann wird nicht getauscht. Ist es der Große Diener, werden alle Ränge umgedreht.</p><h3>Der Stich</h3><p>Der Große Dalmuti beginnt (mit der Einstellung „Großer Diener beginnt“ der Große Diener) mit einer Karte oder mehreren gleichen. Reihum muss man dieselbe Anzahl Karten mit niedrigerer Zahl legen oder passen. Wer gepasst hat, darf später im selben Stich wieder legen. Passen alle, beginnt, wer zuletzt gelegt hat, den nächsten Stich. Ist diese Person schon fertig, beginnt die nächste im Uhrzeigersinn.</p><h3>Wertung</h3><p>Für jede Person, die nach dir fertig wird, gibt es einen Punkt. Die Sitzordnung folgt dem neuen Rang.</p>'
+    });
+  })();
+
+  
+  // ---- Arschloch (wie Der große Dalmuti, aber mit französischem Blatt: höher schlägt niedriger) ----
+  (function () {
+    const K = 'arschloch', SU = ['a', 'b', 'c', 'd'];
+    const RT = { 11: 'B', 12: 'D', 13: 'K', 14: 'A' }, RW = { 11: 'Bube', 12: 'Dame', 13: 'König', 14: 'Ass' };
+    const rk = c => +String(c).slice(1), su = c => String(c)[0];
+    const rtx = r => RT[r] || String(r), rnm = r => RW[r] || String(r);
+    const colOf = id => Math.max(0, SU.indexOf(su(id)));
+    const card = (id, X, o) => xCard(K, String(id), colOf(id), rtx(rk(id)), X, o || {});
+    const ALL = []; SU.forEach(s => { for (let r = 2; r <= 14; r++) ALL.push(s + r); });
+    const deckOf = s => { const d = ALL.filter(c => !s.skat || rk(c) >= 7); return s.dbl ? d.concat(d) : d; };
+    const RANKS = s => s.skat ? [7, 8, 9, 10, 11, 12, 13, 14] : [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+    // a schlägt b? Nach einer Revolution ist die Reihenfolge umgedreht
+    const better = (s, a, b) => s.revo ? a < b : a > b;
+    const sortH = h => h.sort((x, y) => rk(x) - rk(y) || SU.indexOf(su(x)) - SU.indexOf(su(y)));
+    const title = (s, p) => { if (!s.ranked) return 'Runde 1'; const i = s.order.indexOf(p), P = s.order.length; if (i === 0) return 'König'; if (i === P - 1) return 'Arschloch'; if (P >= 4 && i === 1) return 'Vizekönig'; if (P >= 4 && i === P - 2) return 'Vize-Arschloch'; return 'Bürger'; };
+    const live = s => s.order.filter(p => s.hands[p].length);
+    const setOf = cards => { if (!cards.length || cards.some(c => rk(c) !== rk(cards[0]))) return null; return { n: cards.length, rank: rk(cards[0]) }; };
+    function deal(s) {
+      const P = s.order.length;
+      s.hands = {}; s.order.forEach(p => { s.hands[p] = []; });
+      xShuffle(deckOf(s)).forEach((c, i) => s.hands[s.order[i % P]].push(c));
+      s.order.forEach(p => sortH(s.hands[p]));
+      s.table = null; s.passes = 0; s.passed = {}; s.fin = []; s.over = null; s.played = []; s.revo = false; s.recv = {}; s.taxSub = {}; s.taxQ = {};
+      // Ab Runde 2 wird gedrückt, und das Arschloch beginnt
+      s.turn = s.ranked ? P - 1 : 0;
+      if (s.ranked) { s.phase = 'tax'; s.tax = P >= 4 ? [{ from: 0, to: P - 1, n: 2 }, { from: 1, to: P - 2, n: 1 }] : [{ from: 0, to: P - 1, n: 1 }]; }
+      else { s.phase = 'play'; s.tax = []; }
+    }
+    const taxOf = (s, p) => (s.tax || []).find(t => s.order[t.from] === p);
+    const taxBest = (s, t) => s.hands[s.order[t.to]].slice(-t.n);
+    // Raten (wie bei Dalmuti): König bis zu 3 Versuche für höchstens 2 Karten, Vizekönig bis zu 2 für 1 Karte
+    const taxQ = (s, p) => (s.taxQ || {})[p] || { asked: [], got: [] };
+    const taxAsks = t => t.n === 2 ? 3 : 2;
+    const taxNeed = (s, t, p) => s.guess ? taxQ(s, p).got.length : t.n;
+    const taxAskDone = (s, t, p) => { const q = taxQ(s, p); return q.got.length >= t.n || q.asked.length >= taxAsks(t); };
+    function askTax(s0, p, r) {
+      const t = s0.phase === 'tax' && s0.guess && taxOf(s0, p);
+      r = +r;
+      if (!t || (s0.taxSub || {})[p] || taxAskDone(s0, t, p) || RANKS(s0).indexOf(r) < 0) return null;
+      const q = taxQ(s0, p), got = q.got.slice(), asked = q.asked.concat([r]);
+      const avail = s0.hands[s0.order[t.to]].slice(); got.forEach(c => { const k = avail.indexOf(c); if (k >= 0) avail.splice(k, 1); });
+      const hit = avail.find(c => rk(c) === r);
+      if (hit) got.push(hit);
+      return { $upd: { taxQ: { [p]: { asked, got } } } };
+    }
+    function giveTax(s0, p, cards) {
+      const t = s0.phase === 'tax' && taxOf(s0, p);
+      if (!t || (s0.taxSub || {})[p]) return null;
+      if (s0.guess && !taxAskDone(s0, t, p)) return null;
+      if (cards.length !== taxNeed(s0, t, p)) return null;
+      const h = s0.hands[p].slice();
+      for (const c of cards) { const k = h.indexOf(c); if (k < 0) return null; h.splice(k, 1); }
+      return { $upd: { taxSub: { [p]: cards.length ? cards : ['0'] } } };
+    }
+    function resolveTax(s0) {
+      if (s0.phase !== 'tax' || !s0.tax.every(t => (s0.taxSub || {})[s0.order[t.from]])) return null;
+      const s = xClone(s0), mv = [];
+      s.tax.forEach(t => {
+        const p = s.order[t.from], to = s.order[t.to], cards = (s.taxSub[p] || []).filter(c => c !== '0'), back = s.guess ? taxQ(s, p).got.slice() : taxBest(s, t);
+        cards.forEach(c => s.hands[p].splice(s.hands[p].indexOf(c), 1));
+        back.forEach(c => s.hands[to].splice(s.hands[to].indexOf(c), 1));
+        s.hands[p] = sortH(s.hands[p].concat(back)); s.hands[to] = sortH(s.hands[to].concat(cards));
+        s.recv[p] = back.slice(); s.recv[to] = cards.slice();
+        xLog(s, pname(to) + ' drückt ' + back.length + (back.length === 1 ? ' Karte' : ' Karten') + ' an ' + pname(p) + '.');
+        if (cards.length) mv.push([p, to, cards.length]); if (back.length) mv.push([to, p, back.length]);
+      });
+      s.fx = { id: 'tax' + (s.g || 0) + ':' + (s.round || 0) + ':' + s.seq, moves: mv, tax: 1 };
+      s.tax = []; s.taxSub = {}; s.taxQ = {}; s.phase = 'play'; s.turn = s.order.length - 1; s.seq++;
+      return s;
+    }
+    function endRound(s) {
+      const P = s.order.length;
+      live(s).forEach(q => s.fin.push(q));
+      s.fin.forEach((q, i) => { s.scores[q] += P - 1 - i; });
+      s.over = { order: s.fin.slice() }; s.phase = 'over';
+      if (s.round >= s.rounds) { const best = Math.max.apply(null, s.order.map(q => s.scores[q])); s.winner = s.over.order.find(q => s.scores[q] === best); }
+    }
+    function advance(s) {
+      const P = s.order.length; s.passed = s.passed || {};
+      for (let k = 1; k <= P; k++) {
+        const i = (s.turn + k) % P, q = s.order[i];
+        if (q === s.table.by) break;
+        if (s.hands[q].length && !s.passed[q]) { s.turn = i; return; }
+      }
+      const bi = s.order.indexOf(s.table.by);
+      s.clr = { id: 'c' + (s.g || 0) + ':' + s.round + ':' + (s.seq || 0), p: s.table.by };
+      // Wer mit seinen letzten Karten den Stich holt, „vererbt“ das Ausspielen an den Nächsten
+      s.turn = s.hands[s.table.by].length ? bi : xNext(s, bi, q => s.hands[q].length);
+      s.table = null; s.passes = 0; s.passed = {};
+    }
+    function play(s0, p, cards) {
+      const v = setOf(cards);
+      if (s0.phase !== 'play' || s0.order[s0.turn] !== p || !v) return null;
+      if (s0.table && (v.n !== s0.table.n || !better(s0, v.rank, s0.table.rank))) return null;
+      const s = xClone(s0), h = s.hands[p];
+      for (const c of cards) { const k = h.indexOf(c); if (k < 0) return null; h.splice(k, 1); }
+      s.table = { cards: cards.slice(), n: v.n, rank: v.rank, by: p }; s.passes = 0; s.seq = (s.seq || 0) + 1; s.played = (s.played || []).concat(cards);
+      if (s.recv && s.recv[p] && s.recv[p].length) s.recv[p] = [];
+      if (s.revoOn && v.n === 4) { s.revo = !s.revo; xLog(s, pname(p) + ' ruft die Revolution aus: ' + (s.revo ? 'Jetzt ist die niedrigste Karte die höchste!' : 'Die Reihenfolge gilt wieder normal.')); }
+      if (!h.length) { s.fin.push(p); xLog(s, pname(p) + ' ist fertig (Platz ' + s.fin.length + ').'); }
+      if (live(s).length <= 1) { endRound(s); return s; }
+      advance(s);
+      return s;
+    }
+    function playable(s, hand, k, giving) {
+      if (s.phase === 'tax') return giving;
+      if (s.phase !== 'play' || !s.table) return true;
+      const r = rk(hand[k]); return better(s, r, s.table.rank) && hand.filter(x => rk(x) === r).length >= s.table.n;
+    }
+    const canPlayP = (s, p) => { const h = s.hands[p] || []; return !s.table || h.some((c, k) => playable(s, h, k, false)); };
+    function pass(s0, p) {
+      if (s0.phase !== 'play' || s0.order[s0.turn] !== p || !s0.table) return null;
+      const s = xClone(s0);
+      s.passes++; s.seq = (s.seq || 0) + 1; s.passed = s.passed || {}; s.passed[p] = true;
+      advance(s);
+      return s;
+    }
+    function botMove(s, p, L) {
+      const hand = s.hands[p];
+      if (s.phase === 'tax') {
+        const t = taxOf(s, p); if (!t || (s.taxSub || {})[p]) return null;
+        if (s.guess && !taxAskDone(s, t, p)) { const q = taxQ(s, p), r = RANKS(s).slice().reverse().find(x => q.asked.indexOf(x) < 0 && hand.filter(c => rk(c) === x).length < (s.dbl ? 8 : 4)) || RANKS(s).find(x => q.asked.indexOf(x) < 0); return askTax(s, p, r); }
+        return giveTax(s, p, hand.slice(0, taxNeed(s, t, p)));
+      }
+      if (s.phase !== 'play' || s.order[s.turn] !== p) return null;
+      const cnt = {}; hand.forEach(c => { const r = rk(c); cnt[r] = (cnt[r] || 0) + 1; });
+      // schwächste Ränge zuerst (nach einer Revolution umgekehrt)
+      const ranks = Object.keys(cnt).map(Number).sort((a, b) => s.revo ? b - a : a - b);
+      const take = (r, n) => hand.filter(c => rk(c) === r).slice(0, n);
+      if (!s.table) { const r = L <= 1 ? ranks[Math.floor(rnd() * ranks.length)] : ranks[0]; return play(s, p, take(r, cnt[r])); }
+      const n = s.table.n, ok = ranks.filter(r => better(s, r, s.table.rank) && cnt[r] >= n);
+      if (!ok.length || (L <= 1 && rnd() < .25)) return pass(s, p);
+      const exact = ok.filter(r => cnt[r] === n), r = L > 1 && exact.length ? exact[0] : ok[0];
+      if (L > 1 && !exact.length && ranks.indexOf(r) >= ranks.length - 2 && hand.length > 6 && cnt[r] > n) return pass(s, p);
+      return play(s, p, take(r, n)) || pass(s, p);
+    }
+    xgReg(K, {
+      name: 'Arschloch', text: 'Für 3 bis 8: Karten loswerden, König werden – und bloß nicht das Arschloch.', min: 3, max: 16, rec: '3 bis 8, mit doppeltem Blatt bis 16', pre: 'ar',
+      cols: [['Kreuz', '#22202e', '♣'], ['Pik', '#3a3f4f', '♠'], ['Herz', '#c8402f', '♥'], ['Karo', '#d9682b', '♦']],
+      cards: ALL.slice(), sample: ['c14', 'b13', 'a10', 'd7', 'c2'], colOf: colOf, label: (id, D) => ((D && D.games && D.games[K] && D.games[K].cols[colOf(id)] || {}).name || '') + ' ' + rnm(rk(id)), card: card,
+      def: { arRounds: 10, arSkat: false, arRevo: false, arDbl: false, arGuess: false }, nums: ['arRounds'], togs: ['arSkat', 'arRevo', 'arDbl', 'arGuess'],
+      delay: s => s.phase === 'tax' && (s.tax || []).every(t => (s.taxSub || {})[s.order[t.from]]) ? 2000 : 900,
+      lobby: (st, h) => '<h3>Rundenzahl</h3>' + h.stepper('Runden', 'arRounds', Math.max(1, Math.min(30, st.arRounds || 10)), 1, 1, 30) +
+        '<h3>Karten</h3>' + h.toggle('Skatblatt (32 Karten)', st.arSkat ? 'An: nur 7 bis Ass – kürzere Runden.' : 'Aus: Pokerblatt mit 52 Karten (2 bis Ass).', 'arSkat', !!st.arSkat) +
+        h.toggle('Doppeltes Blatt', 'Jede Karte gibt es zweimal – für mehr Personen. Ab 9 Personen wird automatisch doppelt gespielt (bis 16).', 'arDbl', !!st.arDbl) +
+        '<h3>Drücken</h3>' + h.toggle('Karten erraten', 'Der König bekommt die Karten des Arschlochs nicht automatisch, sondern rät Werte: Hat das Arschloch den Wert, bekommt er eine solche Karte. Der König darf bis zu dreimal raten (höchstens 2 Karten), der Vizekönig bis zu zweimal (höchstens 1 Karte). Zurückgegeben werden so viele Karten, wie man bekommen hat.', 'arGuess', !!st.arGuess) +
+        '<h3>Sonderregel</h3>' + h.toggle('Revolution bei vier Gleichen', 'Wer vier Karten mit demselben Wert legt, dreht die Reihenfolge bis zum Rundenende um: Dann ist die niedrigste Karte die höchste.', 'arRevo', !!st.arRevo),
+      create(seats, st) { const s = { order: xShuffle(seats), round: 1, rounds: Math.max(1, Math.min(30, st.arRounds || 10)), skat: !!st.arSkat, dbl: !!st.arDbl || seats.length > 8, guess: !!st.arGuess, revoOn: !!st.arRevo, ranked: false, scores: {}, winner: null, log: [], seq: 0 }; seats.forEach(p => { s.scores[p] = 0; }); deal(s); return s; },
+      act(a, d, s, me) {
+        const U = UI.x, hand = s.hands[me] || [], sel = (U.sel || []).filter(i => Number.isInteger(i) && i >= 0 && i < hand.length);
+        if (a === 'next') { if (!canDeal('x' + s.round) || !s.over || s.winner) return; const n = xClone(s); n.order = s.over.order.slice(); n.round++; n.ranked = true; deal(n); n.seq++; return n; }
+        if (a === 'c') {
+          const i = +d.i, k = sel.indexOf(i);
+          if (!(i >= 0 && i < hand.length)) return;
+          if (k >= 0) sel.splice(k, 1);
+          else if (s.phase === 'play' && s.table && !sel.length) hand.forEach((c, j) => { if (rk(c) === rk(hand[i]) && sel.length < s.table.n) sel.push(j); });
+          else sel.push(i);
+          U.sel = sel; return;
+        }
+        const cards = sel.map(i => hand[i]);
+        if (a === 'ask') return askTax(s, me, d.r);
+        if (a === 'tax') { const t = taxOf(s, me), k = t ? taxNeed(s, t, me) : 0, n = giveTax(s, me, cards); if (!n) { toast('Wähle genau ' + k + (k === 1 ? ' Karte' : ' Karten') + '.'); return; } U.sel = []; return n; }
+        if (a === 'play') { const n = play(s, me, cards); if (!n) { toast(!setOf(cards) ? 'Wähle Karten mit demselben Wert.' : 'Du brauchst genau ' + s.table.n + (s.table.n === 1 ? ' Karte' : ' Karten') + ' mit einem ' + (s.revo ? 'niedrigeren' : 'höheren') + ' Wert als ' + rnm(s.table.rank) + '.'); return; } U.sel = []; return n; }
+        if (a === 'pass') { const n = pass(s, me); if (n) U.sel = []; return n; }
+      },
+      autoSkip(s) { if (s.over || s.phase !== 'play' || !s.table) return null; const p = s.order[s.turn]; return p && (s.hands[p] || []).length && !canPlayP(s, p) ? { p, k: (s.g || 0) + ':' + s.round + ':' + s.seq + ':' + p } : null; },
+      skip(s, p) { return pass(s, p); },
+      bot(s, isB, lvl) {
+        if (s.over) return null;
+        if (s.phase === 'tax') {
+          const r = resolveTax(s); if (r) return r;
+          const p = s.tax.map(t => s.order[t.from]).find(q => isB(q) && !(s.taxSub || {})[q]);
+          return p ? botMove(s, p, lvl(p)) : null;
+        }
+        const p = s.order[s.turn]; return isB(p) ? botMove(s, p, lvl(p)) : null;
+      },
+      score: s => '<p class="fine">Runde ' + s.round + ' von ' + s.rounds + '. Je Runde gibt es einen Punkt für jede Person, die nach dir fertig wird.</p>' + xTable(['Platz', 'Amt', 'Punkte'], s.order.slice().sort((a, b) => s.scores[b] - s.scores[a]).map((p, i) => ({ p: p, win: s.winner === p, cells: [(i + 1) + '. ' + esc(pname(p)), title(s, p), '<b>' + s.scores[p] + '</b>'] }))),
+      html(X, s, me) {
+        const U = UI.x, seated = s.order.indexOf(me) >= 0, hand = s.hands[me] || [], sel = (U.sel || []).filter(i => i < hand.length), cw = cardW();
+        const tx = s.phase === 'tax' ? taxOf(s, me) : null, giving = !!(tx && !(s.taxSub || {})[me]);
+        const cur = s.phase === 'play' ? s.order[s.turn] : null, myTurn = seated && (s.phase === 'tax' ? giving : cur === me);
+        const taxTurn = p => s.phase === 'tax' && !!taxOf(s, p) && !(s.taxSub || {})[p];
+        const outT = s.phase === 'tax' ? (s.tax || []).find(t => s.order[t.to] === me) : null;
+        const outIdx = []; (outT ? (s.guess ? taxQ(s, s.order[outT.from]).got.slice() : taxBest(s, outT)) : []).concat(s.phase === 'tax' ? (s.taxSub || {})[me] || [] : []).forEach(c => { const k = hand.findIndex((x, j) => x === c && outIdx.indexOf(j) < 0); if (k >= 0) outIdx.push(k); });
+        const gotIdx = []; (s.phase === 'play' && s.recv ? s.recv[me] || [] : []).forEach(c => { const k = hand.findIndex((x, j) => x === c && gotIdx.indexOf(j) < 0); if (k >= 0) gotIdx.push(k); });
+        const gold = p => s.ranked && s.order.indexOf(p) < (s.order.length >= 4 ? 2 : 1);
+        const seats = aroundMe(s.order).map(p => xSeat(p, cur === p || taxTurn(p), '<span class="tag' + (gold(p) ? ' gold' : '') + '">' + title(s, p) + '</span>' + (s.phase === 'play' && s.table && (s.passed || {})[p] ? '<span class="tag dim">gepasst</span>' : '') + (s.hands[p].length ? minisHTML(s.hands[p].length) : '<span class="tag gold">fertig, Platz ' + (s.fin.indexOf(p) + 1) + '</span>') + '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>'));
+        let center, status = '';
+        if (s.over) center = xSum(s, s.winner ? xWin(s, me) : 'Runde ' + s.round + ' ist gespielt', xTable(['Neues Amt', 'Runde', 'Gesamt'], s.over.order.map((p, i) => ({ p: p, win: s.winner === p, cells: [(i + 1) + '. ' + esc(pname(p)), '+' + (s.order.length - 1 - i), '<b>' + s.scores[p] + '</b>'] }))), 'Nächste Runde austeilen');
+        else if (s.phase === 'tax') {
+          center = xLogHTML(s);
+          const wait = s.tax.filter(t => !(s.taxSub || {})[s.order[t.from]]).map(t => xNm(s.order[t.from]));
+          if (giving && s.guess && !taxAskDone(s, tx, me)) {
+            const q = taxQ(s, me), to = s.order[tx.to];
+            center = xPick('Rate einen Wert, den ' + xNm(to) + ' hat (noch ' + (taxAsks(tx) - q.asked.length) + ' Versuche, ' + q.got.length + ' von ' + tx.n + ' bekommen)' + (q.asked.length ? '<br><small>Geraten: ' + q.asked.map(r => rnm(r)).join(', ') + '</small>' : ''),
+              RANKS(s).map(r => xBtn('ask', rtx(r), ' data-r="' + r + '"', 'small')).join('')) + center;
+          } else if (giving) { const n = taxNeed(s, tx, me); status = n ? '<b>Gib ' + n + (n === 1 ? ' Karte' : ' Karten') + ' an ' + esc(pname(s.order[tx.to])) + ' ab.</b> ' + (s.guess ? '' : 'Du bekommst dafür ' + (n === 1 ? 'die höchste Karte' : 'die ' + n + ' höchsten Karten') + '. ') + 'Wähle in deiner Hand.' : 'Du hast nichts erraten und gibst nichts ab.'; }
+          else if (outT) status = 'Du musst drücken: Die markierten (höchsten) Karten gehen gleich an ' + esc(pname(s.order[outT.from])) + '. Warte auf ' + wait.join(' und ') + ' …';
+          else status = wait.length ? 'Warte auf ' + wait.join(' und ') + ' …' : 'Es wird gedrückt …';
+        } else {
+          center = (s.table ? '<div class="trick" style="--cw:' + Math.round(cw * .8) + 'px">' + s.table.cards.map(c => '<div class="tc">' + card(c, X) + '</div>').join('') + '</div><p class="xlog">' + s.table.n + '× ' + rnm(s.table.rank) + ' von ' + xNm(s.table.by) + '</p>' : '<p class="xlog">Neuer Stich: ' + xNm(cur) + (cur === me ? ' spielst' : ' spielt') + ' aus.</p>') + xLogHTML(s);
+          status = myTurn ? '<b>Du bist am Zug.</b> ' + (s.table ? (canPlayP(s, me) ? 'Lege ' + s.table.n + (s.table.n === 1 ? ' Karte' : ' Karten') + ' mit ' + (s.revo ? 'niedrigerem' : 'höherem') + ' Wert oder passe.' : 'Du kannst nicht höher legen – du wirst in wenigen Sekunden automatisch übersprungen.') : 'Spiele eine Karte oder mehrere mit demselben Wert.') : xNm(cur) + ' ist am Zug …';
+        }
+        let mine;
+        if (seated) mine = xMe(me, myTurn, '<span class="tag' + (gold(me) ? ' gold' : '') + '">' + title(s, me) + '</span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span>', myTurn && s.phase === 'tax' && !(s.guess && tx && !taxAskDone(s, tx, me)) ? xBtn('tax', 'Abgeben', '', 'small primary') : myTurn && s.phase === 'play' ? xBtn('play', 'Ausspielen', sel.length ? '' : ' disabled', 'small primary') + (s.table ? xBtn('pass', 'Passen', '', 'small') : '') : '') +
+          xFan(hand.length, cw, k => ({ c: (myTurn ? (playable(s, hand, k, giving) ? 'ok' : 'no') : '') + (sel.indexOf(k) >= 0 ? ' sel' + (s.phase === 'tax' ? ' taxout' : '') : '') + (outIdx.indexOf(k) >= 0 ? ' taxout' : '') + (gotIdx.indexOf(k) >= 0 ? ' got' : ''), a: 'data-a="c" data-i="' + k + '"', h: card(hand[k], X) }));
+        else mine = specBar(s.order);
+        return xMain(K, { chips: '<span class="chip">Runde ' + s.round + ' von ' + s.rounds + '</span>' + (s.revo ? '<span class="chip">Revolution</span>' : ''), seats: seats, center: center, status: status, mine: mine });
+      },
+      rules: '<h3>Ziel</h3><p>Werde deine Karten möglichst schnell los. Wer zuerst fertig ist, wird König, wer als Letzter übrig bleibt, ist das Arschloch. Nach der eingestellten Rundenzahl gewinnt, wer die meisten Punkte hat (je Runde ein Punkt für jede Person, die nach dir fertig wird).</p>' +
+        '<h3>Karten</h3><p>Pokerblatt mit 52 Karten (2 bis Ass) oder auf Wunsch Skatblatt mit 32 Karten (7 bis Ass). Die Farbe spielt keine Rolle, nur der Wert: 2 ist am niedrigsten, Ass am höchsten. Alle Karten werden möglichst gleichmäßig verteilt.</p>' +
+        '<h3>Ausspielen</h3><p>Wer herauskommt, legt eine Karte oder mehrere mit demselben Wert. Reihum legt man genauso viele Karten mit einem höheren Wert oder passt. Wer gepasst hat, ist bis zum Ende des Stichs raus. Haben alle anderen gepasst, gewinnt der Höchste den Stich und kommt neu heraus. Wer mit seinen letzten Karten den Stich holt, gibt das Ausspielen an den Nächsten weiter. Wer nicht legen kann, wird nach ein paar Sekunden automatisch übersprungen.</p>' +
+        '<h3>Ämter</h3><p>Die Reihenfolge, in der ihr fertig werdet, bestimmt die Ämter der nächsten Runde: König, Vizekönig, Bürger, Vize-Arschloch, Arschloch (bei 3 Personen nur König, Bürger, Arschloch). Ihr sitzt in dieser Reihenfolge.</p>' +
+        '<h3>Drücken</h3><p>Ab der zweiten Runde gibt das Arschloch seine zwei höchsten Karten an den König, das Vize-Arschloch seine höchste an den Vizekönig (bei 3 Personen: nur eine Karte zwischen Arschloch und König). Dafür sucht sich der König zwei, der Vizekönig eine Karte aus, die sie zurückgeben. Das Arschloch beginnt die Runde.</p>' +
+        '<h3>Karten erraten (optional)</h3><p>Statt automatisch zu bekommen, rät der König bis zu dreimal einen Wert (höchstens 2 Karten), der Vizekönig bis zu zweimal (1 Karte). Für jeden Treffer gibt es eine solche Karte; zurückgegeben werden genauso viele.</p><h3>Doppeltes Blatt (optional)</h3><p>Jede Karte gibt es zweimal – so können bis zu 16 Personen mitspielen (ab 9 Personen automatisch).</p><h3>Revolution (optional)</h3><p>Wer vier Karten mit demselben Wert legt, dreht die Reihenfolge bis zum Rundenende um: Dann ist die niedrigste Karte die höchste. Noch einmal vier Gleiche drehen es zurück.</p>'
     });
   })();
 
