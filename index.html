@@ -929,7 +929,8 @@ input.numin { font: inherit; font-weight: 700; text-align: center; padding: 1px 
 .pcols input[type=color]{width:30px;height:24px;padding:0;border:0;background:none}
 .card.img { background-color: transparent !important; }
 /* Karte mit eigenem Bild und farbigem Rand: Rand liegt UM das Bild statt darüber – der ganze Zuschnitt bleibt sichtbar */
-.card.img.r1:not(.back) { box-sizing: border-box; padding: max(3px, calc(var(--cw, 72px) * .06)); background-origin: content-box !important; background-clip: content-box !important; }
+/* Rahmen: oben/unten im Seitenverhältnis der Karte, damit das Bild nicht verzerrt wird und genau dem Ausschnitt entspricht */
+.card.img.r1:not(.back) { box-sizing: border-box; padding: max(3px, calc(var(--cw, 72px) * .06 * var(--carh, 1.5614))) max(3px, calc(var(--cw, 72px) * .06)); background-origin: content-box !important; background-clip: content-box !important; }
 .edbr { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: flex-start; grid-column: 1 / -1; }
 .edbr > section { flex: 1 1 260px; min-width: 0; }
 /* Editor-Raster: Karte füllt die Zelle – Rundung, Schrift und Symbole an der echten Kartenbreite ausrichten */
@@ -1073,6 +1074,8 @@ section.mine > .bidbar { margin: 0 auto 10px; }
 .trick.pile > .tc .who { display: none; }
 /* Handy-Ansicht: Tischmitte wie beim Rundtisch um --cdy verschieben, damit der Stapel ruhig liegen bleibt */
 .game:not(.round) .center > *:not(.dealdeck) { position: relative; top: var(--cdy, 0px); }
+/* Austeilen vom Stapel: erst wenn alles verteilt ist, erscheinen Text, Ansage-Leiste und Co. (Platz bleibt reserviert, nichts springt) */
+body.dealing main.game .center:has(> .dealdeck) > :not(.dealdeck), body.dealing main.game:has(.center > .dealdeck) section.mine > .bidbar { visibility: hidden; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1090,7 +1093,7 @@ section.mine > .bidbar { margin: 0 auto 10px; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = 'eedc17e1';
+var APP_V = '9ac187ae';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -2833,7 +2836,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const game = p.indexOf('games/') === 0;
       let v = d;
       if (game && d != null && typeof hooks.viewFor === 'function' && !c._heir) {
-        try { v = hooks.viewFor(p, d, c._pid || '', metaDoc()); } catch (e) { console.error('Sicht konnte nicht berechnet werden', e); v = d; }
+        try { v = hooks.viewFor(p, d, c._pid || '', metaDoc()); } catch (e) { console.error('Sicht konnte nicht berechnet werden – nichts gesendet', e); return; }  // im Zweifel nichts senden statt alles
       }
       const n = (c._ver.get(p) || 0) + 1, old = c._last.get(p);
       if (!full && game && isObj(old) && isObj(v)) {
@@ -3020,6 +3023,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           if (!helloPend && linkUp && conn && conn.open && queue.length) { const q = queue; queue = []; q.forEach(op => sendTo(conn, { t: 'op', op })); }
         });
     }
+    // Nur intern erzeugte Anmeldebestätigungen zählen: ein Symbol kann nicht über die Leitung kommen
+    const HELLO_OK = typeof Symbol === 'function' ? Symbol('helloOk') : '__helloOk' + Math.random();
     function hostWire(c) {
       c.on('open', () => {
         conns.add(c);
@@ -3031,6 +3036,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const onData = raw => {
         const msg = unpack(raw); if (!msg) return;
         if (!msg || typeof msg !== 'object') return;
+        // „hello!“ von außen ignorieren – sonst ließe sich die Prüfung der Unterschrift umgehen und eine fremde Kennung annehmen
+        if (msg.t === 'hello!' && msg[HELLO_OK] !== true) return;
         // Drosselung: höchstens 60 Nachrichten und 12 Züge pro Sekunde je Gerät
         const now = Date.now(); if (!c._rl || now - c._rl.t > 1000) c._rl = { t: now, n: 0, a: 0, d: 0 };
         // Angenommenes Kartenset eines Mitspielers: eigenes, höheres Limit (bis 150 Bilder/s), damit große Sets zügig ankommen
@@ -3043,7 +3050,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           c._hv = true;
           checkHello(c, msg).then(r => {
             if (r === 'deny') sendTo(c, { t: 'deny', pid: String(msg.pid || '') });
-            else onData({ t: 'hello!', pid: String(msg.pid || ''), v: typeof msg.v === 'string' ? msg.v.slice(0, 20) : '' });
+            else onData({ t: 'hello!', pid: String(msg.pid || ''), v: typeof msg.v === 'string' ? msg.v.slice(0, 20) : '', [HELLO_OK]: true });
             c._hv = false;
             const b = c._hb || []; c._hb = [];
             b.forEach(onData);
@@ -3499,7 +3506,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       one('Z', G.wiz.color); one('N', G.jes.color);
       one('k1', G.sb.c1); one('k2', G.sb.c2); one('k3', G.sb.c3); one('kS', G.sb.wcolor);
       G.cols.forEach((c, i) => one('x' + i, c.color));
-      const ar = arOf(D, g); needFont(G.font); return v + '--car:' + ar[0] + ' / ' + ar[1] + ';--bk1:' + G.back.c1 + ';--bk2:' + G.back.c2 + ';--cfont:' + FONTS[G.font].css + ';--cmid:' + (G.sizeMid / 100) + ';--cidx:' + (G.sizeIdx / 100) + ';';
+      const ar = arOf(D, g); needFont(G.font); return v + '--car:' + ar[0] + ' / ' + ar[1] + ';--carh:' + (ar[1] / ar[0]).toFixed(4) + ';--bk1:' + G.back.c1 + ';--bk2:' + G.back.c2 + ';--cfont:' + FONTS[G.font].css + ';--cmid:' + (G.sizeMid / 100) + ';--cidx:' + (G.sizeIdx / 100) + ';';
     };
     
     let css = '.' + scope + '{' + block('wizard') + '}';
@@ -3655,6 +3662,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const o = (m.own || {})[pid];
       if (o) return o === dev ? 'ok' : 'deny';
       if (pid === m.host || (m.players && m.players[pid] && m.players[pid].bot)) return 'deny';
+      // Sitzplatz ohne nachgewiesene Gerätekennung: nicht übernehmen (sonst reichte das bloße Behaupten der Kennung)
+      if (!dev && m.players && m.players[pid]) return 'deny';
       return dev ? 'bind' : 'ok';
     },
     bindPid(pid, dev) { if (S.code && runsGame() !== null) w(backend.update(gamePath(), { own: { [pid]: dev } })); },
@@ -7270,18 +7279,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   }
   // Stapel beim Austeilen außerhalb des Textflusses in die freie Fläche zwischen obere Spieler und Tischmitte setzen
   function placeDeck(main, cen, dk) {
+    // Stapel in die Mitte aller Spieler: zwischen den oberen Plätzen und dem eigenen Bereich; Text der Tischmitte ist währenddessen ausgeblendet
     dk.style.position = 'absolute'; dk.style.margin = '0';
     const op = dk.offsetParent || document.body, o = op.getBoundingClientRect(), c = cen.getBoundingClientRect();
     const cx = c.left + c.width / 2, half = 60;
-    let top = c.top + 4, first = null, last = null;
-    for (const e of cen.children) { if (e === dk || !e.getClientRects().length) continue; const r = e.getBoundingClientRect(); if (r.height > 0) { if (first === null || r.top < first) first = r.top; if (last === null || r.bottom > last) last = r.bottom; } }
-    main.querySelectorAll('.seats > .seat').forEach(e => { const r = e.getBoundingClientRect(); if (r.right > cx - half && r.left < cx + half && r.bottom < (first === null ? c.bottom : first) && r.bottom > top - 8) top = r.bottom + 8; });
-    // Fläche A: über dem Inhalt der Tischmitte; Fläche B: darunter bis zur eigenen Hand – die größere nehmen
     const me = main.querySelector('section.mine'), meTop = me && me.getClientRects().length ? me.getBoundingClientRect().top : c.bottom;
-    const A = [top, first === null ? meTop - 8 : first - 8], B = [last === null ? top : last + 8, meTop - 8];
-    let [t0, b0] = (A[1] - A[0] >= B[1] - B[0]) ? A : B;
-    const R = 1.5625;
-    top = t0; const bot = b0;
+    let top = c.top + 4;
+    main.querySelectorAll('.seats > .seat').forEach(e => { const r = e.getBoundingClientRect(); if (r.right > cx - half && r.left < cx + half && r.bottom < (c.top + meTop) / 2 + 40) top = Math.max(top, r.bottom + 8); });
+    const bot = Math.min(meTop, c.bottom) - 8, R = 1.5625;
     const cw = Math.max(46, Math.min(96, Math.floor((bot - top) / R))), h = cw * R;
     dk.style.setProperty('--cw', cw + 'px');
     dk.style.left = (cx - cw / 2 - o.left + op.scrollLeft) + 'px';
@@ -7797,10 +7802,12 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const rank = x => HX.isWiz(x) ? 900 : SUITS.indexOf(x[0]) * 20 + HX.val(x);
       const cards = handSort((d.left[me] || []).slice(), (a, b) => rank(a) - rank(b), x => HX.isWiz(x) ? [1, 0, 0] : [0, SUITS.indexOf(x[0]), HX.val(x)]), myTurn = d.phase === 'play' && d.turn === me && !lt;
       const legal = myTurn ? HX.legal(cards, d.cur.cards.map(x => x.c)) : [], sel = S.witSel || [];
+      // Schon abgegebene Weitergabe-Karten bleiben bis zum Tausch ausgegraut in der Hand
+      const given = d.phase === 'pass' && !needPass ? (((c.rd || {}).pass || {})[me] || []) : [];
       mine = '<div class="mebar' + (myTurn || needPass ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + '<span class="nm">' + esc(pname(me)) + '</span>' + dealTags(d, me) + '<span class="ss">' + (d.phase === 'pass' ? '' : '<span>Stiche: <b>' + d.won[me] + '</b></span>' + live(me)) + '<span class="pts">Gesamt: <b>' + c.tot.total[me] + ' P</b></span></span>' + (recv.length ? '<small class="blindnote">Die markierten Karten hast du <span class="gotnote">von ' + esc(pname(giver)) + ' bekommen</span>.</small>' : '') + autoNote(me) + '</div>' +
         (cards.length ? fanHTML(cards.length, cardW(), (k, ml) => {
           const card = cards[k];
-          if (d.phase === 'pass') return '<button class="hc' + (needPass ? ' ok' : '') + (needPass && sel.indexOf(card) >= 0 ? ' sel passsel' : '') + '" style="margin-left:' + ml + 'px" data-act="witToggle" data-c="' + card + '"' + (needPass ? '' : ' tabindex="-1"') + '>' + witCardHTML(card, X) + '</button>';
+          if (d.phase === 'pass') return '<button class="hc' + (needPass ? ' ok' : '') + (needPass && sel.indexOf(card) >= 0 ? ' sel passsel' : '') + (!needPass && given.indexOf(card) >= 0 ? ' no passgone' : '') + '" style="margin-left:' + ml + 'px" data-act="witToggle" data-c="' + card + '"' + (needPass ? '' : ' tabindex="-1"') + '>' + witCardHTML(card, X) + '</button>';
           const ok = legal.indexOf(card) >= 0;
           return '<button class="hc' + (myTurn ? (ok ? ' ok' : ' no') : '') + (S.sel === card && myTurn ? ' sel' : '') + (recv.indexOf(card) >= 0 ? ' got' : '') + '" style="margin-left:' + ml + 'px" data-act="witCard" data-c="' + card + '"' + (myTurn ? '' : ' tabindex="-1"') + '>' + witCardHTML(card, X) + '</button>';
         }) : '<div class="hand"></div>');
