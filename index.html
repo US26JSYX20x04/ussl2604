@@ -1120,8 +1120,14 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 .witsp .card { --cw: 18px; box-shadow: 0 1px 3px rgba(0, 0, 0, .45); }
 .witsp .card .cn, .witsp .card .cm { font-size: 8px; }
 /* Erinnerung: 6-mal blinken, alle 0,5 s */
-.turnflash.tfblink { animation: tfblink .5s linear 6 forwards; }
-@keyframes tfblink { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0; } }
+.turnflash.tfblink { animation: unoin .2s ease-out; }
+
+/* Spielerfelder: Platz wie für 8 Zeichen, längere Namen werden gekürzt statt das Feld zu verbreitern */
+.seat > .st > .nm, .mebar > .nm { max-width: 6.2em; }
+/* Vorauswahl: Karte angehoben, gestrichelt umrandet, unten „nächste“ */
+.hc.pre { transform: translateY(-12px); }
+.hc.pre .card { outline: 3px dashed var(--brass-2); outline-offset: 1px; }
+.hc.pre::after { content: "nächste"; position: absolute; bottom: -9px; left: 50%; transform: translateX(-50%); color: var(--ink); font: 700 .68rem var(--body); padding: 0 6px; border-radius: 99px; pointer-events: none; background: var(--brass-2); white-space: nowrap; z-index: 2; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1139,7 +1145,7 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '284899ea';
+var APP_V = 'a57cfbe6';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3483,7 +3489,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const GAME_KEYS = ['wizard', 'witches', 'skipbo', 'uno', 'phase10'];
   
   const XG = {}, XPRE = {}, XDEF = {}, VAL_KEYS = { animMode: ['seq', 'all'] };
-  const SET_KEYS = { botMin: 1, botMs: 1, overlap: 1, animMax: 1, animMs: 1, unoHand: 1, unoD2: 1, unoD4: 1, unoS: 1, unoR: 1, unoW: 1, sbHand: 1, witGoal: 1, seats: 1, p10Hand: 1, tlSec: 1, lbP1: 1, lbP2: 1, lbP3: 1, lbP4: 1, lbP5: 1, lbP6: 1 }, TOG_KEYS = { unoStay: 1, unoTill: 1, unoDbl: 1, unoAny: 1, p10Free: 1, spec: 1, anim: 1, pub: 1, tlOn: 1, backup: 1, lbOwn: 1, tfOn: 1, flipOff: 1 };
+  const SET_KEYS = { botMin: 1, botMs: 1, overlap: 1, animMax: 1, animMs: 1, unoHand: 1, unoD2: 1, unoD4: 1, unoS: 1, unoR: 1, unoW: 1, sbHand: 1, witGoal: 1, seats: 1, p10Hand: 1, tlSec: 1, nameMax: 1, lbP1: 1, lbP2: 1, lbP3: 1, lbP4: 1, lbP5: 1, lbP6: 1 }, TOG_KEYS = { unoStay: 1, unoTill: 1, unoDbl: 1, unoAny: 1, p10Free: 1, spec: 1, anim: 1, pub: 1, tlOn: 1, backup: 1, lbOwn: 1, tfOn: 1, flipOff: 1 };
   const GAME_ORDER = ['wizard', 'witches', 'druids', 'skullking', 'uno', 'nomercy', 'allwild', 'passt', 'phase10', 'cabo', 'texas', 'loveletter', 'skipbo', 'dalmuti', 'arschloch', 'werwolf'];
   const gameList = () => GAME_ORDER.filter(k => GAMES[k]).concat(Object.keys(GAMES).filter(k => GAME_ORDER.indexOf(k) < 0));
   const xKey = k => { const m = /^([a-z]{2})_([A-Za-z0-9]+)$/.exec(k || ''), g = m && XPRE[m[1]]; return g ? { g, id: m[2] } : null; };
@@ -3809,13 +3815,15 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
 
   const isHost = () => !!S.meta && S.meta.host === S.pid;
   const gamePath = () => 'games/' + S.code;
-  const players = () => Object.entries((S.meta && S.meta.players) || {}).filter(e => e[1]).map(e => Object.assign({ id: e[0] }, e[1])).sort((a, b) => (a.at || 0) - (b.at || 0));
-  const pname = id => { const p = (S.meta && S.meta.players && S.meta.players[id]) || (S.meta && S.meta.watchers && S.meta.watchers[id]); return p && p.name ? String(p.name).slice(0, 8) : 'Jemand'; };
+  const players = () => Object.entries((S.meta && S.meta.players) || {}).filter(e => e[1]).map(e => Object.assign({ id: e[0] }, e[1], e[1].name ? { name: String(e[1].name).slice(0, nameMax()) } : {})).sort((a, b) => (a.at || 0) - (b.at || 0));
+  const pname = id => { const p = (S.meta && S.meta.players && S.meta.players[id]) || (S.meta && S.meta.watchers && S.meta.watchers[id]); return p && p.name ? String(p.name).slice(0, nameMax()) : 'Jemand'; };
+  // Höchstlänge der Namen: legt die Spielleitung in der Lobby fest (4–16, Standard 8); längere Namen werden in der Anzeige gekürzt
+  const nameMax = () => { const v = +((S.meta && S.meta.settings) || {}).nameMax; return v >= 4 && v <= 16 ? Math.round(v) : 8; };
   const isBot = id => { if (UI.probe) return id === UI.probe; const p = S.meta && S.meta.players && S.meta.players[id]; return !!(p && (p.bot || p.auto)); };
   const isRealBot = id => { const p = S.meta && S.meta.players && S.meta.players[id]; return !!(p && p.bot); };
   const seatCap = () => Math.max(2, Math.min(18, settings().seats || 6));
   const cap0 = seatCap;
-  const settings = () => Object.assign({ seats: 6, botMs: 300, tfOn: false, tlOn: false, tlSec: 60, backup: true, lbOwn: false, lbP1: 3, lbP2: 2, lbP3: 1, lbP4: 0, lbP5: 0, lbP6: 0, p10Hand: 10, p10Free: false, spec: false, overlap: 50, anim: true, animMode: 'seq', animMs: 350, animMax: 6 }, XDEF, { game: 'wizard', sbStock: 0, unoHand: 7, unoD2: 8, unoD4: 4, unoS: 2, unoR: 2, unoW: 4, unoTill: false, unoDbl: true, unoStay: true, sbHand: 5, p10List: null, p10NoPts: false, witGoal: 70, variant: 'standard', blind: false, rounds: 0, start: 1, mono: false }, (S.meta && S.meta.settings) || {});
+  const settings = () => Object.assign({ seats: 6, nameMax: 8, botMs: 300, tfOn: false, tlOn: false, tlSec: 60, backup: true, lbOwn: false, lbP1: 3, lbP2: 2, lbP3: 1, lbP4: 0, lbP5: 0, lbP6: 0, p10Hand: 10, p10Free: false, spec: false, overlap: 50, anim: true, animMode: 'seq', animMs: 350, animMax: 6 }, XDEF, { game: 'wizard', sbStock: 0, unoHand: 7, unoD2: 8, unoD4: 4, unoS: 2, unoR: 2, unoW: 4, unoTill: false, unoDbl: true, unoStay: true, sbHand: 5, p10List: null, p10NoPts: false, witGoal: 70, variant: 'standard', blind: false, rounds: 0, start: 1, mono: false }, (S.meta && S.meta.settings) || {});
   
   function plan(P, st) {
     if (st.mono) return { ok: P === 3 || P === 4, start: 4, max: 12, total: st.rounds ? Math.min(st.rounds, 12) : 12 };
@@ -4243,7 +4251,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     return { code, host: S.pid, status: 'lobby', g: 0, at: Date.now(), rid: genId(), designId: 'default', settings: { variant: 'hidden', blind: true, rounds: 0, botMin: 15 }, players: { [S.pid]: { name: S.name, av: S.av, at: Date.now() } } };
   }
   function needName() {
-    S.name = S.name.trim().slice(0, 8);
+    S.name = S.name.trim().slice(0, 16);
     if (!S.name) { S.err = 'Bitte gib zuerst deinen Namen ein.'; render(); return true; }
     LS.set('wiz.name', S.name);
     return false;
@@ -4393,7 +4401,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     return pools.some(pl => Object.keys(pl).some(id => id !== self && pl[id] && String(pl[id].name || '').trim().toLowerCase() === n && !(pl === m.watchers && (m.players || {})[id])));
   }
   function uniqName(name, self) {
-    name = String(name || '').trim().slice(0, 8); if (!nameTaken(name, self)) return name;
+    name = String(name || '').trim().slice(0, nameMax()); if (!nameTaken(name, self)) return name;
     for (let i = 2; i < 99; i++) { const c = name.slice(0, 6 - String(i).length - 1) + ' ' + i; if (!nameTaken(c, self)) return c; }
     return name;
   }
@@ -4671,11 +4679,16 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (!k || !myTurnNow()) return;
     [5, 10].forEach(n => { if (remOn(n)) UI.remT.push(setTimeout(() => { if (UI.twSeenK === k && myTurnNow() && !document.hidden) turnBlink(); }, n * 1000)); });
   }
+  // Blinken selbst gesteuert (auf dem iPad lief die CSS-Animation nicht); ausgeschaltet bleibt der Hinweis die 3 s einfach stehen
+  const blinkOn = () => LS.get('wiz.tblink') !== '0';
   function turnBlink() {
     const old = document.querySelector('.turnflash'); if (old) old.remove();
+    clearInterval(UI.blinkI);
     const d = document.createElement('div'); d.className = 'unoflash turnflash tfblink'; d.setAttribute('role', 'alert');
     d.innerHTML = '<b>Du bist dran!</b>';
-    document.body.appendChild(d); setTimeout(() => d.remove(), 3050);
+    document.body.appendChild(d);
+    if (blinkOn()) { let n = 0; UI.blinkI = setInterval(() => { n++; d.style.visibility = n % 2 ? 'hidden' : 'visible'; if (n >= 11) clearInterval(UI.blinkI); }, 250); }
+    setTimeout(() => { clearInterval(UI.blinkI); d.remove(); }, 3000);
   }
   function turnFlash() {
     const old = document.querySelector('.turnflash'); if (old) old.remove();
@@ -5073,7 +5086,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     'const rnd = () => { const a = new Uint32Array(1); crypto.getRandomValues(a); return a[0] / 4294967296; };',
     'const esc = s => String(s == null ? "" : s), pname = p => String(p), isHost = () => true, offline = () => false, toast = () => {};',
     'const avatar = () => "", seatTags = () => "", autoNote = () => "", banner = () => "", topbarHTML = (t, c) => t + c, lobbyFoot = () => "", specBar = () => "", minisHTML = () => "", cardW = () => 72, requestRender = () => {};',
-    'const aroundMe = o => o.slice(), fanHTML = () => "", plainCard = () => "", backHTML = () => "", dzTags = () => "", bidModeBtn = () => "", ordNum = () => "";',
+    'const aroundMe = o => o.slice(), fanHTML = () => "", plainCard = () => "", backHTML = () => "", dzTags = () => "", bidModeBtn = () => "", ordNum = () => "", preIs = () => false;',
     'const handSort = (a, f) => a.sort(f), bidSlider = () => false, bidSliderHTML = () => "", canDeal = () => true, dealWaitHTML = () => "";',
     'const tableX = () => { const games = {}; Object.keys(XG).forEach(k => { games[k] = { cols: (XG[k].cols || []).map(c => ({ name: c[0], color: c[1], sym: c[2] || "" })) }; }); return { D: { games: games }, imgs: {} }; };',
     'const window = { innerWidth: 900 }, LS = { get: () => null, set: () => {}, del: () => {} };',
@@ -5239,6 +5252,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     hsortSet(el) { LS.set('wiz.hsort', el.dataset.v); renderModal(true); render(); },
     hrevTog() { LS.set('wiz.hrev', LS.get('wiz.hrev') === '1' ? '0' : '1'); renderModal(true); render(); },
     cbLay() { LS.set('wiz.cbcol', LS.get('wiz.cbcol') === '1' ? '0' : '1'); render(); },
+    blinkTog() { LS.set('wiz.tblink', blinkOn() ? '0' : '1'); renderModal(true); },
     remTog(el) { const n = +el.dataset.v; if (n !== 5 && n !== 10) return; LS.set('wiz.trem' + n, remOn(n) ? '0' : '1'); renderModal(true); },
     tflTog() { LS.set('wiz.tflash', flashOn() ? '0' : '1'); if (flashOn()) turnFlash(); renderModal(true); },
     sigTog() { LS.set('wiz.sig', sigOn() ? '0' : '1'); titleMark(myTurnNow() && document.hidden); toast(sigOn() ? 'Ist dein Tab im Hintergrund, zeigt der Titel „● Du bist dran“, sobald du am Zug bist.' : 'Hinweis im Tab-Titel aus.'); renderModal(true); },
@@ -5306,6 +5320,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     xg(el) {
       const k = S.meta && S.meta.game, G = XG[k], s = G && xState(k);
       if (!s) return;
+      if (el.dataset.a === 'c' && PRE_X[k] && s.order.indexOf(S.pid) >= 0 && !s.over && !(s.order[s.turn] === S.pid && PRE_X[k](s) && !(UI.trickHold > Date.now()))) { preToggleX(s, el.dataset.c); return; }
       const r = G.act(el.dataset.a, el.dataset, s, S.pid);
       if (r && typeof r === 'object') xgWrite(k, r); else render();
     },
@@ -5391,6 +5406,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     },
     witCard(el) {
       const c = wctx();
+      if (c && c.seated && c.d.phase === 'play' && (c.d.turn !== c.me || lingerTrick(c))) { preToggle(c, el.dataset.c); return; }
       if (!c || !c.seated || c.d.phase !== 'play' || c.d.turn !== c.me || lingerTrick(c)) return;
       const hand = c.d.left[c.me] || [], card = el.dataset.c;
       if (HX.legal(hand, c.d.cur.cards.map(x => x.c)).indexOf(card) < 0) { toast('Du musst die angespielte Farbe bedienen.'); return; }
@@ -5500,7 +5516,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     },
     pick(el) { const c = ctx(); if (c && c.d.phase === 'trump' && c.d.dealer === c.me && SUITS.indexOf(el.dataset.s) >= 0) w(backend.update(c.path, { pick: el.dataset.s })); },
     card(el) {
-      const c = ctx(); if (!c || !c.seated || c.d.phase !== 'play' || c.d.turn !== c.me || lingerTrick(c)) return;
+      const c = ctx();
+      if (c && c.seated && c.d.phase !== 'done' && !(c.d.phase === 'play' && c.d.turn === c.me && !lingerTrick(c))) { if (el.dataset.c !== 'blind') preToggle(c, el.dataset.c); return; }
+      if (!c || !c.seated || c.d.phase !== 'play' || c.d.turn !== c.me || lingerTrick(c)) return;
       const hand = c.d.left[c.me] || [];
       const card = el.dataset.c === 'blind' ? hand[0] : el.dataset.c;
       if (!card || E.legalCards(hand, c.d.cur.cards.map(x => x.c), c.d.mono).indexOf(card) < 0) { toast('Du musst die angespielte Farbe bedienen.'); return; }
@@ -5656,7 +5674,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     cropFit(el) { CR.ox = 0; CR.oy = 0; cropSet('zoom', el.dataset.v === 'fit' ? cropFitZoom() : 1); },
     rename(el) { if (S.meta && S.meta.status === 'playing') return; UI.rename = el.dataset.id; UI.rnErr = ''; S.modal = 'rename'; renderModal(true); setTimeout(() => { const i = $('#rn-name'); if (i) { i.focus(); i.select(); } }, 30); },
     renameSave() {
-      const i = $('#rn-name'), v = i ? i.value.trim().slice(0, 8) : '', id = UI.rename;
+      const i = $('#rn-name'), v = i ? i.value.trim().slice(0, nameMax()) : '', id = UI.rename;
       if (v && nameTaken(v, id)) { UI.rnErr = 'Den Namen „' + v + '“ gibt es im Raum schon.'; renderModal(true); return; }
       UI.rnErr = '';
       if (v && isHost() && isRealBot(id)) w(backend.update(gamePath(), { players: { [id]: { name: v } } }));
@@ -6733,6 +6751,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (eb) { eb.hidden = !(S.code && S.meta && S.joined); if (eb.hidden) eb.classList.remove('open'); }
     renderModal(false);
     syncImgNeed();
+    if (S.pre) { clearTimeout(UI.preT); UI.preT = setTimeout(preTick, 250); }
   }
   
   
@@ -6828,7 +6847,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const dis = S.busy || S.mode === 'none' ? ' disabled' : '';
     return '<main class="home">' + banner() +
       '<header class="brand"><div class="fan" aria-hidden="true">' + fan + '</div><h1>Kartenrunde</h1><p class="sub">Dreizehn Kartenspiele, online zusammen von verschiedenen Orten.</p></header>' +
-      '<section class="panel start"><label for="in-name">Dein Name und dein Bild</label><div class="namerow"><button class="avbtn" data-act="modal" data-m="avatar" aria-label="Dein Bild wählen">' + avHTML(S.av, S.name, 'me', 'me', ' big') + '</button><input id="in-name" type="text" maxlength="8" autocomplete="off" placeholder="z. B. Kai" value="' + esc(S.name) + '"><button class="btn small" data-act="modal" data-m="avatar">Bild wählen</button></div>' +
+      '<section class="panel start"><label for="in-name">Dein Name und dein Bild</label><div class="namerow"><button class="avbtn" data-act="modal" data-m="avatar" aria-label="Dein Bild wählen">' + avHTML(S.av, S.name, 'me', 'me', ' big') + '</button><input id="in-name" type="text" maxlength="16" autocomplete="off" placeholder="z. B. Kai" value="' + esc(S.name) + '"><button class="btn small" data-act="modal" data-m="avatar">Bild wählen</button></div>' +
       '<div class="startrow"><button class="btn primary" data-act="create"' + dis + '>' + (S.busy ? 'Einen Moment …' : 'Neuen Raum erstellen') + '</button>' +
       '<div class="joinbox"><label class="vh" for="in-code">Raumcode</label><input id="in-code" type="text" maxlength="12" autocapitalize="characters" autocomplete="off" placeholder="Raumcode" value="' + esc(S.joinCode) + '"><button class="btn" data-act="join"' + dis + '>Beitreten</button></div></div>' +
       (S.err ? '<p class="err" role="alert">' + esc(S.err) + '</p>' : '') + '</section>' +
@@ -6897,7 +6916,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     return '<main class="lobby">' + banner() +
       '<header class="lobhead"><div class="codebox"><span class="eyebrow">Raumcode</span><span class="code">' + esc(S.code) + '</span></div>' +
       '<div class="headbtns">' + (host ? '<button class="btn primary" data-act="start"' + (!canStart ? ' disabled' : '') + '>' + GI.name + ' starten</button>' : '') + '<button class="btn" data-act="copy">' + (S.mode === 'peer' && /^https?:/.test(location.protocol) ? 'Einladungslink kopieren' : 'Code kopieren') + '</button><button class="btn ghost" data-act="leave">Verlassen</button></div></header>' +
-      '<div class="lobgrid"><section class="panel">' + (host ? stepper('Plätze am Tisch', 'seats', cap, 1, 2, 18) : '') +
+      '<div class="lobgrid"><section class="panel">' + (host ? stepper('Plätze am Tisch', 'seats', cap, 1, 2, 18) + stepper('Namen höchstens', 'nameMax', nameMax() + ' Zeichen', 1, 4, 16) : '') +
       (host ? '<button class="btn small addbot" data-act="addBot"' + (ps.length >= cap ? ' disabled' : '') + '>Computergegner hinzufügen</button>' : '') +
       (host ? '<div class="tlrow">' + toggle('Zugzeit begrenzen', st.tlOn ? 'Wer länger als ' + tlSec() + ' Sekunden braucht, bekommt einen Computerzug. Alle sehen die Restzeit.' : 'Aus: Jeder hat so viel Zeit, wie er braucht.', 'tlOn', !!st.tlOn) + (st.tlOn ? stepper('Zeit je Zug', 'tlSec', tlSec() + ' s', 15, 15, 300) : '') + '</div>' : st.tlOn ? '<p class="fine">Zugzeit: ' + tlSec() + ' Sekunden, danach spielt der Computer den Zug.</p>' : '') +
       '<h2 class="tishead' + (host ? ' sepb' : '') + '">Am Tisch <small>' + ps.length + ' von ' + cap + '</small>' + (host && ps.length >= 2 ? '<button class="btn small" data-act="shuffleSeats">Plätze mischen</button>' : '') + '</h2>' +
@@ -6984,7 +7003,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     let rows = '', row = '';
     cards.forEach((card, i) => {
       const key = hide ? 'blind' : card, ok = legal.indexOf(card) >= 0;
-      row += '<button class="hc' + (myTurn ? (ok ? ' ok' : ' no') : '') + (S.sel === key && myTurn ? ' sel' : '') + '" style="margin-left:' + (i % per ? Math.round(step - cw) : 0) + 'px" data-act="card" data-c="' + key + '"' + (myTurn ? '' : ' tabindex="-1"') + ' aria-label="' + (hide ? 'Verdeckte Karte' : esc(cardName(card, X.D))) + '">' + cardHTML(hide ? null : card, X) + '</button>';
+      row += '<button class="hc' + (myTurn ? (ok ? ' ok' : ' no') : '') + (S.sel === key && myTurn ? ' sel' : '') + (!myTurn && preIs(card) ? ' pre' : '') + '" style="margin-left:' + (i % per ? Math.round(step - cw) : 0) + 'px" data-act="card" data-c="' + key + '"' + (myTurn ? '' : ' tabindex="-1"') + ' aria-label="' + (hide ? 'Verdeckte Karte' : esc(cardName(card, X.D))) + '">' + cardHTML(hide ? null : card, X) + '</button>';
       if ((i + 1) % per === 0 || i === n - 1) { rows += '<div class="hrow">' + row + '</div>'; row = ''; }
     });
     return '<div class="hand" style="--cw:' + cw + 'px">' + rows + '</div>';
@@ -8089,6 +8108,53 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     (d.tricks || []).forEach(t => { if (t.winner === p) t.cards.forEach(pl => { if (WIT_SP.indexOf(pl.c) >= 0) got.push(pl.c); }); });
     return got.length ? '<span class="witsp" title="Sonderkarten in den Stichen">' + got.sort((a, b) => WIT_SP.indexOf(a) - WIT_SP.indexOf(b)).map(c => witCardHTML(c, X)).join('') + '</span>' : '';
   }
+  // ---- Karte vorauswählen (Wizard, Witches): wer nicht dran ist, merkt sich eine Karte; sie wird gespielt, sobald man dran ist ----
+  // Skull King, Druids, Texas Showdown: wann eine Karte gerade wirklich gespielt werden kann
+  const PRE_X = { texas: s => !s.over && !s.choose, skullking: s => !s.over && s.order.every(p => typeof (s.bids || {})[p] === 'number'), druids: s => !s.over };
+  const preRound = () => { const g = (S.meta && S.meta.game) || 'wizard'; if (PRE_X[g]) { const s = xState(g); return s ? s.round : null; } const c = g === 'witches' ? wctx() : g === 'wizard' ? ctx() : null; return c && c.rd ? c.rd.n : null; };
+  const preKey = () => S.code + ':' + ((S.meta && S.meta.game) || 'wizard') + ':' + ((S.meta && S.meta.g) || 0) + ':' + preRound();
+  const preIs = card => !!S.pre && S.pre.c === String(card) && S.pre.k === preKey();
+  function preToggleX(s, card) {
+    if (card == null || !(s.hands[S.pid] || []).some(x => String(x) === String(card))) return;
+    S.pre = preIs(card) ? null : { c: String(card), k: preKey() };
+    render();
+  }
+  function preToggle(c, card) {
+    if (!card || (c.d.left[c.me] || []).indexOf(card) < 0) return;
+    S.pre = preIs(card) ? null : { c: card, k: preKey() };
+    render();
+  }
+  function preTick() {
+    if (!S.pre) return;
+    const g = (S.meta && S.meta.game) || 'wizard';
+    if (!S.meta || S.meta.status !== 'playing' || (g !== 'wizard' && g !== 'witches' && !PRE_X[g]) || S.pre.k !== preKey()) { S.pre = null; return; }
+    if (PRE_X[g]) {
+      const s = xState(g), me = S.pid; if (!s) return;
+      const hand = s.hands[me] || [], card = hand.find(x => String(x) === S.pre.c);
+      if (card === undefined || s.over) { S.pre = null; return; }
+      if (s.order[s.turn] !== me || !PRE_X[g](s) || (S.meta.players[me] || {}).auto) return;
+      if (document.body.classList.contains('tricklock') || (UI.trickHold || 0) > Date.now()) { clearTimeout(UI.preT); UI.preT = setTimeout(preTick, 400); return; }
+      S.pre = null; UI.x = UI.x || {}; UI.x.sel = null;
+      // wie zweimal Antippen: erst wählen, dann spielen (Tigress/Gaia fragen danach wie gewohnt nach)
+      const G = XG[g], dd = { c: String(card) };
+      let r = G.act('c', dd, s, me);
+      if (!(r && typeof r === 'object') && UI.x && String(UI.x.sel) === String(card)) r = G.act('c', dd, s, me);
+      if (r && typeof r === 'object') xgWrite(g, r); else render();
+      return;
+    }
+    const c = g === 'witches' ? wctx() : ctx();
+    if (!c || !c.seated || !c.d) { S.pre = null; return; }
+    const d = c.d, hand = d.left[c.me] || [], card = S.pre.c;
+    if (hand.indexOf(card) < 0 || d.phase === 'done') { S.pre = null; return; }
+    if (d.phase !== 'play' || d.turn !== c.me || (S.meta.players[c.me] || {}).auto) return;
+    // Ich bin dran, aber der letzte Stich wird noch gezeigt/eingesammelt: gleich noch einmal versuchen
+    if (lingerTrick(c) || document.body.classList.contains('tricklock')) { clearTimeout(UI.preT); UI.preT = setTimeout(preTick, 400); return; }
+    S.pre = null;
+    const led = d.cur.cards.map(x => x.c), legal = g === 'witches' ? HX.legal(hand, led) : E.legalCards(hand, led, d.mono);
+    if (legal.indexOf(card) < 0) { toast('Deine vorgewählte Karte darfst du nicht spielen – du musst bedienen. Bitte neu wählen.'); requestRender(); return; }
+    S.sel = null;
+    w(backend.update(c.path, { plays: { [d.playCount]: { p: c.me, c: card } } }));
+  }
   function witHTML(X) {
     const c = wctx();
     if (!c) return WAIT_HTML;
@@ -8143,7 +8209,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           const card = cards[k];
           if (d.phase === 'pass') return '<button class="hc' + (needPass ? ' ok' : '') + (needPass && sel.indexOf(card) >= 0 ? ' sel passsel' : '') + (!needPass && given.indexOf(card) >= 0 ? ' no passgone' : '') + '" style="margin-left:' + ml + 'px" data-act="witToggle" data-c="' + card + '"' + (needPass ? '' : ' tabindex="-1"') + '>' + witCardHTML(card, X) + '</button>';
           const ok = legal.indexOf(card) >= 0;
-          return '<button class="hc' + (myTurn ? (ok ? ' ok' : ' no') : '') + (S.sel === card && myTurn ? ' sel' : '') + (recv.indexOf(card) >= 0 ? ' got' : '') + '" style="margin-left:' + ml + 'px" data-act="witCard" data-c="' + card + '"' + (myTurn ? '' : ' tabindex="-1"') + '>' + witCardHTML(card, X) + '</button>';
+          return '<button class="hc' + (myTurn ? (ok ? ' ok' : ' no') : '') + (S.sel === card && myTurn ? ' sel' : '') + (!myTurn && preIs(card) ? ' pre' : (recv.indexOf(card) >= 0 ? ' got' : '')) + '" style="margin-left:' + ml + 'px" data-act="witCard" data-c="' + card + '"' + (myTurn ? '' : ' tabindex="-1"') + '>' + witCardHTML(card, X) + '</button>';
         }) : emptyHand());
     } else mine = specBar(m.order);
     return '<main class="game gm-witches">' + banner() + topbarHTML('Witches', '<span class="chip">Runde ' + c.rd.n + '</span><span class="chip">bis ' + c.goal + ' Feuerpunkte</span>') + '<section class="seats">' + seats + '</section><section class="center">' + center + (status ? '<p class="status" aria-live="polite">' + status + '</p>' : '') + '</section><section class="mine">' + mine + '</section></main>';
@@ -8302,7 +8368,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (S.joined) d += '<button class="btn" data-act="modal" data-m="avatar">Mein Bild ändern</button>';
     h += '<details class="mfold mdisp"' + (UI.dispOpen ? ' open' : '') + '><summary class="mhead">Darstellung <small>nur auf diesem Gerät</small></summary><div class="mleadin">' + d + '</div></details>';
     // 5. Hinweise, wenn man dran ist
-    h += sec('Wenn du dran bist', '<button class="btn" data-act="tflTog">Großer Hinweis „Du bist dran!“: ' + (flashOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>' + [5, 10].map(n => '<button class="btn" data-act="remTog" data-v="' + n + '">Blinken nach ' + n + ' s ohne Zug: ' + (remOn(n) ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>').join('') + '<button class="btn" data-act="sigTog">„Du bist dran“ im Tab-Titel: ' + (sigOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button><button class="btn" data-act="sndTog">Ton, wenn du dran bist: ' + (sndOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>');
+    h += sec('Wenn du dran bist', '<button class="btn" data-act="tflTog">Großer Hinweis „Du bist dran!“: ' + (flashOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>' + [5, 10].map(n => '<button class="btn" data-act="remTog" data-v="' + n + '">Erinnerung nach ' + n + ' s ohne Zug: ' + (remOn(n) ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>').join('') + '<button class="btn" data-act="blinkTog">Erinnerung blinkt: ' + (blinkOn() ? 'an (ausschalten, Hinweis bleibt dann einfach stehen)' : 'aus (einschalten)') + '</button>' + '<button class="btn" data-act="sigTog">„Du bist dran“ im Tab-Titel: ' + (sigOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button><button class="btn" data-act="sndTog">Ton, wenn du dran bist: ' + (sndOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>');
     // Spielleitung zuletzt, direkt vor „Raum verlassen“
     h += UI.menuLead || '';
     return h + '<div class="mhead sep"></div>' + (host && playing ? '<button class="btn danger" data-act="abort">Spiel abbrechen</button>' : '') + '<button class="btn ghost" data-act="leave">Raum verlassen</button></div>';
@@ -8515,7 +8581,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     else if (S.modal === 'avatar') { title = 'Dein Bild'; body = avatarModalHTML(); cls += ' mid'; }
     else if (S.modal === 'rename') {
       title = UI.rename === S.pid ? 'Deinen Namen ändern' : 'Computergegner umbenennen'; cls += ' narrow';
-      body = '<div class="field"><label for="rn-name">Neuer Name</label><input id="rn-name" type="text" maxlength="8" value="' + esc(UI.rename === S.pid ? (S.name || pname(UI.rename)) : pname(UI.rename)) + '"></div>' + (UI.rnErr ? '<p class="err" role="alert">' + esc(UI.rnErr) + '</p>' : '') + '<div class="sumfoot"><button class="btn primary" data-act="renameSave">Speichern</button><button class="btn" data-act="closeModal">Abbrechen</button></div>';
+      body = '<div class="field"><label for="rn-name">Neuer Name</label><input id="rn-name" type="text" maxlength="' + nameMax() + '" value="' + esc(UI.rename === S.pid ? (S.name || pname(UI.rename)) : pname(UI.rename)) + '"></div>' + (UI.rnErr ? '<p class="err" role="alert">' + esc(UI.rnErr) + '</p>' : '') + '<div class="sumfoot"><button class="btn primary" data-act="renameSave">Speichern</button><button class="btn" data-act="closeModal">Abbrechen</button></div>';
     }
     else if (S.modal === 'confirm') {
       const c = UI.confirm || {};
@@ -8949,7 +9015,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         let mine;
         if (seated) {
           const hand = s.hands[me] || [], lg = myTurn ? legal(s, me) : [];
-          mine = xMe(me, myTurn, '<span>Stiche: <b>' + s.won[me] + '</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span>') + xFan(hand.length, cw, k => ({ c: (myTurn ? (lg.indexOf(hand[k]) >= 0 ? 'ok' : 'no') : '') + (UI.x.sel === hand[k] && myTurn ? ' sel' : ''), a: 'data-a="c" data-c="' + hand[k] + '"', h: card(hand[k], X) }));
+          mine = xMe(me, myTurn, '<span>Stiche: <b>' + s.won[me] + '</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span>') + xFan(hand.length, cw, k => ({ c: (myTurn ? (lg.indexOf(hand[k]) >= 0 ? 'ok' : 'no') : '') + (UI.x.sel === hand[k] && myTurn ? ' sel' : '') + (!myTurn && preIs(hand[k]) ? ' pre' : ''), a: 'data-a="c" data-c="' + hand[k] + '"', h: card(hand[k], X) }));
         } else mine = specBar(s.order);
         return xMain(K, { chips: '<span class="chip">Runde ' + s.round + '</span><span class="chip">bis ' + s.goal + ' Minuspunkte</span>', seats: seats, center: center, status: status, mine: mine });
       },
@@ -10305,7 +10371,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         let mine;
         if (seated) {
           const rank = c => isNum(c) ? SU.indexOf(c[0]) * 20 + val(c) : 100 + power(c), hand = handSort((s.hands[me] || []).slice(), (a, b) => rank(a) - rank(b), c => isNum(c) ? [0, SU.indexOf(c[0]), val(c)] : [1, 0, power(c)]), lg = myTurn ? legal(hand, s.trick) : [];
-          mine = xMe(me, myTurn, '<span>Ansage: <b>' + (typeof bids[me] === 'number' ? bids[me] : '–') + '</b></span><span>Stiche: <b>' + s.won[me] + '</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span>') + xFan(hand.length, cw, k => ({ c: (myTurn ? (lg.indexOf(hand[k]) >= 0 ? 'ok' : 'no') : '') + (U.sel === hand[k] && myTurn ? ' sel' : ''), a: 'data-a="c" data-c="' + hand[k] + '"', h: card(hand[k], X) }));
+          mine = xMe(me, myTurn, '<span>Ansage: <b>' + (typeof bids[me] === 'number' ? bids[me] : '–') + '</b></span><span>Stiche: <b>' + s.won[me] + '</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span>') + xFan(hand.length, cw, k => ({ c: (myTurn ? (lg.indexOf(hand[k]) >= 0 ? 'ok' : 'no') : '') + (U.sel === hand[k] && myTurn ? ' sel' : '') + (!myTurn && preIs(hand[k]) ? ' pre' : ''), a: 'data-a="c" data-c="' + hand[k] + '"', h: card(hand[k], X) }));
         } else mine = specBar(s.order);
         return xMain(K, { chips: '<span class="chip">Durchgang ' + s.round + ' von ' + s.rounds + '</span><span class="chip">' + s.cards + (s.cards === 1 ? ' Karte' : ' Karten') + '</span>' + (allBid(s) || s.over ? '<span class="chip">Stiche angesagt: ' + s.order.reduce((x, q) => x + (+((s.over && s.over.bids) || bids)[q] || 0), 0) + '/' + s.cards + '</span>' : ''), seats: seats, center: center, status: status, mine: mine });
       },
@@ -10473,7 +10539,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         let mine;
         if (seated) {
           const rank = c => isDom(c) ? DO.indexOf(c[0]) * 20 + val(c) : 200, hand = handSort((s.hands[me] || []).slice(), (a, b) => rank(a) - rank(b), c => isDom(c) ? [0, DO.indexOf(c[0]), val(c)] : [1, 0, 0]), lg = myTurn ? legal(s, me) : [];
-          mine = xMe(me, myTurn, '<span class="dline"><span>Runde: <b>' + sum(me) + ' P</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span></span>' + pilesHTML(s, me)) + xFan(hand.length, cw, k => ({ c: (myTurn ? (lg.indexOf(hand[k]) >= 0 ? 'ok' : 'no') : '') + (U.sel === hand[k] && myTurn ? ' sel' : ''), a: 'data-a="c" data-c="' + hand[k] + '"', h: card(hand[k], X) }));
+          mine = xMe(me, myTurn, '<span class="dline"><span>Runde: <b>' + sum(me) + ' P</b></span><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span></span>' + pilesHTML(s, me)) + xFan(hand.length, cw, k => ({ c: (myTurn ? (lg.indexOf(hand[k]) >= 0 ? 'ok' : 'no') : '') + (U.sel === hand[k] && myTurn ? ' sel' : '') + (!myTurn && preIs(hand[k]) ? ' pre' : ''), a: 'data-a="c" data-c="' + hand[k] + '"', h: card(hand[k], X) }));
         } else mine = specBar(s.order);
         return xMain(K, { chips: '<span class="chip">Runde ' + s.round + ' von ' + s.rounds + '</span>' + (s.sun ? '<span class="chip">Sonnen-Regel</span>' : ''), seats: seats, center: center, status: status, mine: mine });
       },
