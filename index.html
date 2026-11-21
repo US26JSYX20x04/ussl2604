@@ -1120,7 +1120,7 @@ main.game .seats > .seat > * { zoom: var(--seatz, 1); }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '0372c569';
+var APP_V = 'd431f053';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3464,7 +3464,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const GAME_KEYS = ['wizard', 'witches', 'skipbo', 'uno', 'phase10'];
   
   const XG = {}, XPRE = {}, XDEF = {}, VAL_KEYS = { animMode: ['seq', 'all'] };
-  const SET_KEYS = { botMin: 1, botMs: 1, overlap: 1, animMax: 1, animMs: 1, unoHand: 1, unoD2: 1, unoD4: 1, unoS: 1, unoR: 1, unoW: 1, sbHand: 1, witGoal: 1, seats: 1, p10Hand: 1, tlSec: 1, lbP1: 1, lbP2: 1, lbP3: 1, lbP4: 1, lbP5: 1, lbP6: 1 }, TOG_KEYS = { unoStay: 1, unoTill: 1, unoDbl: 1, unoAny: 1, p10Free: 1, spec: 1, anim: 1, pub: 1, tlOn: 1, backup: 1, lbOwn: 1, tfOn: 1 };
+  const SET_KEYS = { botMin: 1, botMs: 1, overlap: 1, animMax: 1, animMs: 1, unoHand: 1, unoD2: 1, unoD4: 1, unoS: 1, unoR: 1, unoW: 1, sbHand: 1, witGoal: 1, seats: 1, p10Hand: 1, tlSec: 1, lbP1: 1, lbP2: 1, lbP3: 1, lbP4: 1, lbP5: 1, lbP6: 1 }, TOG_KEYS = { unoStay: 1, unoTill: 1, unoDbl: 1, unoAny: 1, p10Free: 1, spec: 1, anim: 1, pub: 1, tlOn: 1, backup: 1, lbOwn: 1, tfOn: 1, flipOff: 1 };
   const GAME_ORDER = ['wizard', 'witches', 'druids', 'skullking', 'uno', 'nomercy', 'allwild', 'passt', 'phase10', 'cabo', 'texas', 'loveletter', 'skipbo', 'dalmuti', 'werwolf'];
   const gameList = () => GAME_ORDER.filter(k => GAMES[k]).concat(Object.keys(GAMES).filter(k => GAME_ORDER.indexOf(k) < 0));
   const xKey = k => { const m = /^([a-z]{2})_([A-Za-z0-9]+)$/.exec(k || ''), g = m && XPRE[m[1]]; return g ? { g, id: m[2] } : null; };
@@ -3853,6 +3853,18 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const FWD_NO = /^(modal|closeModal|confirmYes|confTog|leave|leaveReq|copy|emo|emoToggle|optInfo|viewTog|specView|rename|renameSave|zoom|create|join|watch|sit|seat|selfPlay|takeHost|giveHost|kick|assign|unwatchOther|reqOk|reqNo|setOk|setNo|turnSave|theme.*|crop.*|persp.*|ed[A-Z].*|av[A-Z].*|num.*)$/;
   const UI_S = ['sel', 'sbSel', 'unoPick', 'unoAsk', 'unoTwo', 'p10Sel', 'witSel'], UI_U = ['x', 'bidV'];
   function uiSnap() { const o = { s: {}, u: {} }; UI_S.forEach(k => { o.s[k] = S[k] === undefined ? null : clone(S[k]); }); UI_U.forEach(k => { o.u[k] = UI[k] === undefined ? null : clone(UI[k]); }); return o; }
+  // Von Mitspielern mitgeschickte Auswahl nur in erwarteter Form übernehmen (Typ und Größe begrenzt).
+  // Die Spielregeln prüfen die eigentlichen Züge ohnehin gegen den Spielstand der Spielleitung.
+  function uxClean(o) {
+    o = o && typeof o === 'object' ? o : {};
+    const ss = o.s && typeof o.s === 'object' ? o.s : {}, uu = o.u && typeof o.u === 'object' ? o.u : {};
+    const int = (v, hi) => Number.isInteger(v) && v >= 0 && v <= hi ? v : null, str = (v, n) => typeof v === 'string' && v.length <= n ? v : null;
+    const sb = ss.sbSel && typeof ss.sbSel === 'object' && ['hand', 'stock', 'disc'].indexOf(ss.sbSel.t) >= 0 && int(ss.sbSel.i, 40) !== null ? { t: ss.sbSel.t, i: ss.sbSel.i } : null;
+    const ws = Array.isArray(ss.witSel) ? ss.witSel.filter(v => str(v, 16) !== null).slice(0, 8) : [];
+    let x = {};
+    try { if (uu.x && typeof uu.x === 'object' && !Array.isArray(uu.x) && JSON.stringify(uu.x).length <= 4000) x = uu.x; } catch (e) { x = {}; }
+    return { s: { sel: str(ss.sel, 60), sbSel: sb, unoPick: int(ss.unoPick, 300), unoAsk: int(ss.unoAsk, 300), unoTwo: ss.unoTwo === true, p10Sel: int(ss.p10Sel, 60), witSel: ws }, u: { x, bidV: typeof uu.bidV === 'number' && isFinite(uu.bidV) && uu.bidV >= 0 && uu.bidV <= 60 ? uu.bidV : undefined } };
+  }
   function uiLoad(o) {
     o = o && typeof o === 'object' ? o : {};
     const ss = o.s && typeof o.s === 'object' ? o.s : {}, uu = o.u && typeof o.u === 'object' ? o.u : {};
@@ -3924,7 +3936,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const save = uiSnap(), sp = S.pid, sj = S.joined, sw = S.watch;
     HXC.on = true; HXC.wrote = false; HXC.toasts = [];
     try {
-      S.pid = actor; S.joined = seated; S.watch = !seated; uiLoad(m.ux);
+      S.pid = actor; S.joined = seated; S.watch = !seated; uiLoad(uxClean(m.ux));
       const ret = A[m.n](fakeEl(m.ds, m.cls), { preventDefault() {}, stopPropagation() {}, target: null });
       // Spielzüge müssen ohne Warten fertig werden: Nach einem await liefe der Rest schon wieder unter der Kennung der Spielleitung
       if (ret && typeof ret.then === 'function') console.warn('[Kartenrunde] Spielzug „' + m.n + '“ wartet asynchron – das ist für Züge von Mitspielern nicht erlaubt.');
@@ -5289,6 +5301,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     witPass() {
       const c = wctx();
       if (!c || !c.seated || c.d.phase !== 'pass' || c.d.passed(c.me) || (S.witSel || []).length !== c.d.passN) return;
+      // Weitergabe nur mit Karten, die wirklich auf der Hand liegen – jede höchstens einmal
+      { const hand = ((c.rd.hands || {})[c.me] || c.d.left[c.me] || []).slice(); for (const x of S.witSel) { const i = hand.indexOf(x); if (typeof x !== 'string' || i < 0) { S.witSel = []; return; } hand.splice(i, 1); } }
       w(backend.update(c.path, { pass: { [c.me]: S.witSel.slice() } }));
       S.witSel = [];
     },
@@ -5396,10 +5410,12 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     bid(el) {
       const c = ctx(); if (!c || !c.seated || c.d.phase !== 'bid' || c.d.hasBid(c.me)) return;
       const k = +el.dataset.k;
+      // Ansage muss eine ganze Zahl zwischen 0 und der Kartenzahl der Runde sein (auch bei manipulierten Anfragen)
+      if (!Number.isInteger(k) || k < 0 || k > (c.d.n || c.rd.n || 0)) return;
       if (!c.d.simultaneous && (c.d.bidTurn !== c.me || k === c.d.forbidden)) return;
       w(backend.update(c.path, { bids: { [c.me]: k } }));
     },
-    pick(el) { const c = ctx(); if (c && c.d.phase === 'trump' && c.d.dealer === c.me) w(backend.update(c.path, { pick: el.dataset.s })); },
+    pick(el) { const c = ctx(); if (c && c.d.phase === 'trump' && c.d.dealer === c.me && SUITS.indexOf(el.dataset.s) >= 0) w(backend.update(c.path, { pick: el.dataset.s })); },
     card(el) {
       const c = ctx(); if (!c || !c.seated || c.d.phase !== 'play' || c.d.turn !== c.me || lingerTrick(c)) return;
       const hand = c.d.left[c.me] || [];
@@ -6602,7 +6618,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     // Aufdecken/Zudecken (z. B. Cabo): vorher merken, welche Karten verdeckt waren
     const faceWas = {}; root.querySelectorAll('main.game [data-mk]').forEach(el => { const c = el.querySelector('.card'); if (c) faceWas[el.dataset.mk] = c.classList.contains('back'); });
     morph(root, html);
-    if (!UI.lite) root.querySelectorAll('main.game [data-mk]').forEach(el => { const c = el.querySelector('.card'), was = faceWas[el.dataset.mk]; if (!c || was === undefined || was === c.classList.contains('back')) return; c.classList.remove('flipin'); void c.offsetWidth; c.classList.add('flipin'); setTimeout(() => c.classList.remove('flipin'), 600); });
+    if (flipOk()) root.querySelectorAll('main.game [data-mk]').forEach(el => { const c = el.querySelector('.card'), was = faceWas[el.dataset.mk]; if (!c || was === undefined || was === c.classList.contains('back')) return; c.classList.remove('flipin'); void c.offsetWidth; c.classList.add('flipin'); setTimeout(() => c.classList.remove('flipin'), 600); });
     seatMinis(root);
     layoutRound();   // erst Plätze setzen,
     layoutPile();    // dann den Kreis an den freien Platz anpassen,
@@ -6797,7 +6813,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       (host && S.mode === 'peer' ? toggle('Ersatz-Leitung', st.backup !== false ? 'An: Ein zweites Gerät hält den Spielstand verschlüsselt bereit. Fällt dein Gerät aus, übernimmt es nach etwa 30 Sekunden, und die Partie geht weiter.' : 'Aus: Fällt dein Gerät während einer Partie aus, ist die Partie verloren.', 'backup', st.backup !== false) : '') +
       lbSetHTML(host, toggle, stepper) +
       '<div class="lsep"></div><div class="subpanel"><h3>Gelegte Karten</h3>' + (host ? stepper('Überlappen', 'overlap', Math.max(0, Math.min(80, st.overlap || 0)) + ' %', 5, 0, 80) : '<p class="fine">Gelegte Karten überlappen um ' + Math.max(0, Math.min(80, st.overlap || 0)) + ' %.</p>') + '</div>' +
-      '<div class="subpanel"><h3>Ziehanimation</h3>' + (host ? '<button class="opt toggle' + (st.anim === false ? ' on' : '') + '" role="switch" aria-checked="' + (st.anim === false) + '" data-act="animOff"' + hdis + '><b>Ziehanimation deaktivieren</b><span>Sonst fliegen die Karten beim Austeilen und Ziehen vom Stapel zu den Händen.</span></button>' + (st.anim !== false ? '<button class="opt toggle' + (st.animMode === 'all' ? ' on' : '') + '" role="switch" aria-checked="' + (st.animMode === 'all') + '" data-act="setv" data-k="animMode" data-v="' + (st.animMode === 'all' ? 'seq' : 'all') + '"' + hdis + '><b>Gleichzeitig austeilen</b><span>' + (st.animMode === 'all' ? 'An: alle bekommen ihre Karten zur selben Zeit.' : 'Aus: nacheinander, reihum Karte für Karte.') + '</span></button>' + stepper('Dauer je Karte', 'animMs', Math.max(100, Math.min(1500, st.animMs || 350)) + ' ms', 50, 100, 1500) + stepper('Austeilen höchstens', 'animMax', Math.max(1, Math.min(30, st.animMax || 6)) + ' s', 1, 1, 30) : '') : '<p class="fine animinfo">Ziehanimation: ' + (st.anim === false ? 'aus' : 'an, ' + (st.animMode === 'all' ? 'gleichzeitig' : 'nacheinander') + ', ' + Math.max(100, Math.min(1500, st.animMs || 350)) + ' ms je Karte, Austeilen höchstens ' + Math.max(1, Math.min(30, st.animMax || 6)) + ' s') + '</p>') + '</div>' + '<div class="subpanel"><h3>Computergegner</h3>' + (host ? stepper('Computer verzögert', 'botMin', botMinTxt(), 5, 0, 50) + stepper('Rechenzeit starke Computer', 'botMs', (Math.max(100, Math.min(3000, st.botMs || 300)) / 1000).toFixed(1).replace('.', ',') + ' s', 100, 100, 3000) + '<p class="fine">Mehr Rechenzeit = stärkere Züge auf Stufe 3, aber langsamere Geräte können kurz stocken.</p>' : '<p class="fine">Computer verzögert: ' + botMinTxt() + ' · Rechenzeit: ' + (Math.max(100, Math.min(3000, st.botMs || 300)) / 1000).toFixed(1).replace('.', ',') + ' s</p>') + '</div></section>' +
+      '<div class="subpanel"><h3>Ziehanimation</h3>' + (host ? '<button class="opt toggle' + (st.anim === false ? ' on' : '') + '" role="switch" aria-checked="' + (st.anim === false) + '" data-act="animOff"' + hdis + '><b>Ziehanimation deaktivieren</b><span>Sonst fliegen die Karten beim Austeilen und Ziehen vom Stapel zu den Händen.</span></button>' + (st.anim !== false ? '<button class="opt toggle' + (st.animMode === 'all' ? ' on' : '') + '" role="switch" aria-checked="' + (st.animMode === 'all') + '" data-act="setv" data-k="animMode" data-v="' + (st.animMode === 'all' ? 'seq' : 'all') + '"' + hdis + '><b>Gleichzeitig austeilen</b><span>' + (st.animMode === 'all' ? 'An: alle bekommen ihre Karten zur selben Zeit.' : 'Aus: nacheinander, reihum Karte für Karte.') + '</span></button>' + '<button class="opt toggle' + (st.flipOff ? ' on' : '') + '" role="switch" aria-checked="' + !!st.flipOff + '" data-act="tog" data-k="flipOff"' + hdis + '><b>Kartenumdrehen deaktivieren</b><span>Sonst drehen sich die eigenen Karten beim Austeilen um, die Trumpfkarte beim Aufdecken und aufgedeckte Karten (z. B. Cabo).</span></button>' + stepper('Dauer je Karte', 'animMs', Math.max(100, Math.min(1500, st.animMs || 350)) + ' ms', 50, 100, 1500) + stepper('Austeilen höchstens', 'animMax', Math.max(1, Math.min(30, st.animMax || 6)) + ' s', 1, 1, 30) : '') : '<p class="fine animinfo">Ziehanimation: ' + (st.anim === false ? 'aus' : 'an, ' + (st.animMode === 'all' ? 'gleichzeitig' : 'nacheinander') + ', ' + Math.max(100, Math.min(1500, st.animMs || 350)) + ' ms je Karte, Austeilen höchstens ' + Math.max(1, Math.min(30, st.animMax || 6)) + ' s') + '</p>') + '</div>' + '<div class="subpanel"><h3>Computergegner</h3>' + (host ? stepper('Computer verzögert', 'botMin', botMinTxt(), 5, 0, 50) + stepper('Rechenzeit starke Computer', 'botMs', (Math.max(100, Math.min(3000, st.botMs || 300)) / 1000).toFixed(1).replace('.', ',') + ' s', 100, 100, 3000) + '<p class="fine">Mehr Rechenzeit = stärkere Züge auf Stufe 3, aber langsamere Geräte können kurz stocken.</p>' : '<p class="fine">Computer verzögert: ' + botMinTxt() + ' · Rechenzeit: ' + (Math.max(100, Math.min(3000, st.botMs || 300)) / 1000).toFixed(1).replace('.', ',') + ' s</p>') + '</div></section>' +
       '<div class="lobcol">' + lbHTML('lobby') + '<section class="panel gpanel"><h2 class="tishead">Spiel' + gselBtn + '</h2>' + (host ? '' : '<p class="fine">Nur die Spielleitung (' + esc(pname(m.host)) + ') kann Spiel und Einstellungen ändern.</p>') +
       gameSel + countErr + '<h2 class="h2b tishead sepb">Einstellungen für dieses Spiel<button class="btn small ghost" data-act="modal" data-m="rules">Regeln</button></h2>' + (sb ? sbSet : '<h3>Ansagen</h3><div class="opts" role="radiogroup" aria-label="Art der Ansage">' + vars + '</div>' +
       '<h3>Karten und Stiche</h3><div class="opts" role="radiogroup" aria-label="Kartenverteilung"><button class="opt' + (st.mono ? '' : ' on') + '" role="radio" aria-checked="' + !st.mono + '" data-act="mono" data-v="0"' + hd + '><b>Klassisch</b><span>Ein gemeinsamer Stapel mit Trumpf und Bedienpflicht.</span></button>' +
@@ -7067,7 +7083,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   
   function applyHide() {
     const now = Date.now();
-    document.querySelectorAll('main.game .topbar .trump .card').forEach(e => { e.style.visibility = (UI.hideTrump || 0) > now ? 'hidden' : ''; });
+    // Trumpf (Karte, Farbe oben und Farbe in der eigenen Leiste) erst zeigen, wenn die Trumpfkarte gelandet ist
+    document.querySelectorAll('main.game .topbar .trump, main.game .mebar .trm').forEach(e => { e.style.visibility = (UI.hideTrump || 0) > now ? 'hidden' : ''; });
     UI.hideMine = (UI.hideMine || []).filter(x => x.t > now);
     const used = new Set();
     const oc = ownCards(), ocr = oc.slice().reverse();
@@ -7080,6 +7097,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       hs[p] = hs[p].filter(t => t > now);
       const el = seatEls[around.indexOf(p)], sm = el && el.querySelector('.minis small');
       
+      const sc = el && el.querySelector('.seatcard'); if (sc) sc.style.visibility = hs[p].length ? 'hidden' : '';
       const row = el && el.querySelector('.cbrow');
       if (row) { const it = Array.from(row.children).filter(c => !c.classList.contains('cbhold')); it.forEach((c, k) => { c.style.visibility = k >= it.length - hs[p].length ? 'hidden' : ''; }); }
       if (!sm) return;
@@ -7133,7 +7151,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     UI.anPrev = { key: h.key, cnt: cnt, won: h.won, tot: h.tot };
     
     const cen = centerCards(), snapPrev = UI.cenSnap;
-    UI.cenSnap = cen.map(x => { const r = x.el.getBoundingClientRect(); return { k: x.k, html: x.el.outerHTML, r: { left: r.left, top: r.top, width: r.width, height: r.height } }; });
+    UI.cenSnap = cen.map(x => { const r = x.el.getBoundingClientRect(), tc = x.el.closest && x.el.closest('.trick.pile > .tc'), rot = tc ? parseFloat(tc.style.getPropertyValue('--pr')) || 0 : 0, w0 = tc && x.el.offsetWidth ? x.el.offsetWidth : r.width, h0 = tc && x.el.offsetHeight ? x.el.offsetHeight : r.height, mx = r.left + r.width / 2, my = r.top + r.height / 2; return { k: x.k, html: x.el.outerHTML, rot, r: { left: mx - w0 / 2, top: my - h0 / 2, width: w0, height: h0 } }; });
     
     if (prev && prev.key === h.key && prev.won && h.won) h.order.forEach(p => { if ((h.won[p] || 0) > (prev.won[p] || 0)) UI.trickWin = { p: p, t: Date.now() }; });
     
@@ -7145,7 +7163,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       UI.trickT = setTimeout(() => {
         document.body.classList.remove('tricklock');
         const now = centerCards(); if (!now.length || UI.trickPend !== tkey) return;
-        const items = now.map(x => { const r = x.el.getBoundingClientRect(); return { k: x.k, html: x.el.outerHTML, r: { left: r.left, top: r.top, width: r.width, height: r.height } }; });
+        const items = now.map(x => { const r = x.el.getBoundingClientRect(), tc = x.el.closest && x.el.closest('.trick.pile > .tc'), rot = tc ? parseFloat(tc.style.getPropertyValue('--pr')) || 0 : 0, w0 = tc && x.el.offsetWidth ? x.el.offsetWidth : r.width, h0 = tc && x.el.offsetHeight ? x.el.offsetHeight : r.height, mx = r.left + r.width / 2, my = r.top + r.height / 2; return { k: x.k, html: x.el.outerHTML, rot, r: { left: mx - w0 / 2, top: my - h0 / 2, width: w0, height: h0 } }; });
         flyTrick(order, tw.p, items, st);
         UI.trickGone = tkey; UI.trickGoneK = items.map(x => x.k).join('§'); now.forEach(x => { (x.el.closest('.trick') || x.el).style.visibility = 'hidden'; });
         botTick();
@@ -7238,7 +7256,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       layer.appendChild(box);
       const dx = bx - (r.left + r.width / 2), dy = by - (r.top + r.height / 2), delay = i * 40;
       UI.flyEnd = Math.max(UI.flyEnd || 0, Date.now() + delay + per + 50);
-      const an = box.animate([{ transform: 'translate(0,0) scale(1)', opacity: 1 }, { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(.3)', opacity: .2 }], { duration: per, delay: delay, easing: 'cubic-bezier(.4,0,.7,1)', fill: 'both' });
+      // Schräge Karten (Kreis-Ansicht) starten in ihrer Lage und drehen sich beim Wegfliegen gerade – kein Sprung
+      const rot = it.rot || 0;
+      const an = box.animate([{ transform: 'translate(0,0) rotate(' + rot + 'deg) scale(1)', opacity: 1 }, { transform: 'translate(' + dx + 'px,' + dy + 'px) rotate(0deg) scale(.3)', opacity: .2 }], { duration: per, delay: delay, easing: 'cubic-bezier(.4,0,.7,1)', fill: 'both' });
       an.onfinish = () => box.remove();
       setTimeout(() => box.remove(), delay + per + 400);
     });
@@ -7383,6 +7403,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       }
     });
   }
+  const flipOk = () => !UI.lite && settings().flipOff !== true;
   function flyCards(order, add, st, ownNew) {
     const main = $('main.game');
     if (!main) return;
@@ -7435,7 +7456,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       box.className = 'flyc gm-' + g;
       // Eigene Karten fliegen verdeckt an und drehen sich in der Hand um
       let front = null;
-      if (j.p === S.pid && spot && spot.el && !UI.lite) { const fe = spot.el.querySelector('.card') || spot.el; if (fe && !fe.classList.contains('back')) { front = fe.cloneNode(true); front.classList.remove('arriving', 'sel', 'ok'); front.removeAttribute('style'); } }
+      if (j.p === S.pid && spot && spot.el && flipOk()) { const fe = spot.el.querySelector('.card') || spot.el; if (fe && !fe.classList.contains('back')) { front = fe.cloneNode(true); front.classList.remove('arriving', 'sel', 'ok'); front.removeAttribute('style'); } }
       if (front) { box.innerHTML = '<div class="flipc"><div class="ff fb">' + backHTML(X, g) + '</div><div class="ff ffr"></div></div>'; box.querySelector('.ffr').appendChild(front); box.classList.add('flipbox'); }
       else box.innerHTML = backHTML(X, g);
       if (pl) { box.style.width = bw + 'px'; box.style.setProperty('--cw', bw + 'px'); box.style.left = sr.left + 'px'; box.style.top = sr.top + 'px'; const c0 = box.firstChild; if (c0 && c0.style) { c0.style.setProperty('--cw', bw + 'px'); c0.style.boxShadow = 'none'; } }
@@ -7445,7 +7466,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const FD = front ? 280 : 0, delay = seq ? n * gap : j.k * gap, land = Date.now() + delay + per + FD;
       if (j.p === S.pid) { const k = ownNew[j.k]; if (k !== undefined) (UI.hideMine = UI.hideMine || []).push({ k: k, t: land }); }
       else { UI.hideSeat = UI.hideSeat || {}; (UI.hideSeat[j.p] = UI.hideSeat[j.p] || []).push(land); }
-      setTimeout(applyHide, delay + per + 15);
+      setTimeout(applyHide, delay + per + FD + 5);
       const kf = (x, y, sc) => [{ transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 }, { transform: 'translate(' + (x - sx) + 'px,' + (y - sy) + 'px) rotate(' + (j.p === S.pid ? 0 : 12) + 'deg) scale(' + sc + ')', opacity: .95 }];
       const an = box.animate(kf(tx, ty, j.sc ? j.sc.toFixed(3) : j.p === S.pid ? Math.max(.5 * 96 / bw, cardW() / bw) : .32 * 96 / bw), { duration: per, delay: delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' });
       if (j.spot && an.effect && an.effect.setKeyframes) {
@@ -7453,12 +7474,12 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         setTimeout(fix, Math.max(0, delay - 10)); setTimeout(fix, delay + per * 0.6);
       }
       if (front) {
-        an.onfinish = () => { const fc = box.querySelector('.flipc'); const f2 = fc && fc.animate([{ transform: 'rotateY(0deg)' }, { transform: 'rotateY(180deg)' }], { duration: FD, easing: 'ease-in-out', fill: 'forwards' }); if (f2) f2.onfinish = () => box.remove(); else box.remove(); };
+        an.onfinish = () => { const fc = box.querySelector('.flipc'); const f2 = fc && fc.animate([{ transform: 'rotateY(0deg)' }, { transform: 'rotateY(180deg)' }], { duration: FD, easing: 'ease-in-out', fill: 'forwards' }); const end = () => { applyHide(); setTimeout(() => box.remove(), 60); }; if (f2) f2.onfinish = end; else end(); };
       } else an.onfinish = () => box.remove();
       setTimeout(() => box.remove(), delay + per + FD + 400);
     });
     // Wizard: Die Trumpfkarte wird als letzte Karte gezogen, fliegt in die obere Leiste und dreht sich dabei um
-    if (g === 'wizard' && jobs.length && Object.keys(add).filter(p => add[p] > 0).length >= 2 && !UI.lite) {
+    if (g === 'wizard' && jobs.length && Object.keys(add).filter(p => add[p] > 0).length >= 2 && flipOk()) {
       const tEl = document.querySelector('main.game .topbar .trump .card'), tr = tEl && tEl.getBoundingClientRect();
       if (tEl && tr && tr.width) {
         const delay = (seq ? jobs.length * gap : max * gap) + gap * 0.5, dur = per * 1.4, land = Date.now() + delay + dur;
