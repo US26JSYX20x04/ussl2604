@@ -1103,6 +1103,10 @@ main.game .center:has(> .trick.pile) > .status { position: absolute; left: 0; ri
 /* Spielerplätze größer/kleiner (Darstellung, nur dieses Gerät): Inhalt der Plätze skaliert, Lage berechnet der Tisch neu */
 main.game .seats > .seat > * { zoom: var(--seatz, 1); }
 .game.round .seats > .seat { min-width: calc(200px * var(--seatz, 1)); max-width: calc(300px * var(--seatz, 1)); }
+/* PC und Tablet: im Spiel kein Scrollen */
+html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
+/* „Spiel abbrechen“ ganz rechts im Rundenende */
+.sumfoot > .abortb { order: 99; margin-left: auto; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1120,7 +1124,7 @@ main.game .seats > .seat > * { zoom: var(--seatz, 1); }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '6511bb55';
+var APP_V = 'a200d068';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3540,7 +3544,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     GAME_KEYS.forEach(g => { css += '.' + scope + ' .gm-' + g + ',.' + scope + '.gm-' + g + '{' + block(g) + '}'; });
     for (const k in X.imgs) if (/^[A-Za-z0-9_]+$/.test(k) && DATA_RE.test(X.imgs[k] || '')) { css += '.' + scope + ' .k-' + k + '{background-image:url("' + blobUrl(X.imgs[k]) + '")}';
       
-      if ((X.imgm || {})[k]) { const z = ((1 + 2 * X.imgm[k]) * 100).toFixed(2) + '%';         css += '.' + scope + ' .card.img.k-' + k + ',.' + scope + ' .k-' + k + '.k-' + k + '{background-size:' + z + ' ' + z + ' !important;background-position:center !important}'; } }
+      if ((X.imgm || {})[k]) { const z = ((1 + 2 * X.imgm[k]) * 100).toFixed(2) + '%';         css += '.' + scope + ' .card.img.k-' + k + ',.' + scope + ' .k-' + k + '.k-' + k + '{background-size:' + z + ' ' + z + ' !important;background-position:center !important}';
+        // Fliegende Karten werden skaliert – dabei blitzte der gespeicherte Rand als feiner Streifen auf; dort etwas mehr abschneiden
+        if (scope === 'dzT') { const z2 = ((1 + 2 * X.imgm[k]) * 104).toFixed(2) + '%'; css += '#flylayer.dzT .card.img.k-' + k + '.k-' + k + '{background-size:' + z2 + ' ' + z2 + ' !important}'; } } }
     return css;
   }
   function backHTML(X, game, o) {
@@ -4451,6 +4457,17 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     return (s.hist || []).map(r => { if (r.tot) return r; const t = {}; (s.order || []).forEach(p => { acc[p] = (acc[p] || 0) + (+(r.pts || {})[p] || 0); t[p] = acc[p]; }); return { n: r.n, tot: t }; });
   }
   const CHART_X = { skullking: 1, cabo: 1 };
+  // Punkteverlauf mitten im Spiel (für „Spiel abbrechen“)
+  function curChart() {
+    const gk = (S.meta && S.meta.game) || 'wizard';
+    try {
+      if (gk === 'wizard') { const c = ctx(); if (!c) return ''; const o = c.m.order; return ptChart(o, c.table.rows.filter(r => r.done).map(r => { const t = {}; o.forEach(p => { t[p] = r.cells[p].total; }); return { n: r.n, tot: t }; }), 'Punkteverlauf'); }
+      if (gk === 'witches') { const c = wctx(); if (!c) return ''; const o = c.m.order, acc = {}; return ptChart(o, c.tot.rows.filter(r => r.done).map(r => { const t = {}; o.forEach(p => { acc[p] = (acc[p] || 0) + (+r.pts[p] || 0); t[p] = acc[p]; }); return { n: r.n, tot: t }; }), 'Feuerpunkte im Verlauf (wenige sind gut)'); }
+      if (gk === 'phase10') { const s = xState('phase10'); return s && !s.nopts ? ptChart(s.order, s.hist, 'Strafpunkte im Verlauf') : ''; }
+      if (XG[gk]) { const s = xState(gk); return s && s.hist ? ptChart(s.order || [], xChartRows(s), gk === 'cabo' ? 'Punkte im Verlauf (wenige sind gut)' : 'Punkteverlauf') : ''; }
+    } catch (e) { if (typeof __kw === 'function') __kw(e); }
+    return '';
+  }
   // ---- Letzter Stich ----
   function lastTrickData() {
     const g = (S.meta && S.meta.game) || 'wizard', X = tableX();
@@ -5449,6 +5466,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const g = S.meta.game || 'wizard', go = () => { S.sel = null; S.sbSel = null; S.unoPick = null; S.p10Sel = null; S.witSel = []; startGame(); };
       if (settings().game !== g) w(backend.update(gamePath(), { settings: { game: g } })).then(go); else go();
     },
+    abortAsk() { if (!isHost()) return; S.modal = 'abort'; renderModal(true); },
+    abortGo(el) { if (!isHost()) return; S.modal = null; renderModal(true); if (el.dataset.v === 'new') A.rematch(); else A.toLobby(); },
     lastTrick() { S.modal = 'lasttrick'; renderModal(true); },
     toStats() { const m = S.meta; if (m) UI.endSeen = S.code + ':' + (m.g || 0); render(); },
     toEnd() { UI.endSeen = null; render(); },
@@ -5730,6 +5749,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     cropSet('zoom', CR.zoom * (ev.deltaY < 0 ? (ev.shiftKey ? 1.005 : 1.02) : (ev.shiftKey ? 1 / 1.005 : 1 / 1.02)));
   }, { passive: false });
   window.addEventListener('resize', () => requestRender());
+  // PC: im Spiel gar nicht scrollen (verschobene Seite bringt die Kartenflüge durcheinander)
+  // PC und Tablet (nicht Handy): im Spiel gar nicht scrollen
+  const pcNoScroll = () => { const on = !!(document.querySelector('main.game') && !isPhone() && window.innerWidth > 600); document.documentElement.classList.toggle('noscr', on); return on; };
+  window.addEventListener('scroll', () => { if ((window.scrollX || window.scrollY) && pcNoScroll()) window.scrollTo(0, 0); }, { passive: true });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) requestRender(); titleMark(document.hidden && myTurnNow()); syncWake(); });
 
   
@@ -6643,6 +6666,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     autoNext();
     optInfo(root);
     document.body.classList.toggle('ingame', !!root.querySelector('main.game .topbar .emotb'));
+    try { if (pcNoScroll() && (window.scrollX || window.scrollY)) window.scrollTo(0, 0); } catch (e) { if (typeof __kw === 'function') __kw(e); }
     fitNames(root);
     alignTags(root);
     const eb = $('#emobar');
@@ -7432,7 +7456,13 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const target = p => {
       let el = null;
       if (p === S.pid) el = mineEl(main, ['.hand', '.fan', '.cbmine']);
-      else el = seatEls[around.indexOf(p)];
+      else {
+        // Andere Spieler: genau auf ihren kleinen Kartenstapel fliegen (nicht in die Feldmitte), sonst springt die Karte am Ende
+        const se = seatEls[around.indexOf(p)], mc = se && se.querySelector('.minis .card, .minis i');
+        const mr = mc && mc.getBoundingClientRect();
+        if (mr && mr.width) return { left: mr.left, top: mr.top, width: mr.width, height: mr.height, mini: true };
+        el = se;
+      }
       return el ? el.getBoundingClientRect() : null;
     };
     let layer = $('#flylayer');
@@ -7464,8 +7494,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (!tr) return;
       // Ohne passenden Schlüssel (z. B. neue Runde mit gleichen Karten wie vorher) irgendeinen noch freien Platz in der Hand nehmen
       const spot = j.p === S.pid ? (ownNew[j.k] !== undefined && ownSpot(ownNew[j.k])) || ownAnySpot() : null;
-      const tx = spot ? spot.left + spot.width / 2 : tr.left + tr.width / 2 + (j.k % 5 - 2) * 6, ty = spot ? spot.top + spot.height / 2 : tr.top + Math.min(tr.height / 2, 60);
-      j.sc = spot ? spot.width / bw : null; j.spot = spot;
+      const tx = spot ? spot.left + spot.width / 2 : tr.mini ? tr.left + tr.width / 2 : tr.left + tr.width / 2 + (j.k % 5 - 2) * 6, ty = spot ? spot.top + spot.height / 2 : tr.mini ? tr.top + tr.height / 2 : tr.top + Math.min(tr.height / 2, 60);
+      j.sc = spot ? spot.width / bw : tr.mini ? tr.width / bw : null; j.spot = spot; j.mini = !!tr.mini;
       const box = document.createElement('div');
       box.className = 'flyc gm-' + g;
       // Eigene Karten fliegen verdeckt an und drehen sich in der Hand um
@@ -7481,7 +7511,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (j.p === S.pid) { const k = ownNew[j.k]; if (k !== undefined) (UI.hideMine = UI.hideMine || []).push({ k: k, t: land }); }
       else { UI.hideSeat = UI.hideSeat || {}; (UI.hideSeat[j.p] = UI.hideSeat[j.p] || []).push(land); }
       setTimeout(applyHide, delay + per + FD + 5);
-      const kf = (x, y, sc) => [{ transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 }, { transform: 'translate(' + (x - sx) + 'px,' + (y - sy) + 'px) rotate(' + (j.p === S.pid ? 0 : 12) + 'deg) scale(' + sc + ')', opacity: .95 }];
+      const kf = (x, y, sc) => [{ transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 }, { transform: 'translate(' + (x - sx) + 'px,' + (y - sy) + 'px) rotate(' + (j.p === S.pid || j.mini ? 0 : 12) + 'deg) scale(' + sc + ')', opacity: .95 }];
       const an = box.animate(kf(tx, ty, j.sc ? j.sc.toFixed(3) : j.p === S.pid ? Math.max(.5 * 96 / bw, cardW() / bw) : .32 * 96 / bw), { duration: per, delay: delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' });
       if (j.spot && an.effect && an.effect.setKeyframes) {
         const fix = () => { const r = spotNow(j.spot); if (r && (Math.abs(r.left - j.spot.left) > 1 || Math.abs(r.top - j.spot.top) > 1 || Math.abs(r.width - j.spot.width) > 1)) { j.spot = Object.assign({}, j.spot, { left: r.left, top: r.top, width: r.width }); an.effect.setKeyframes(kf(r.left + r.width / 2, r.top + r.height / 2, (r.width / bw).toFixed(3))); } };
@@ -7867,7 +7897,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     return Date.now() - UI.overAt[k] >= ms - slack;
   }
   // Austeilen-Knopf: für Mitspieler ausgegraut sichtbar, bis die Wartezeit vorbei ist (danach wird neu gezeichnet)
-  const dealBtn = (tag, html) => canDeal(tag) ? html : S.joined ? String(html).replace('<button ', '<button disabled aria-disabled="true" title="Gleich verfügbar – die Spielleitung hat zuerst die Gelegenheit" ') : dealWaitHTML();
+  const abortBtn = () => isHost() ? '<button class="btn abortb" data-act="abortAsk">Spiel abbrechen</button>' : '';
+  const dealBtn = (tag, html) => dealBtn0(tag, html) + abortBtn();
+  const dealBtn0 = (tag, html) => canDeal(tag) ? html : S.joined ? String(html).replace('<button ', '<button disabled aria-disabled="true" title="Gleich verfügbar – die Spielleitung hat zuerst die Gelegenheit" ') : dealWaitHTML();
   const dealWaitHTML = () => '<span class="waitline">' + (hostAway() && S.joined ? 'Gleich kann jede Person am Tisch die nächste Runde austeilen …' : 'Warte auf ' + esc(pname(S.meta.host)) + ' …' + (S.joined ? ' Sonst kannst du in wenigen Sekunden selbst austeilen.' : '')) + '</span>';
   const lobbyFoot = () => isHost() ? '<button class="btn primary rematch" data-act="rematch">Nochmal</button><button class="btn" data-act="toLobby">Zurück zur Lobby</button>' : '<span class="waitline">' + esc(pname(S.meta.host)) + ' kann eine neue Partie starten.</span>';
   const wChip = () => tlChip() + (S.meta && S.meta.status === 'playing' ? '<button class="btn small histbtn" data-act="modal" data-m="hist" aria-label="Spielverlauf" title="Spielverlauf">Verlauf</button>' : '') + wChip0();
@@ -8385,6 +8417,11 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     } else UI.edSig = null;
     let title = '', body = '', cls = 'sheet';
     if (S.modal === 'score') { title = 'Punktetafel'; body = scoreHTML(); }
+    else if (S.modal === 'abort') {
+      title = 'Spiel abbrechen'; cls += ' mid';
+      const ch = curChart();
+      body = (ch ? '<div class="summary endstats">' + ch + '</div>' : scoreHTML()) + '<div class="sumfoot"><button class="btn primary" data-act="closeModal">Doch weiter spielen</button>' + (isHost() ? '<button class="btn" data-act="abortGo" data-v="lobby">Zurück zur Lobby</button><button class="btn" data-act="abortGo" data-v="new">Spiel neu starten</button>' : '') + '</div>';
+    }
     else if (S.modal === 'theme') { title = 'Farben anpassen'; body = themeHTML(); }
     else if (S.modal === 'lasttrick') { title = 'Letzter Stich'; body = lastTrickHTML(); cls += ' mid'; }
     else if (S.modal === 'hist') { title = 'Spielverlauf'; body = histHTML(); cls += ' mid'; }
