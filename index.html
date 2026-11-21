@@ -1119,6 +1119,9 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 .witsp { display: inline-flex; flex: none; gap: 2px; margin-left: 6px; align-self: center; --cw: 18px; }
 .witsp .card { --cw: 18px; box-shadow: 0 1px 3px rgba(0, 0, 0, .45); }
 .witsp .card .cn, .witsp .card .cm { font-size: 8px; }
+/* Erinnerung: 6-mal blinken, alle 0,5 s */
+.turnflash.tfblink { animation: tfblink .5s linear 6 forwards; }
+@keyframes tfblink { 0%, 60% { opacity: 1; } 61%, 100% { opacity: 0; } }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1136,7 +1139,7 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '0d1e6971';
+var APP_V = '284899ea';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -4661,6 +4664,19 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const sigOn = () => LS.get('wiz.sig') !== '0', sndOn = () => LS.get('wiz.snd') === '1';
   // Großer Hinweis „Du bist dran!“ (wie „UNO!“): eigene Einstellung geht vor, sonst gilt die der Spielleitung (Standard aus)
   const flashOn = () => { const v = LS.get('wiz.tflash'); return v === '1' ? true : v === '0' ? false : !!settings().tfOn; };
+  // Erinnerung, wenn man nach 5 s bzw. 10 s noch nicht gespielt hat: „Du bist dran!“ blinkt 6-mal (alle 0,5 s)
+  const remOn = n => { const v = LS.get('wiz.trem' + n); return v === '1' ? true : v === '0' ? false : n === 10; };
+  function turnRemind(k) {
+    (UI.remT || []).forEach(clearTimeout); UI.remT = [];
+    if (!k || !myTurnNow()) return;
+    [5, 10].forEach(n => { if (remOn(n)) UI.remT.push(setTimeout(() => { if (UI.twSeenK === k && myTurnNow() && !document.hidden) turnBlink(); }, n * 1000)); });
+  }
+  function turnBlink() {
+    const old = document.querySelector('.turnflash'); if (old) old.remove();
+    const d = document.createElement('div'); d.className = 'unoflash turnflash tfblink'; d.setAttribute('role', 'alert');
+    d.innerHTML = '<b>Du bist dran!</b>';
+    document.body.appendChild(d); setTimeout(() => d.remove(), 3050);
+  }
   function turnFlash() {
     const old = document.querySelector('.turnflash'); if (old) old.remove();
     const d = document.createElement('div'); d.className = 'unoflash turnflash'; d.setAttribute('role', 'alert');
@@ -4696,6 +4712,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       UI.twSeenK = k; wakeBump(); UI.twAt = tw && typeof tw.at === 'number' ? tw.at - (runsGame() ? 0 : UI.clkOff || 0) : Date.now(); UI.tlWarned = false;
       if (myTurnNow() && document.hidden) { titleMark(true); if (sigOn() && sndOn()) beep(); }
       if (myTurnNow() && !document.hidden && flashOn()) turnFlash();
+      turnRemind(k);
     }
     if (!myTurnNow() || !document.hidden) titleMark(false);
   }
@@ -5222,6 +5239,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     hsortSet(el) { LS.set('wiz.hsort', el.dataset.v); renderModal(true); render(); },
     hrevTog() { LS.set('wiz.hrev', LS.get('wiz.hrev') === '1' ? '0' : '1'); renderModal(true); render(); },
     cbLay() { LS.set('wiz.cbcol', LS.get('wiz.cbcol') === '1' ? '0' : '1'); render(); },
+    remTog(el) { const n = +el.dataset.v; if (n !== 5 && n !== 10) return; LS.set('wiz.trem' + n, remOn(n) ? '0' : '1'); renderModal(true); },
     tflTog() { LS.set('wiz.tflash', flashOn() ? '0' : '1'); if (flashOn()) turnFlash(); renderModal(true); },
     sigTog() { LS.set('wiz.sig', sigOn() ? '0' : '1'); titleMark(myTurnNow() && document.hidden); toast(sigOn() ? 'Ist dein Tab im Hintergrund, zeigt der Titel „● Du bist dran“, sobald du am Zug bist.' : 'Hinweis im Tab-Titel aus.'); renderModal(true); },
     sndTog() { LS.set('wiz.snd', sndOn() ? '0' : '1'); if (sndOn()) { audioCtx(); beep(); } toast(sndOn() ? 'Ton an: Ist dein Tab im Hintergrund, hörst du einen kurzen Ton, wenn du dran bist.' : 'Ton aus.'); renderModal(true); },
@@ -7423,7 +7441,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       }
       (UI.hideCen = UI.hideCen || []).push({ k: it.k, t: land });
       setTimeout(applyHide, delay + per + 2);
-      box.animate([{ transform: 'translate(' + dx + 'px,' + dy + 'px) rotate(' + (p === S.pid ? 0 : -10) + 'deg) scale(' + (og ? Math.max(.4, Math.min(1.6, og[i].width / b.width)).toFixed(3) : '.55') + ')', opacity: .9 }, { transform: 'translate(0,0) rotate(' + rEnd + 'deg) scale(1)', opacity: 1 }], { duration: per, delay: delay, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both' });
+      const s0 = og ? Math.max(.4, Math.min(1.6, og[i].width / b.width)).toFixed(3) : '.55';
+      const pkf = (ddx, ddy) => [{ transform: 'translate(' + ddx + 'px,' + ddy + 'px) rotate(' + (p === S.pid ? 0 : -10) + 'deg) scale(' + s0 + ')', opacity: .9 }, { transform: 'translate(0,0) rotate(' + rEnd + 'deg) scale(1)', opacity: 1 }];
+      const pan = box.animate(pkf(dx, dy), { duration: per, delay: delay, easing: 'cubic-bezier(.2,.7,.3,1)', fill: 'both' });
+      // Ziel während des Flugs nachmessen: verschiebt sich die Auslage noch (z. B. iPad), landet die Karte trotzdem genau
+      const refit = () => { if (!it.el.isConnected || !pan.effect || !pan.effect.setKeyframes) return; let r = it.el.getBoundingClientRect(); if (!r.width) return; if (ptc && it.el.offsetWidth) { const w0 = it.el.offsetWidth, h0 = it.el.offsetHeight, mx = r.left + r.width / 2, my = r.top + r.height / 2; r = { left: mx - w0 / 2, top: my - h0 / 2, width: w0 }; }
+        const ox = r.left - parseFloat(box.style.left), oy = r.top - parseFloat(box.style.top); if (Math.abs(ox) < 1 && Math.abs(oy) < 1) return;
+        box.style.left = r.left + 'px'; box.style.top = r.top + 'px'; pan.effect.setKeyframes(pkf(sxp - (r.left + b.width / 2), syp - (r.top + b.height / 2))); };
+      setTimeout(refit, delay + per * 0.5); setTimeout(refit, delay + per * 0.85);
       
       setTimeout(() => box.remove(), delay + per + 120);
     });
@@ -7555,6 +7580,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       setTimeout(applyHide, delay + per + FD + 5);
       const kf = (x, y, sc) => [{ transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 }, { transform: 'translate(' + (x - sx) + 'px,' + (y - sy) + 'px) rotate(' + (j.p === S.pid || j.mini ? 0 : 12) + 'deg) scale(' + sc + ')', opacity: .95 }];
       const an = box.animate(kf(tx, ty, j.sc ? j.sc.toFixed(3) : j.p === S.pid ? Math.max(.5 * 96 / bw, cardW() / bw) : .32 * 96 / bw), { duration: per, delay: delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' });
+      if (!j.spot && j.mini && an.effect && an.effect.setKeyframes) {
+        const refit = () => { const r = target(j.p); if (!r || !r.mini) return; const nx = r.left + r.width / 2, ny = r.top + r.height / 2; if (Math.abs(nx - tx) < 1 && Math.abs(ny - ty) < 1) return; an.effect.setKeyframes(kf(nx, ny, (r.width / bw).toFixed(3))); };
+        setTimeout(refit, delay + per * 0.5); setTimeout(refit, delay + per * 0.85);
+      }
       if (j.spot && an.effect && an.effect.setKeyframes) {
         const fix = () => { const r = spotNow(j.spot); if (r && (Math.abs(r.left - j.spot.left) > 1 || Math.abs(r.top - j.spot.top) > 1 || Math.abs(r.width - j.spot.width) > 1)) { j.spot = Object.assign({}, j.spot, { left: r.left, top: r.top, width: r.width }); an.effect.setKeyframes(kf(r.left + r.width / 2, r.top + r.height / 2, (r.width / bw).toFixed(3))); } };
         setTimeout(fix, Math.max(0, delay - 10)); setTimeout(fix, delay + per * 0.6);
@@ -8273,7 +8302,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (S.joined) d += '<button class="btn" data-act="modal" data-m="avatar">Mein Bild ändern</button>';
     h += '<details class="mfold mdisp"' + (UI.dispOpen ? ' open' : '') + '><summary class="mhead">Darstellung <small>nur auf diesem Gerät</small></summary><div class="mleadin">' + d + '</div></details>';
     // 5. Hinweise, wenn man dran ist
-    h += sec('Wenn du dran bist', '<button class="btn" data-act="tflTog">Großer Hinweis „Du bist dran!“: ' + (flashOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button><button class="btn" data-act="sigTog">„Du bist dran“ im Tab-Titel: ' + (sigOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button><button class="btn" data-act="sndTog">Ton, wenn du dran bist: ' + (sndOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>');
+    h += sec('Wenn du dran bist', '<button class="btn" data-act="tflTog">Großer Hinweis „Du bist dran!“: ' + (flashOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>' + [5, 10].map(n => '<button class="btn" data-act="remTog" data-v="' + n + '">Blinken nach ' + n + ' s ohne Zug: ' + (remOn(n) ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>').join('') + '<button class="btn" data-act="sigTog">„Du bist dran“ im Tab-Titel: ' + (sigOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button><button class="btn" data-act="sndTog">Ton, wenn du dran bist: ' + (sndOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>');
     // Spielleitung zuletzt, direkt vor „Raum verlassen“
     h += UI.menuLead || '';
     return h + '<div class="mhead sep"></div>' + (host && playing ? '<button class="btn danger" data-act="abort">Spiel abbrechen</button>' : '') + '<button class="btn ghost" data-act="leave">Raum verlassen</button></div>';
