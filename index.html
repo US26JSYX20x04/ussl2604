@@ -1105,6 +1105,8 @@ main.game .seats > .seat > * { zoom: var(--seatz, 1); }
 .game.round .seats > .seat { min-width: calc(200px * var(--seatz, 1)); max-width: calc(300px * var(--seatz, 1)); }
 /* PC und Tablet: im Spiel kein Scrollen */
 html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
+/* iPad: Seite fest stehen lassen (Safari scrollt sonst trotz overflow:hidden) */
+html.noscr body { position: fixed; inset: 0; width: 100%; height: 100%; }
 /* „Spiel abbrechen“ ganz rechts im Rundenende */
 .sumfoot > .abortgrp { order: 99; margin-left: auto; display: flex; gap: 10px; flex-wrap: wrap; }
 .btn.abortb { color: #ff6b6b; }
@@ -1172,7 +1174,7 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '3b4c13f2';
+var APP_V = '6b1778fb';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -5880,6 +5882,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   // PC und Tablet (nicht Handy): im Spiel gar nicht scrollen
   const pcNoScroll = () => { const on = !!(document.querySelector('main.game') && !isPhone() && window.innerWidth > 600); document.documentElement.classList.toggle('noscr', on); return on; };
   window.addEventListener('scroll', () => { if ((window.scrollX || window.scrollY) && pcNoScroll()) window.scrollTo(0, 0); }, { passive: true });
+  // iPad/Safari ignoriert overflow:hidden beim Wischen: Wischen nur in Bereichen erlauben, die selbst scrollen können (Menü, Hand …)
+  const canScrollEl = t => { for (let e = t; e && e !== document.body && e !== document.documentElement; e = e.parentElement) { const cs = getComputedStyle(e); if ((/(auto|scroll)/.test(cs.overflowY) && e.scrollHeight > e.clientHeight + 1) || (/(auto|scroll)/.test(cs.overflowX) && e.scrollWidth > e.clientWidth + 1)) return true; } return false; };
+  document.addEventListener('touchmove', ev => { if (!document.documentElement.classList.contains('noscr') || ev.touches.length > 1) return; if (!canScrollEl(ev.target)) ev.preventDefault(); }, { passive: false });
   document.addEventListener('visibilitychange', () => { if (!document.hidden) requestRender(); titleMark(document.hidden && myTurnNow()); syncWake(); });
 
   
