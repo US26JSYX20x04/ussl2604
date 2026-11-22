@@ -1152,6 +1152,9 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 /* Person wählen: Rahmen markiert und anklickbar */
 .seat.tgt { cursor: pointer; outline: 2px dashed var(--brass-2); outline-offset: 3px; }
 .seat.tgt:hover, .seat.tgt:focus-visible { background: rgba(245, 215, 126, .12); }
+/* Arschloch: offene Hand (vier Asse) im Spielerrahmen */
+.openh { display: inline-flex; flex-wrap: wrap; gap: 2px; --cw: 22px; }
+.openh .card { --cw: 22px; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1169,7 +1172,7 @@ html.noscr, html.noscr body { overflow: hidden; overscroll-behavior: none; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '794c96fb';
+var APP_V = '3b4c13f2';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3906,7 +3909,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const FWD = { on: false, hit: false, ops: [], rec: [], toasts: [] }, HXC = { on: false, wrote: false, toasts: [] };
   // Aktionen, die nie über den Host laufen (Menüs, Editor, Beitritt, Bestätigungsdialoge …)
   // Nur diese Aktionen sind Spielzüge: Bei Mitspielern laufen sie über die Spielleitung, und nur diese führt die Spielleitung für andere aus.
-  const FWD_YES = /^(xg|bid|pick|card|next|unoCard|unoDbl|unoGo|unoColor|unoDraw|unoPass|p10Pick|p10Draw|p10Pile|p10Sel|p10Lay|p10Hit|p10Next|witToggle|witPass|witCard|witNext|sbSrc|sbBuild|sbDisc|sbPass)$/;
+  const FWD_YES = /^(xg|prePlay|bid|pick|card|next|unoCard|unoDbl|unoGo|unoColor|unoDraw|unoPass|p10Pick|p10Draw|p10Pile|p10Sel|p10Lay|p10Hit|p10Next|witToggle|witPass|witCard|witNext|sbSrc|sbBuild|sbDisc|sbPass)$/;
   const FWD_NO = /^(modal|closeModal|confirmYes|confTog|leave|leaveReq|copy|emo|emoToggle|optInfo|viewTog|specView|rename|renameSave|zoom|create|join|watch|sit|seat|selfPlay|takeHost|giveHost|kick|assign|unwatchOther|reqOk|reqNo|setOk|setNo|turnSave|theme.*|crop.*|persp.*|ed[A-Z].*|av[A-Z].*|num.*)$/;
   const UI_S = ['sel', 'sbSel', 'unoPick', 'unoAsk', 'unoTwo', 'p10Sel', 'witSel'], UI_U = ['x', 'bidV'];
   function uiSnap() { const o = { s: {}, u: {} }; UI_S.forEach(k => { o.s[k] = S[k] === undefined ? null : clone(S[k]); }); UI_U.forEach(k => { o.u[k] = UI[k] === undefined ? null : clone(UI[k]); }); return o; }
@@ -4068,6 +4071,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const v = hideDeck(s);
       if (ended(s)) return v;
       v.hands = maskOthers(s.hands, me);
+      // Wer mit vier Assen startet, spielt mit offenen Karten
+      if (s.open) Object.keys(s.open).forEach(p => { if (s.open[p] && s.hands[p]) v.hands[p] = s.hands[p].slice(); });
       if (s.recv) v.recv = onlyMine(s.recv, me, []);
       if (s.taxSub) v.taxSub = maskOthers(s.taxSub, me);
       return v;
@@ -4644,7 +4649,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (k === 'u') return unoCardHTML(c, X);
       if (k === 'p') return p10CardHTML(c, X);
       if (k === 's') return sbCardHTML(c, X);
-      if (k === 'x' && XG[g]) return XG[g].card(c, X);
+      if (k === 'x' && XG[g]) return (Array.isArray(c) ? c : [c]).map(x => XG[g].card(x, X)).join('');
     } catch (e) { if (typeof __kw === 'function') __kw(e); }
     return '';
   }
@@ -4754,6 +4759,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       UI.twSeenK = k; wakeBump(); UI.twAt = tw && typeof tw.at === 'number' ? tw.at - (runsGame() ? 0 : UI.clkOff || 0) : Date.now(); UI.tlWarned = false;
       if (myTurnNow() && document.hidden) { titleMark(true); if (sigOn() && sndOn()) beep(); }
       if (myTurnNow() && !document.hidden && flashOn()) turnFlash();
+      // Am Zug: zurück zum Spieltisch (Menü, Verlauf usw. schließen – Editor und Eingaben bleiben offen)
+      if (myTurnNow() && S.modal && ['menu', 'hist', 'chart', 'score', 'lb', 'rules', 'lasttrick'].indexOf(S.modal) >= 0) { S.modal = null; renderModal(true); }
       turnRemind(k);
     }
     if (!myTurnNow() || !document.hidden) titleMark(false);
@@ -5571,6 +5578,15 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     },
     witSpTog() { LS.set('wiz.witsp', witSpOn() ? '0' : '1'); renderModal(true); requestRender(); },
     histImg() { LS.set('wiz.histimg', histImgOn() ? '0' : '1'); renderModal(true); },
+    prePlay(el) {
+      const g = (S.meta && S.meta.game) || 'wizard', card = el.dataset.c;
+      const c = g === 'witches' ? wctx() : g === 'wizard' ? ctx() : null;
+      if (!c || !c.seated || c.d.phase !== 'play' || c.d.turn !== c.me || lingerTrick(c)) return;
+      const hand = c.d.left[c.me] || []; if (hand.indexOf(card) < 0) return;
+      const led = c.d.cur.cards.map(x => x.c), legal = g === 'witches' ? HX.legal(hand, led) : E.legalCards(hand, led, c.d.mono);
+      if (legal.indexOf(card) < 0) { toast('Deine vorgewählte Karte darfst du nicht spielen – du musst bedienen. Bitte neu wählen.'); return; }
+      w(backend.update(c.path, { plays: { [c.d.playCount]: { p: c.me, c: card } } }));
+    },
     abortArm(el) {
       if (!isHost()) return;
       const v = el.dataset.v;
@@ -5798,7 +5814,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     else if (t.dataset.ed && (t.type === 'color' || t.type === 'range')) edChange(t, true);
     else if (t.dataset.theme) { const th = themeGet(); th[t.dataset.theme] = t.value; LS.set('wiz.theme', JSON.stringify(th)); themeKeep(th); applyTheme(); }
   });
-  document.addEventListener('toggle', ev => { const t = ev.target; if (t && t.classList && t.classList.contains('edgrp')) UI.edGrpOpen = t.open; if (t && t.classList && t.classList.contains('mlead')) UI.leadOpen = t.open; if (t && t.classList && t.classList.contains('mdisp')) UI.dispOpen = t.open; }, true);
+  document.addEventListener('toggle', ev => { const t = ev.target; if (t && t.classList && t.classList.contains('edgrp')) UI.edGrpOpen = t.open; if (t && t.classList && t.classList.contains('mlead')) UI.leadOpen = t.open; if (t && t.classList && t.classList.contains('mdisp')) UI.dispOpen = t.open; if (t && t.classList && t.classList.contains('msec') && t.dataset.mk2) { UI.mopen = UI.mopen || {}; UI.mopen[t.dataset.mk2] = t.open; } }, true);
   document.addEventListener('change', ev => {
     const t = ev.target;
     if (t.id === 'ed-sel') { ED.id = t.value; ED.pick = null; ensureImgs(ED.id); refreshDyn(); renderModal(true); }
@@ -6749,6 +6765,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     
     if (document.hidden) setTimeout(run, Math.max(0, 1000 - (Date.now() - (UI.lastHidRender || 0)))); else requestAnimationFrame(run);
   }
+  // Rundenende-Anzeige erst nach 3 s (alle sehen noch die letzte Karte); gilt einmal je Runde
+  function sumWait(s) {
+    if (UI.sumNow || !S.meta) return false;
+    const k = S.code + ':' + S.meta.game + ':' + (S.meta.g || 0) + ':' + (s && (s.round != null ? s.round : '')) + ':' + (s && s.winner ? 'w' : '');
+    UI.sumW = UI.sumW || {};
+    if (!UI.sumW[k]) { UI.sumW[k] = Date.now() + 3000; setTimeout(() => requestRender(), 3060); }
+    return Date.now() < UI.sumW[k];
+  }
   function render() {
     if (HXC.on) return;
     const root = $('#app'), X = tableX();
@@ -6760,7 +6784,11 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     else if (!S.code) html = homeHTML(X);
     else if (!S.meta) html = '<main class="home"><p class="wait">Verbinde mit Raum ' + esc(S.code) + ' …</p></main>';
     else if (gated(S.meta)) html = '<main class="home">' + banner() + '<section class="panel start"><h2>Raum ' + esc(S.code) + '</h2><p class="wait">Warte, bis die Spielleitung (' + esc(pname(S.meta.host)) + ') deinen Beitritt erlaubt …</p><p><button class="btn ghost" data-act="leaveReq">Abbrechen</button></p></section></main>';
-    else if (S.meta.status === 'playing') html = XG[S.meta.game] ? xgHTML(X) : S.meta.game === 'skipbo' ? skipboHTML(X) : S.meta.game === 'uno' ? unoHTML(X) : S.meta.game === 'phase10' ? p10HTML(X) : S.meta.game === 'witches' ? witHTML(X) : gameHTML(X);
+    else if (S.meta.status === 'playing') {
+      // Rundenende: erst 3 s den Tisch mit der letzten Karte zeigen; klappt das in einem Spiel nicht, sofort die Auswertung
+      const build = () => XG[S.meta.game] ? xgHTML(X) : S.meta.game === 'skipbo' ? skipboHTML(X) : S.meta.game === 'uno' ? unoHTML(X) : S.meta.game === 'phase10' ? p10HTML(X) : S.meta.game === 'witches' ? witHTML(X) : gameHTML(X);
+      try { html = build(); } catch (e) { if (!UI.sumNow) { UI.sumNow = true; try { html = build(); } finally { UI.sumNow = false; } if (typeof __kw === 'function') __kw(e); } else throw e; }
+    }
     else html = lobbyHTML(X);
     
     // Aufdecken/Zudecken (z. B. Cabo): vorher merken, welche Karten verdeckt waren
@@ -8107,7 +8135,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const ask = myTurn && S.unoAsk !== null && S.unoAsk !== undefined && myHand[S.unoAsk] !== undefined ? S.unoAsk : null;
     const gotN = s.got && s.got.p === me ? Math.min(s.got.n || 0, myHand.length) : 0;
     let center, status = '';
-    if (s.winner) {
+    if (s.winner && !sumWait(s)) {
       const rank = s.order.slice().sort((a, b) => s.hands[a].length - s.hands[b].length);
       center = '<div class="summary"><h2>' + (s.winner === me ? 'Du gewinnst' : esc(pname(s.winner)) + ' gewinnt') + '</h2><div class="tablewrap"><table><thead><tr><th scope="col">Platz</th><th scope="col">Handkarten</th></tr></thead><tbody>' + rank.map((p, i) => '<tr class="' + (p === me ? 'me' : '') + (i === 0 ? ' win' : '') + '"><th scope="row">' + (i + 1) + '. ' + esc(pname(p)) + '</th><td><b>' + s.hands[p].length + '</b></td></tr>').join('') + '</tbody></table></div><div class="sumfoot">' + lobbyFoot() + '</div></div>';
     } else {
@@ -8162,7 +8190,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     
     const gotMine = s.got && s.got.p === me ? s.got : null, gotI = gotMine ? hand0.lastIndexOf(gotMine.c) : -1;
     let center, status = '';
-    if (s.over) {
+    if (s.over && !sumWait(s)) {
       const head = s.winner ? (s.winner === me ? 'Du gewinnst' : esc(pname(s.winner)) + ' gewinnt') : s.nopts && s.order.every(q => s.over.res[q] && s.over.res[q].done) ? 'Runde ' + s.round + ': Alle haben ihre Phase geschafft' : 'Runde ' + s.round + ' ist vorbei: ' + nm(s.over.out) + (s.over.out === me ? ' hast' : ' hat') + ' keine Karten mehr';
       center = '<div class="summary"><h2>' + head + '</h2>' + p10Table(s, !!s.winner) + (s.winner && !s.nopts ? ptChart(s.order, s.hist, 'Strafpunkte im Verlauf') : '') + '<div class="sumfoot">' + (s.winner ? lobbyFoot() : dealBtn('p' + s.round, '<button class="btn primary" data-act="p10Next">Nächste Runde austeilen</button>')) + '</div></div>';
       if (s.winner) center = endGate(center);
@@ -8234,11 +8262,11 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (document.body.classList.contains('tricklock') || (UI.trickHold || 0) > Date.now()) { clearTimeout(UI.preT); UI.preT = setTimeout(preTick, 400); return; }
       if (preWait()) return;
       S.pre = null; UI.x = UI.x || {}; UI.x.sel = null;
-      // wie zweimal Antippen: erst wählen, dann spielen (Tigress/Gaia fragen danach wie gewohnt nach)
-      const G = XG[g], dd = { c: String(card) };
-      let r = G.act('c', dd, s, me);
-      if (!(r && typeof r === 'object') && UI.x && String(UI.x.sel) === String(card)) r = G.act('c', dd, s, me);
-      if (r && typeof r === 'object') xgWrite(g, r); else render();
+      // wie zweimal Antippen – über die normale Aktion, damit der Zug bei Gästen über die Spielleitung läuft (Tigress/Gaia fragen danach wie gewohnt nach)
+      const el = fakeEl({ a: 'c', c: String(card) }, 'hc ok');
+      runAction('xg', A.xg, el, null);
+      if (UI.x && String(UI.x.sel) === String(card)) runAction('xg', A.xg, el, null);
+      render();
       return;
     }
     const c = g === 'witches' ? wctx() : ctx();
@@ -8253,7 +8281,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const led = d.cur.cards.map(x => x.c), legal = g === 'witches' ? HX.legal(hand, led) : E.legalCards(hand, led, d.mono);
     if (legal.indexOf(card) < 0) { toast('Deine vorgewählte Karte darfst du nicht spielen – du musst bedienen. Bitte neu wählen.'); requestRender(); return; }
     S.sel = null;
-    w(backend.update(c.path, { plays: { [d.playCount]: { p: c.me, c: card } } }));
+    // über eine eigene Aktion: bei Gästen führt die Spielleitung den Zug aus (direktes Schreiben nimmt sie nicht an)
+    runAction('prePlay', A.prePlay, fakeEl({ c: card }, ''), null);
   }
   function witHTML(X) {
     const c = wctx();
@@ -8332,7 +8361,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     }).join('');
     const W = Math.min(window.innerWidth - 24, 760), cw = Math.min(cardW(), Math.floor((W - 40) / 5));
     let center, status;
-    if (s.winner) {
+    if (s.winner && !sumWait(s)) {
       const rank = s.order.slice().sort((a, b) => (s.stock[a] || []).length - (s.stock[b] || []).length);
       center = '<div class="summary"><h2>' + (s.winner === me ? 'Du gewinnst' : esc(pname(s.winner)) + ' gewinnt') + '</h2><div class="tablewrap"><table><thead><tr><th scope="col">Platz</th><th scope="col">Karten im Stapel</th></tr></thead><tbody>' +
         rank.map((p, i) => '<tr class="' + (p === me ? 'me' : '') + (i === 0 ? ' win' : '') + '"><th scope="row">' + (i + 1) + '. ' + esc(pname(p)) + '</th><td><b>' + (s.stock[p] || []).length + '</b></td></tr>').join('') + '</tbody></table></div><div class="sumfoot">' +
@@ -8428,11 +8457,13 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     // Karten in der Mitte: zeigt den geltenden Wert (auch den automatischen); − / + setzen einen eigenen Wert, „Automatisch“ hebt ihn auf
     const midLoc = () => '<div class="animctl"><b>Karten in der Mitte</b><span class="steps"><button class="rb" data-act="midStep" data-d="-5" aria-label="Karten in der Mitte kleiner">−</button><output>' + midEff() + ' %</output><button class="rb" data-act="midStep" data-d="5" aria-label="Karten in der Mitte größer">+</button></span>' + (midScale() ? '<button class="btn small ghost" data-act="midStep" data-d="0">Automatisch</button>' : '<span class="fine">automatisch</span>') + '</div>';
     const loc = (k, lab, v, d) => '<div class="animctl"><b>' + lab + '</b><span class="steps"><button class="rb" data-act="locStep" data-k="' + k + '" data-d="-' + d + '" aria-label="' + lab + ' kleiner">−</button><output>' + v + ' %</output><button class="rb" data-act="locStep" data-k="' + k + '" data-d="' + d + '" aria-label="' + lab + ' größer">+</button></span>' + (v !== 100 ? '<button class="btn small ghost" data-act="locStep" data-k="' + k + '" data-d="0">100 %</button>' : '') + '</div>';
-    const sec = (title, body, cls) => body ? '<h3 class="mhead' + (cls ? ' ' + cls : '') + '">' + title + '</h3>' + body : '';
+    // Alle Menüpunkte einklappbar, standardmäßig eingeklappt (geöffnete bleiben offen, solange die Seite offen ist)
+    const sec = (title, body, cls) => { if (!body) return ''; const k = title.replace(/<[^>]*>/g, '').trim(); UI.mopen = UI.mopen || {};
+      return '<details class="mfold msec' + (cls ? ' ' + cls : '') + '" data-mk2="' + esc(k) + '"' + (UI.mopen[k] ? ' open' : '') + '><summary class="mhead">' + title + '</summary><div class="mleadin">' + body + '</div></details>'; };
     let h = '<p class="menuinfo">Raumcode <b>' + esc(S.code) + '</b> · Spielleitung: <b>' + esc(pname(S.meta.host)) + '</b></p>' + (playing ? watchersHTML() : '') + '<div class="menu">';
     // 1. Spiel: nachlesen und nachschlagen
     let g = '<button class="btn" data-act="modal" data-m="score">Punktetafel</button>';
-    if (playing) g += '<button class="btn" data-act="modal" data-m="hist">Spielverlauf</button>';
+    if (playing) g += '<button class="btn" data-act="modal" data-m="hist">Spielverlauf</button><button class="btn" data-act="modal" data-m="chart">Punkteverlauf (Grafik)</button>';
     g += '<button class="btn" data-act="modal" data-m="lb">Rangliste der Sitzung</button><button class="btn" data-act="modal" data-m="rules">Regeln</button>';
     if (!playing && !host) g += '<button class="btn" data-act="modal" data-m="editor">Karten ansehen</button>';
     h += sec('Spiel', g);
@@ -8714,13 +8745,16 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const xClone = o => JSON.parse(JSON.stringify(o));
   const xShuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)), t = a[i]; a[i] = a[j]; a[j] = t; } return a; };
   const xNext = (s, i, ok, dir) => { const n = s.order.length; for (let k = 1; k <= n; k++) { const j = (((i + k * (dir || 1)) % n) + n) % n; if (!ok || ok(s.order[j])) return j; } return i; };
+  // Verlaufszeile mit Karte(n): Text + \u0001x:<JSON> – die Karten erscheinen im Spielverlauf als kleine Bilder
+  const xc = (t, c) => t + '\u0001x:' + JSON.stringify(c);
+  const logTxt = t => String(t).split('\u0001')[0];
   const xLog = (s, t) => { s.log = (Array.isArray(s.log) ? s.log : []).concat([t]).slice(-4); s.seq = (s.seq || 0) + 1; };
   const xNm = p => p === S.pid ? 'Du' : esc(pname(p));
   // Uno-Varianten: Spielrichtung über den Karten
   // Person wählen (gezielte +2, Tausch): Rahmen der wählbaren Personen markieren und anklickbar machen
   const xPickSeats = (html, ps, a) => html.replace(/<div class="seat([^"]*)" data-p="([^"]+)"/g, (m, c, p) => ps.indexOf(p) >= 0 || ps.map(esc).indexOf(p) >= 0 ? '<div class="seat' + c + ' tgt" data-p="' + p + '" data-act="xg" data-a="' + a + '" role="button" tabindex="0" title="Diese Person wählen"' : m);
   const unoDir = d => '<p class="unodir" aria-label="Spielrichtung ' + (d === 1 ? 'im Uhrzeigersinn' : 'gegen den Uhrzeigersinn') + '">Richtung <b>' + (d === 1 ? '↻' : '↺') + '</b></p>';
-  const xLogHTML = s => (s.log || []).length ? '<p class="xlog">' + s.log.slice(-3).map(esc).join('<br>') + '</p>' : '';
+  const xLogHTML = s => (s.log || []).length ? '<p class="xlog">' + s.log.slice(-3).map(t => esc(logTxt(t))).join('<br>') + '</p>' : '';
   function xCard(g, id, ci, txt, X, o) {
     o = Object.assign({}, o || {});
     const G = XG[g], c = X.D.games[g].cols[ci] || {};
@@ -8975,7 +9009,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const seats = aroundMe(s.order).map(p => xSeat(p, cur === p && !s.over, tags(p)).replace('</div><div class="ss">', '<span class="lltok">' + tok + ' <b>' + s.tokens[p] + '</b></span></div><div class="ss">')).join('');
         const ws = s.winners || (s.winner ? [s.winner] : []);
         let center, status = '';
-        if (s.over) center = xSum(s, s.winner ? (ws.length > 1 ? 'Es gewinnen ' + ws.map(xNm).join(' und ') : xWin(s, me)) : 'Runde ' + s.round + ': ' + s.over.win.map(xNm).join(' und ') + (s.over.win.length > 1 || s.over.win[0] === me ? ' gewinnen' : ' gewinnt'), xTable(['', 'Handkarte', s.ext ? 'Herzen' : 'Steine'], s.order.map(p => ({ p: p, win: s.over.win.indexOf(p) >= 0, cells: [esc(pname(p)), s.out[p] ? 'ausgeschieden' : esc(nv(s.hand[p][0])), '<b>' + s.tokens[p] + '</b>' + (s.over.spy === p ? ' (Spionin +1)' : '')] }))), 'Nächste Runde');
+        if (s.over && !sumWait(s)) center = xSum(s, s.winner ? (ws.length > 1 ? 'Es gewinnen ' + ws.map(xNm).join(' und ') : xWin(s, me)) : 'Runde ' + s.round + ': ' + s.over.win.map(xNm).join(' und ') + (s.over.win.length > 1 || s.over.win[0] === me ? ' gewinnen' : ' gewinnt'), xTable(['', 'Handkarte', s.ext ? 'Herzen' : 'Steine'], s.order.map(p => ({ p: p, win: s.over.win.indexOf(p) >= 0, cells: [esc(pname(p)), s.out[p] ? 'ausgeschieden' : esc(nv(s.hand[p][0])), '<b>' + s.tokens[p] + '</b>' + (s.over.spy === p ? ' (Spionin +1)' : '')] }))), 'Nächste Runde');
         else {
           let ask = '';
           if (s.chan === me) ask = '<p class="xlog"><b>Kanzler:</b> Tippe unten die Karte an, die du behältst. Die anderen kommen unter den Stapel.</p>';
@@ -9114,7 +9148,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const seated = s.order.indexOf(me) >= 0, cur = s.order[s.turn], playing = !s.over && !s.choose, myTurn = seated && playing && cur === me, cw = cardW(), P = s.order.length;
         const seats = aroundMe(s.order).map(p => xSeat(p, playing && cur === p, minisHTML((s.hands[p] || []).length) + '<span>Stiche: <b>' + s.won[p] + '</b></span><span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>')).join('');
         let center, status = '';
-        if (s.over) center = xSum(s, s.winner ? (s.winners.length > 1 ? 'Es gewinnen ' + s.winners.map(xNm).join(' und ') : xWin(s, me)) : 'Runde ' + s.round + ' ist gespielt', xTable(['', 'Stiche', 'Gesamt'], s.order.slice().sort((a, b) => s.scores[a] - s.scores[b]).map(p => ({ p: p, win: s.winner && s.winners.indexOf(p) >= 0, cells: [esc(pname(p)), '+' + s.over.won[p], '<b>' + s.scores[p] + '</b>'] }))), 'Nächste Runde austeilen');
+        if (s.over && !sumWait(s)) center = xSum(s, s.winner ? (s.winners.length > 1 ? 'Es gewinnen ' + s.winners.map(xNm).join(' und ') : xWin(s, me)) : 'Runde ' + s.round + ' ist gespielt', xTable(['', 'Stiche', 'Gesamt'], s.order.slice().sort((a, b) => s.scores[a] - s.scores[b]).map(p => ({ p: p, win: s.winner && s.winners.indexOf(p) >= 0, cells: [esc(pname(p)), '+' + s.over.won[p], '<b>' + s.scores[p] + '</b>'] }))), 'Nächste Runde austeilen');
         else {
           center = xTrick(s, c => card(c, X), P) + (s.choose === me ? xPick('Du hast mit der höchsten Karte einer Farbe gewonnen. Wer eröffnet den nächsten Stich?', s.order.map(q => xBtn('lead', q === me ? 'Ich selbst' : esc(pname(q)), ' data-p="' + esc(q) + '"')).join('')) : '');
           status = s.choose ? (s.choose === me ? '<b>Wähle, wer ausspielt.</b>' : xNm(s.choose) + ' bestimmt, wer den nächsten Stich eröffnet …') : (!s.trick.length && s.last ? '<b>' + xNm(s.last.win) + '</b> ' + (s.last.win === me ? 'bekommst' : 'bekommt') + ' den Stich. ' : '');  // wer dran ist, zeigt der Rahmen
@@ -9226,6 +9260,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       for (const c of cards) { const k = h.indexOf(c); if (k < 0) return null; h.splice(k, 1); }
       s.table = { cards: cards.slice(), n: v.n, rank: v.rank, by: p }; s.passes = 0; s.seq = (s.seq || 0) + 1; s.played = (s.played || []).concat(cards);
       if (s.recv && s.recv[p] && s.recv[p].length) s.recv[p] = [];
+      xLog(s, xc(pname(p) + ' legt ' + (v.n > 1 ? v.n + '× ' : '') + (v.rank === 13 ? 'Narr' : v.rank) + '.', cards));
       if (!h.length) { s.fin.push(p); xLog(s, pname(p) + ' ist fertig (Platz ' + s.fin.length + ').'); }
       if (live(s).length <= 1) { endRound(s); return s; }
       advance(s);
@@ -9370,7 +9405,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const gotIdx = []; (s.phase === 'play' && s.recv ? s.recv[me] || [] : []).forEach(c => { const k = hand.findIndex((x, j) => x === c && gotIdx.indexOf(j) < 0); if (k >= 0) gotIdx.push(k); });
         const seats = aroundMe(s.order).map(p => xSeat(p, cur === p || taxTurn(p), '<span class="tag' + (s.order.indexOf(p) < 2 ? ' gold' : '') + '">' + title(s, p) + '</span>' + (s.phase === 'play' && s.table && (s.passed || {})[p] ? '<span class="tag dim">gepasst</span>' : '') + (s.hands[p].length ? minisHTML(s.hands[p].length) : '<span class="tag gold">fertig, Platz ' + (s.fin.indexOf(p) + 1) + '</span>') + '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>')).join('');
         let center, status = '';
-        if (s.over) center = xSum(s, s.winner ? xWin(s, me) : 'Runde ' + s.round + ' ist gespielt', xTable(['Neuer Rang', 'Runde', 'Gesamt'], s.over.order.map((p, i) => ({ p: p, win: s.winner === p, cells: [(i + 1) + '. ' + esc(pname(p)), '+' + (s.order.length - 1 - i), '<b>' + s.scores[p] + '</b>'] }))), 'Nächste Runde austeilen');
+        if (s.over && !sumWait(s)) center = xSum(s, s.winner ? xWin(s, me) : 'Runde ' + s.round + ' ist gespielt', xTable(['Neuer Rang', 'Runde', 'Gesamt'], s.over.order.map((p, i) => ({ p: p, win: s.winner === p, cells: [(i + 1) + '. ' + esc(pname(p)), '+' + (s.order.length - 1 - i), '<b>' + s.scores[p] + '</b>'] }))), 'Nächste Runde austeilen');
         else if (s.phase === 'rev') { center = myTurn ? xPick('Du hast beide Narren. ' + (s.order.indexOf(me) === s.order.length - 1 ? 'Als Großer Diener kannst du den großen Aufstand ausrufen: Alle Ränge werden umgedreht.' : 'Du kannst die Revolution ausrufen: Dann wird nicht getauscht.'), xBtn('rev', 'Ausrufen', ' data-v="1"', 'primary') + xBtn('rev', 'Nicht ausrufen', ' data-v="0"')) : ''; status = myTurn ? '<b>Entscheide dich.</b>' : 'Gleich geht es los …'; }
         else if (s.phase === 'tax') {
           center = xLogHTML(s);
@@ -9405,33 +9440,60 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   (function () {
     const K = 'arschloch', SU = ['a', 'b', 'c', 'd'];
     const RT = { 11: 'B', 12: 'D', 13: 'K', 14: 'A' }, RW = { 11: 'Bube', 12: 'Dame', 13: 'König', 14: 'Ass' };
-    const rk = c => +String(c).slice(1), su = c => String(c)[0];
-    const rtx = r => RT[r] || String(r), rnm = r => RW[r] || String(r);
+    // Joker (optional): allein die niedrigste Karte (Wert 1), zusammen mit anderen nimmt er deren Wert an
+    const isJ = c => String(c)[0] === 'j';
+    const rk = c => isJ(c) ? 1 : +String(c).slice(1), su = c => String(c)[0];
+    const rtx = r => r === 1 ? 'J' : RT[r] || String(r), rnm = r => r === 1 ? 'Joker' : RW[r] || String(r);
     const colOf = id => Math.max(0, SU.indexOf(su(id)));
     // Arschloch: in der Kartenmitte das Farbsymbol (dick) statt der Zahl; die Zahl steht in den Ecken
-    const card = (id, X, o) => xCard(K, String(id), colOf(id), rtx(rk(id)), X, Object.assign({ midSym: true }, o || {}));
+    const card = (id, X, o) => isJ(id) ? xCard(K, 'j1', 0, '★', X, Object.assign({ label: 'Joker' }, o || {})) : xCard(K, String(id), colOf(id), rtx(rk(id)), X, Object.assign({ midSym: true }, o || {}));
     const ALL = []; SU.forEach(s => { for (let r = 2; r <= 14; r++) ALL.push(s + r); });
-    const deckOf = s => { const d = ALL.filter(c => !s.skat || rk(c) >= 7); return s.dbl ? d.concat(d) : d; };
+    const deckOf = s => { const d = ALL.filter(c => !s.skat || rk(c) >= 7).concat(s.joker ? ['j1', 'j2'] : []); return s.dbl ? d.concat(d) : d; };
     const RANKS = s => s.skat ? [7, 8, 9, 10, 11, 12, 13, 14] : [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
     // a schlägt b? Nach einer Revolution ist die Reihenfolge umgedreht
     const better = (s, a, b) => s.revo ? a < b : a > b;
     const sortH = h => h.sort((x, y) => rk(x) - rk(y) || SU.indexOf(su(x)) - SU.indexOf(su(y)));
-    const title = (s, p) => { if (!s.ranked) return 'Runde 1'; const i = s.order.indexOf(p), P = s.order.length; if (i === 0) return 'König'; if (i === P - 1) return 'Arschloch'; if (P >= 4 && i === 1) return 'Vizekönig'; if (P >= 4 && i === P - 2) return 'Vize-Arschloch'; return 'Bürger'; };
+    const title = (s, p) => { if (!s.ranked) return 'Runde 1'; const i = s.order.indexOf(p), P = s.order.length; if (i === 0) return 'König'; if (i === P - 1) return 'Arschloch'; if (P >= 4 && i === 1) return 'Vizekönig'; if (P >= 4 && i === P - 2) return 'Vize-Arschloch'; if (s.viceB && P >= 6 && i === 2) return 'Bauer'; if (s.viceB && P >= 6 && i === P - 3) return 'Vize-Bauer'; return 'Bürger'; };
     const live = s => s.order.filter(p => s.hands[p].length);
-    const setOf = cards => { if (!cards.length || cards.some(c => rk(c) !== rk(cards[0]))) return null; return { n: cards.length, rank: rk(cards[0]) }; };
+    const setOf = cards => {
+      if (!cards.length) return null;
+      const nat = cards.filter(c => !isJ(c));
+      if (nat.some(c => rk(c) !== rk(nat[0]))) return null;
+      return { n: cards.length, rank: nat.length ? rk(nat[0]) : 1 };
+    };
+    const isBomb = v => v.n === 4;
+    // Schlägt v die Auslage t? Gleiche Anzahl mit höherem Wert – oder derselbe Wert mit mehr Karten – oder eine Bombe
+    function beats(s, v, t) {
+      if (!t) return true;
+      if (isBomb(v) && (s.bombAce ? t.rank === 14 : s.bomb)) return true;
+      if (v.n === t.n && better(s, v.rank, t.rank)) return true;
+      return !!s.more && v.rank === t.rank && v.n > t.n;
+    }
     function deal(s) {
       const P = s.order.length;
       s.hands = {}; s.order.forEach(p => { s.hands[p] = []; });
       xShuffle(deckOf(s)).forEach((c, i) => s.hands[s.order[i % P]].push(c));
       s.order.forEach(p => sortH(s.hands[p]));
-      s.table = null; s.passes = 0; s.passed = {}; s.fin = []; s.over = null; s.played = []; s.revo = false; s.recv = {}; s.taxSub = {}; s.taxQ = {};
-      // Ab Runde 2 wird gedrückt, und das Arschloch beginnt
-      s.turn = s.ranked ? P - 1 : 0;
-      if (s.ranked) { s.phase = 'tax'; s.tax = P >= 4 ? [{ from: 0, to: P - 1, n: 2 }, { from: 1, to: P - 2, n: 1 }] : [{ from: 0, to: P - 1, n: 1 }]; }
-      else { s.phase = 'play'; s.tax = []; }
+      s.table = null; s.passes = 0; s.passed = {}; s.fin = []; s.aceOut = []; s.open = {}; s.over = null; s.played = []; s.revo = false; s.recv = {}; s.taxSub = {}; s.taxQ = {};
+      // Ab Runde 2 wird gedrückt; beginnen darf (je nach Einstellung) das Arschloch oder der König
+      s.turn = startSeat(s);
+      if (s.ranked) { s.phase = 'tax'; s.tax = P >= 4 ? [{ from: 0, to: P - 1, n: 2 }, { from: 1, to: P - 2, n: 1 }] : [{ from: 0, to: P - 1, n: 1 }];
+        // Ab 6 Personen (Einstellung): der Dritte von oben (Bauer) bekommt 1 Karte vom Dritten von unten (Vize-Bauer) und gibt eine zurück
+        if (s.viceB && P >= 6) s.tax.push({ from: 2, to: P - 3, n: 1 }); }
+      else { s.phase = 'play'; s.tax = []; aces(s); }
+    }
+    // Beginn je nach Einstellung: letzter Platz (Arschloch) oder erster Platz (König) – in Runde 1 entsprechend der gemischten Sitzordnung
+    const startSeat = s => s.arsStart === false ? 0 : s.order.length - 1;
+    // Drei Asse ansagen, mit vier (oder mehr) Assen offen spielen
+    function aces(s) {
+      if (!s.aceRule) return;
+      s.order.forEach(p => { const n = s.hands[p].filter(c => rk(c) === 14).length;
+        if (n >= 4) { s.open[p] = true; xLog(s, pname(p) + ' hat ' + n + ' Asse und spielt mit offenen Karten.'); }
+        else if (n === 3) xLog(s, pname(p) + ' hat drei Asse.'); });
     }
     const taxOf = (s, p) => (s.tax || []).find(t => s.order[t.from] === p);
-    const taxBest = (s, t) => s.hands[s.order[t.to]].slice(-t.n);
+    // Höchste Karten zum Drücken; mit „Asse behalten“ gibt das Arschloch keine Asse ab
+    const taxBest = (s, t) => s.hands[s.order[t.to]].filter(c => !(s.keepAce && rk(c) === 14) && !isJ(c)).slice(-t.n);
     // Raten (wie bei Dalmuti): König bis zu 3 Versuche für höchstens 2 Karten, Vizekönig bis zu 2 für 1 Karte
     const taxQ = (s, p) => (s.taxQ || {})[p] || { asked: [], got: [] };
     const taxAsks = t => t.n === 2 ? 3 : 2;
@@ -9443,7 +9505,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (!t || (s0.taxSub || {})[p] || taxAskDone(s0, t, p) || RANKS(s0).indexOf(r) < 0) return null;
       const q = taxQ(s0, p), got = q.got.slice(), asked = q.asked.concat([r]);
       const avail = s0.hands[s0.order[t.to]].slice(); got.forEach(c => { const k = avail.indexOf(c); if (k >= 0) avail.splice(k, 1); });
-      const hit = avail.find(c => rk(c) === r);
+      const hit = avail.find(c => rk(c) === r && !(s0.keepAce && r === 14));
       if (hit) got.push(hit);
       return { $upd: { taxQ: { [p]: { asked, got } } } };
     }
@@ -9469,12 +9531,15 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         if (cards.length) mv.push([p, to, cards.length]); if (back.length) mv.push([to, p, back.length]);
       });
       s.fx = { id: 'tax' + (s.g || 0) + ':' + (s.round || 0) + ':' + s.seq, moves: mv, tax: 1 };
-      s.tax = []; s.taxSub = {}; s.taxQ = {}; s.phase = 'play'; s.turn = s.order.length - 1; s.seq++;
+      s.tax = []; s.taxSub = {}; s.taxQ = {}; s.phase = 'play'; s.turn = startSeat(s); s.seq++;
+      aces(s);
       return s;
     }
     function endRound(s) {
       const P = s.order.length;
       live(s).forEach(q => s.fin.push(q));
+      // Wer mit einem Ass als letzter Karte fertig wurde, landet ganz hinten
+      (s.aceOut || []).forEach(q => s.fin.push(q));
       s.fin.forEach((q, i) => { s.scores[q] += P - 1 - i; });
       s.over = { order: s.fin.slice() }; s.phase = 'over';
       if (s.round >= s.rounds) { const best = Math.max.apply(null, s.order.map(q => s.scores[q])); s.winner = s.over.order.find(q => s.scores[q] === best); }
@@ -9497,21 +9562,30 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     function play(s0, p, cards) {
       const v = setOf(cards);
       if (s0.phase !== 'play' || s0.order[s0.turn] !== p || !v) return null;
-      if (s0.table && (v.n !== s0.table.n || !better(s0, v.rank, s0.table.rank))) return null;
+      if (s0.table && !beats(s0, v, s0.table)) return null;
       const s = xClone(s0), h = s.hands[p];
       for (const c of cards) { const k = h.indexOf(c); if (k < 0) return null; h.splice(k, 1); }
       s.table = { cards: cards.slice(), n: v.n, rank: v.rank, by: p }; s.passes = 0; s.passed = {}; s.seq = (s.seq || 0) + 1; s.played = (s.played || []).concat(cards);
       if (s.recv && s.recv[p] && s.recv[p].length) s.recv[p] = [];
       if (s.revoOn && v.n === 4) { s.revo = !s.revo; xLog(s, pname(p) + ' ruft die Revolution aus: ' + (s.revo ? 'Jetzt ist die niedrigste Karte die höchste!' : 'Die Reihenfolge gilt wieder normal.')); }
-      if (!h.length) { s.fin.push(p); xLog(s, pname(p) + ' ist fertig (Platz ' + s.fin.length + ').'); }
+      xLog(s, xc(pname(p) + ' legt ' + (v.n > 1 ? v.n + '× ' : '') + rnm(v.rank) + '.', cards));
+      if (!h.length) {
+        if (s.aceLast && cards.some(c => rk(c) === 14)) { s.aceOut.push(p); xLog(s, pname(p) + ' ist mit einem Ass fertig geworden und wird zum Arschloch.'); }
+        else { s.fin.push(p); xLog(s, pname(p) + ' ist fertig (Platz ' + s.fin.length + ').'); }
+      }
       if (live(s).length <= 1) { endRound(s); return s; }
+      // Bombe gewinnt den Stich sofort
+      if (isBomb(v) && (s.bomb || s.bombAce) && s0.table) { xLog(s, pname(p) + ' zündet eine Bombe und gewinnt den Stich.'); s.passes = 99; }
       advance(s);
       return s;
     }
     function playable(s, hand, k, giving) {
       if (s.phase === 'tax') return giving;
       if (s.phase !== 'play' || !s.table) return true;
-      const r = rk(hand[k]); return better(s, r, s.table.rank) && hand.filter(x => rk(x) === r).length >= s.table.n;
+      const t = s.table, jn = hand.filter(isJ).length;
+      const okR = r => { const n = hand.filter(x => rk(x) === r && !isJ(x)).length + jn; return [t.n, t.n + 1, 4].some(m => m <= n && beats(s, { n: m, rank: r }, t)); };
+      if (isJ(hand[k])) return okR(1) || hand.some(x => !isJ(x) && okR(rk(x)));
+      return okR(rk(hand[k]));
     }
     const canPlayP = (s, p) => { const h = s.hands[p] || []; return !s.table || h.some((c, k) => playable(s, h, k, false)); };
     function pass(s0, p) {
@@ -9543,15 +9617,24 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     xgReg(K, {
       name: 'Arschloch', text: 'Für 3 bis 8: Karten loswerden, König werden – und bloß nicht das Arschloch.', min: 3, max: 16, rec: '3 bis 8, mit doppeltem Blatt bis 16', pre: 'ar',
       cols: [['Kreuz', '#22202e', '♣'], ['Pik', '#3a3f4f', '♠'], ['Herz', '#c8402f', '♥'], ['Karo', '#d9682b', '♦']],
-      cards: ALL.slice(), sample: ['c14', 'b13', 'a10', 'd7', 'c2'], colOf: colOf, label: (id, D) => ((D && D.games && D.games[K] && D.games[K].cols[colOf(id)] || {}).name || '') + ' ' + rnm(rk(id)), card: card,
-      def: { arRounds: 10, arSkat: false, arRevo: false, arDbl: false, arGuess: false }, nums: ['arRounds'], togs: ['arSkat', 'arRevo', 'arDbl', 'arGuess'],
+      cards: ALL.concat(['j1']), sample: ['c14', 'b13', 'a10', 'd7', 'c2'], colOf: colOf, label: (id, D) => isJ(id) ? 'Joker' : ((D && D.games && D.games[K] && D.games[K].cols[colOf(id)] || {}).name || '') + ' ' + rnm(rk(id)), card: card,
+      def: { arRounds: 10, arSkat: false, arRevo: false, arDbl: false, arGuess: false, arJoker: false, arKeepAce: false, arStart: true, arBomb: false, arBombAce: false, arAceLast: true, arAces: false, arMore: false, arViceB: false }, nums: ['arRounds'], togs: ['arSkat', 'arRevo', 'arDbl', 'arGuess', 'arJoker', 'arKeepAce', 'arStart', 'arBomb', 'arBombAce', 'arAceLast', 'arAces', 'arMore', 'arViceB'],
       delay: s => s.phase === 'tax' && (s.tax || []).every(t => (s.taxSub || {})[s.order[t.from]]) ? 2000 : 900,
       lobby: (st, h) => '<h3>Rundenzahl</h3>' + h.stepper('Runden', 'arRounds', Math.max(1, Math.min(30, st.arRounds || 10)), 1, 1, 30) +
         '<h3>Karten</h3>' + h.toggle('Skatblatt (32 Karten)', st.arSkat ? 'An: nur 7 bis Ass – kürzere Runden.' : 'Aus: Pokerblatt mit 52 Karten (2 bis Ass).', 'arSkat', !!st.arSkat) +
         h.toggle('Doppeltes Blatt', 'Jede Karte gibt es zweimal – für mehr Personen. Ab 9 Personen wird automatisch doppelt gespielt (bis 16).', 'arDbl', !!st.arDbl) +
+        h.toggle('Joker', 'Zwei Joker je Blatt: allein die niedrigste Karte, zusammen mit anderen Karten nehmen sie deren Wert an.', 'arJoker', !!st.arJoker) +
+        '<h3>Beginn</h3>' + h.toggle('Arschloch beginnt', st.arStart !== false ? 'An: Der letzte Platz (ab Runde 2 das Arschloch) spielt den ersten Stich aus.' : 'Aus: Der erste Platz (ab Runde 2 der König) spielt den ersten Stich aus.', 'arStart', st.arStart !== false) +
         '<h3>Drücken</h3>' + h.toggle('Karten erraten', 'Der König bekommt die Karten des Arschlochs nicht automatisch, sondern rät Werte: Hat das Arschloch den Wert, bekommt er eine solche Karte. Der König darf bis zu dreimal raten (höchstens 2 Karten), der Vizekönig bis zu zweimal (höchstens 1 Karte). Zurückgegeben werden so viele Karten, wie man bekommen hat.', 'arGuess', !!st.arGuess) +
-        '<h3>Sonderregel</h3>' + h.toggle('Revolution bei vier Gleichen', 'Wer vier Karten mit demselben Wert legt, dreht die Reihenfolge bis zum Rundenende um: Dann ist die niedrigste Karte die höchste.', 'arRevo', !!st.arRevo),
-      create(seats, st) { const s = { order: xShuffle(seats), round: 1, rounds: Math.max(1, Math.min(30, st.arRounds || 10)), skat: !!st.arSkat, dbl: !!st.arDbl || seats.length > 8, guess: !!st.arGuess, revoOn: !!st.arRevo, ranked: false, scores: {}, winner: null, log: [], seq: 0 }; seats.forEach(p => { s.scores[p] = 0; }); deal(s); return s; },
+        h.toggle('Arschloch behält Asse', 'Das Arschloch muss keine Asse an den König abgeben (es gibt dann die höchsten Karten ohne Asse).', 'arKeepAce', !!st.arKeepAce) +
+        h.toggle('Bauer und Vize-Bauer (ab 6)', 'Ab 6 Personen tauschen auch der Dritte von oben (Bauer) und der Dritte von unten (Vize-Bauer): 1 Karte, wie bei Vizekönig und Vize-Arschloch.', 'arViceB', !!st.arViceB) +
+        '<h3>Sonderregeln</h3>' + h.toggle('Mit mehr Karten erhöhen', 'Man darf auch mit mehr Karten desselben Werts erhöhen – auf eine 4 also zwei 4er.', 'arMore', !!st.arMore) +
+        h.toggle('Bombe', 'Vier Karten mit demselben Wert gewinnen jeden Stich sofort – egal, wie viele Karten vorher gelegt wurden.', 'arBomb', !!st.arBomb) +
+        h.toggle('Bombe nur auf Asse', 'Eine Bombe (vier Gleiche) darf nur Asse überbieten – dann gewinnt sie den Stich sofort, egal wie viele Asse liegen.', 'arBombAce', !!st.arBombAce) +
+        h.toggle('Ass zuletzt = Arschloch', st.arAceLast !== false ? 'An: Wer als letzte Karte ein Ass ablegt, wird automatisch zum Arschloch.' : 'Aus: Mit einem Ass fertig zu werden ist erlaubt.', 'arAceLast', st.arAceLast !== false) +
+        h.toggle('Drei Asse ansagen, vier offen', 'Wer mit drei Assen startet, muss es ansagen (steht im Verlauf); wer mit vier Assen startet, spielt mit offenen Karten.', 'arAces', !!st.arAces) +
+        h.toggle('Revolution bei vier Gleichen', 'Wer vier Karten mit demselben Wert legt, dreht die Reihenfolge bis zum Rundenende um: Dann ist die niedrigste Karte die höchste.', 'arRevo', !!st.arRevo),
+      create(seats, st) { const s = { order: xShuffle(seats), round: 1, rounds: Math.max(1, Math.min(30, st.arRounds || 10)), skat: !!st.arSkat, dbl: !!st.arDbl || seats.length > 8, guess: !!st.arGuess, revoOn: !!st.arRevo, joker: !!st.arJoker, keepAce: !!st.arKeepAce, arsStart: st.arStart !== false, bomb: !!st.arBomb, bombAce: !!st.arBombAce, aceLast: st.arAceLast !== false, aceRule: !!st.arAces, more: !!st.arMore, viceB: !!st.arViceB, ranked: false, scores: {}, winner: null, log: [], seq: 0 }; seats.forEach(p => { s.scores[p] = 0; }); deal(s); return s; },
       act(a, d, s, me) {
         const U = UI.x, hand = s.hands[me] || [], sel = (U.sel || []).filter(i => Number.isInteger(i) && i >= 0 && i < hand.length);
         if (a === 'next') { if (!canDeal('x' + s.round) || !s.over || s.winner) return; const n = xClone(s); n.order = s.over.order.slice(); n.round++; n.ranked = true; deal(n); n.seq++; return n; }
@@ -9559,14 +9642,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
           const i = +d.i, k = sel.indexOf(i);
           if (!(i >= 0 && i < hand.length)) return;
           if (k >= 0) sel.splice(k, 1);
-          else if (s.phase === 'play' && s.table && !sel.length) hand.forEach((c, j) => { if (rk(c) === rk(hand[i]) && sel.length < s.table.n) sel.push(j); });
+          else if (s.phase === 'play' && s.table && !sel.length && !isJ(hand[i])) hand.forEach((c, j) => { if (rk(c) === rk(hand[i]) && sel.length < s.table.n) sel.push(j); });
           else sel.push(i);
           U.sel = sel; return;
         }
         const cards = sel.map(i => hand[i]);
         if (a === 'ask') return askTax(s, me, d.r);
         if (a === 'tax') { const t = taxOf(s, me), k = t ? taxNeed(s, t, me) : 0, n = giveTax(s, me, cards); if (!n) { toast('Wähle genau ' + k + (k === 1 ? ' Karte' : ' Karten') + '.'); return; } U.sel = []; return n; }
-        if (a === 'play') { const n = play(s, me, cards); if (!n) { toast(!setOf(cards) ? 'Wähle Karten mit demselben Wert.' : 'Du brauchst genau ' + s.table.n + (s.table.n === 1 ? ' Karte' : ' Karten') + ' mit einem ' + (s.revo ? 'niedrigeren' : 'höheren') + ' Wert als ' + rnm(s.table.rank) + '.'); return; } U.sel = []; return n; }
+        if (a === 'play') { const n = play(s, me, cards); if (!n) { toast(!setOf(cards) ? 'Wähle Karten mit demselben Wert (Joker passen dazu).' : 'Du brauchst ' + s.table.n + (s.table.n === 1 ? ' Karte' : ' Karten') + ' mit einem ' + (s.revo ? 'niedrigeren' : 'höheren') + ' Wert als ' + rnm(s.table.rank) + (s.more ? ' – oder mehr Karten mit demselben Wert.' : '.')); return; } U.sel = []; return n; }
         if (a === 'pass') { const n = pass(s, me); if (n) U.sel = []; return n; }
       },
       autoSkip(s) { if (s.over || s.phase !== 'play' || !s.table) return null; const p = s.order[s.turn]; return p && (s.hands[p] || []).length && !canPlayP(s, p) ? { p, k: (s.g || 0) + ':' + s.round + ':' + s.seq + ':' + p } : null; },
@@ -9590,9 +9673,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const outIdx = []; (outT ? (s.guess ? taxQ(s, s.order[outT.from]).got.slice() : taxBest(s, outT)) : []).concat(s.phase === 'tax' ? (s.taxSub || {})[me] || [] : []).forEach(c => { const k = hand.findIndex((x, j) => x === c && outIdx.indexOf(j) < 0); if (k >= 0) outIdx.push(k); });
         const gotIdx = []; (s.phase === 'play' && s.recv ? s.recv[me] || [] : []).forEach(c => { const k = hand.findIndex((x, j) => x === c && gotIdx.indexOf(j) < 0); if (k >= 0) gotIdx.push(k); });
         const gold = p => s.ranked && s.order.indexOf(p) < (s.order.length >= 4 ? 2 : 1);
-        const seats = aroundMe(s.order).map(p => xSeat(p, cur === p || taxTurn(p), '<span class="tag' + (gold(p) ? ' gold' : '') + '">' + title(s, p) + '</span>' + (s.phase === 'play' && s.table && (s.passed || {})[p] ? '<span class="tag dim">gepasst</span>' : '') + (s.hands[p].length ? minisHTML(s.hands[p].length) : '<span class="tag gold">fertig, Platz ' + (s.fin.indexOf(p) + 1) + '</span>') + '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>')).join('');
+        const seats = aroundMe(s.order).map(p => xSeat(p, cur === p || taxTurn(p), '<span class="tag' + (gold(p) ? ' gold' : '') + '">' + title(s, p) + '</span>' + (s.phase === 'play' && s.table && (s.passed || {})[p] ? '<span class="tag dim">gepasst</span>' : '') + (s.hands[p].length ? (s.open && s.open[p] && s.hands[p][0] !== '?' ? '<span class="openh">' + s.hands[p].map(c => card(c, X, { cls: 'tiny' })).join('') + '</span>' : minisHTML(s.hands[p].length)) : (s.aceOut || []).indexOf(p) >= 0 ? '<span class="tag dim">mit Ass raus – Arschloch</span>' : '<span class="tag gold">fertig, Platz ' + (s.fin.indexOf(p) + 1) + '</span>') + '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>')).join('');
         let center, status = '';
-        if (s.over) center = xSum(s, s.winner ? xWin(s, me) : 'Runde ' + s.round + ' ist gespielt', xTable(['Neues Amt', 'Runde', 'Gesamt'], s.over.order.map((p, i) => ({ p: p, win: s.winner === p, cells: [(i + 1) + '. ' + esc(pname(p)), '+' + (s.order.length - 1 - i), '<b>' + s.scores[p] + '</b>'] }))), 'Nächste Runde austeilen');
+        if (s.over && !sumWait(s)) center = xSum(s, s.winner ? xWin(s, me) : 'Runde ' + s.round + ' ist gespielt', xTable(['Neues Amt', 'Runde', 'Gesamt'], s.over.order.map((p, i) => ({ p: p, win: s.winner === p, cells: [(i + 1) + '. ' + esc(pname(p)), '+' + (s.order.length - 1 - i), '<b>' + s.scores[p] + '</b>'] }))), 'Nächste Runde austeilen');
         else if (s.phase === 'tax') {
           center = xLogHTML(s);
           const wait = s.tax.filter(t => !(s.taxSub || {})[s.order[t.from]]).map(t => xNm(s.order[t.from]));
@@ -9615,10 +9698,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       },
       rules: '<h3>Ziel</h3><p>Werde deine Karten möglichst schnell los. Wer zuerst fertig ist, wird König, wer als Letzter übrig bleibt, ist das Arschloch. Nach der eingestellten Rundenzahl gewinnt, wer die meisten Punkte hat (je Runde ein Punkt für jede Person, die nach dir fertig wird).</p>' +
         '<h3>Karten</h3><p>Pokerblatt mit 52 Karten (2 bis Ass) oder auf Wunsch Skatblatt mit 32 Karten (7 bis Ass). Die Farbe spielt keine Rolle, nur der Wert: 2 ist am niedrigsten, Ass am höchsten. Alle Karten werden möglichst gleichmäßig verteilt.</p>' +
-        '<h3>Ausspielen</h3><p>Wer herauskommt, legt eine Karte oder mehrere mit demselben Wert. Reihum im Uhrzeigersinn muss der Nächste genauso viele Karten mit einem höheren Wert legen oder passen. Wer gepasst hat, darf in derselben Runde später wieder legen, wenn er erneut dran ist. Haben alle anderen gepasst, gewinnt der Höchste den Stich und kommt neu heraus. Wer mit seinen letzten Karten den Stich holt, gibt das Ausspielen an den Nächsten weiter. Wer nicht legen kann, wird nach ein paar Sekunden automatisch übersprungen.</p>' +
+        '<h3>Ausspielen</h3><p>Wer herauskommt, legt eine Karte oder mehrere mit demselben Wert. Reihum im Uhrzeigersinn muss der Nächste genauso viele Karten mit einem höheren Wert legen oder passen (mit der Einstellung „Mit mehr Karten erhöhen“ auch mehr Karten desselben Werts, auf eine 4 also zwei 4er). Wer gepasst hat, darf in derselben Runde später wieder legen, wenn er erneut dran ist. Haben alle anderen gepasst, gewinnt der Höchste den Stich und kommt neu heraus. Wer mit seinen letzten Karten den Stich holt, gibt das Ausspielen an den Nächsten weiter. Wer nicht legen kann, wird nach ein paar Sekunden automatisch übersprungen.</p>' +
         '<h3>Ämter</h3><p>Die Reihenfolge, in der ihr fertig werdet, bestimmt die Ämter der nächsten Runde: König, Vizekönig, Bürger, Vize-Arschloch, Arschloch (bei 3 Personen nur König, Bürger, Arschloch). Ihr sitzt in dieser Reihenfolge.</p>' +
         '<h3>Drücken</h3><p>Ab der zweiten Runde gibt das Arschloch seine zwei höchsten Karten an den König, das Vize-Arschloch seine höchste an den Vizekönig (bei 3 Personen: nur eine Karte zwischen Arschloch und König). Dafür sucht sich der König zwei, der Vizekönig eine Karte aus, die sie zurückgeben. Das Arschloch beginnt die Runde.</p>' +
-        '<h3>Karten erraten (optional)</h3><p>Statt automatisch zu bekommen, rät der König bis zu dreimal einen Wert (höchstens 2 Karten), der Vizekönig bis zu zweimal (1 Karte). Für jeden Treffer gibt es eine solche Karte; zurückgegeben werden genauso viele.</p><h3>Doppeltes Blatt (optional)</h3><p>Jede Karte gibt es zweimal – so können bis zu 16 Personen mitspielen (ab 9 Personen automatisch).</p><h3>Revolution (optional)</h3><p>Wer vier Karten mit demselben Wert legt, dreht die Reihenfolge bis zum Rundenende um: Dann ist die niedrigste Karte die höchste. Noch einmal vier Gleiche drehen es zurück.</p>'
+        '<h3>Karten erraten (optional)</h3><p>Statt automatisch zu bekommen, rät der König bis zu dreimal einen Wert (höchstens 2 Karten), der Vizekönig bis zu zweimal (1 Karte). Für jeden Treffer gibt es eine solche Karte; zurückgegeben werden genauso viele.</p><h3>Doppeltes Blatt (optional)</h3><p>Jede Karte gibt es zweimal – so können bis zu 16 Personen mitspielen (ab 9 Personen automatisch).</p><h3>Joker (optional)</h3><p>Allein ist ein Joker die niedrigste Karte; zusammen mit anderen Karten nimmt er deren Wert an.</p><h3>Weitere Varianten (optional)</h3><p>Mit mehr Karten erhöhen · Bauer und Vize-Bauer tauschen ab 6 Personen 1 Karte · Arschloch behält Asse · Arschloch oder König beginnt · Bombe (vier Gleiche gewinnen jeden Stich sofort) · Bombe nur auf Asse · Wer mit einem Ass als letzter Karte fertig wird, wird Arschloch · Drei Asse ansagen, mit vier Assen offen spielen.</p><h3>Revolution (optional)</h3><p>Wer vier Karten mit demselben Wert legt, dreht die Reihenfolge bis zum Rundenende um: Dann ist die niedrigste Karte die höchste. Noch einmal vier Gleiche drehen es zurück.</p>'
     });
   })();
 
@@ -9691,7 +9774,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (!isW(c)) s.color = c[0]; else if (k !== 'WC') s.color = color;
       s.drawn = false; s.got = null;
       if (k === 'A') { const gone = h.filter(x => !isW(x) && x[0] === c[0]); s.hands[p] = h.filter(x => isW(x) || x[0] !== c[0]); gone.forEach(x => s.pile.splice(s.pile.length - 1, 0, x)); }
-      xLog(s, pname(p) + ' legt ' + (two ? 'zweimal ' : '') + tn(c) + '.');
+      xLog(s, xc(pname(p) + ' legt ' + (two ? 'zweimal ' : '') + tn(c) + '.', c));
       
       if (!s.hands[p].length && (dval(c) || k === 'WR')) s.fin = p;
       else if (!s.hands[p].length) { s.winner = p; return s; }
@@ -9854,7 +9937,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
             (s.swap === me ? xPick('Du hast eine 7 gespielt: Mit wem tauschst du deine Hand?', s.order.filter(q => q !== me && !s.out[q]).map(q => xBtn('swap', esc(pname(q)) + ' (' + s.hands[q].length + ')', ' data-p="' + esc(q) + '"')).join('')) : '') +
             (s.roul === me ? xPick('Farbroulette: Nenne eine Farbe. Du ziehst, bis du eine Karte dieser Farbe aufdeckst' + (s.rules.stay ? ', und spielst dann weiter.' : ', und setzt dann aus.'), colBtns('roul')) : '');
           status = s.swap ? (s.swap === me ? '<b>Wähle, mit wem du tauschst.</b>' : xNm(s.swap) + ' wählt einen Tauschpartner …') : s.roul ? (s.roul === me ? '<b>Wähle eine Farbe.</b>' : xNm(s.roul) + ' wählt eine Farbe für das Roulette …') :
-            gotN && myTurn ? 'Du hast ' + gotN + (gotN === 1 ? ' Karte' : ' Karten') + ' gezogen (markiert).' : myTurn && pend ? 'Ziehe ' + pend + ' Karten' + (s.rules.stay ? '' : ' und setze aus') + ', oder erhöhe.' : esc((s.log || []).slice(-1)[0] || '');
+            gotN && myTurn ? 'Du hast ' + gotN + (gotN === 1 ? ' Karte' : ' Karten') + ' gezogen (markiert).' : myTurn && pend ? 'Ziehe ' + pend + ' Karten' + (s.rules.stay ? '' : ' und setze aus') + ', oder erhöhe.' : esc(logTxt((s.log || []).slice(-1)[0] || ''));
         }
         let mine;
         if (seated) {
@@ -9919,7 +10002,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (two) { s.hands[p].splice(Math.max(i, j), 1); s.hands[p].splice(Math.min(i, j), 1); s.pile.push(c0); } else s.hands[p].splice(i, 1);
       const c = c0;
       s.pile.push(c); s.drawn = false; s.got = null;
-      xLog(s, pname(p) + ' legt ' + (two ? 'zweimal ' : '') + name(c) + '.');
+      xLog(s, xc(pname(p) + ' legt ' + (two ? 'zweimal ' : '') + name(c) + '.', c));
       
       if (!s.hands[p].length && (c === 'D2' || c === 'D4')) {
         const q = s.order[seat(s, s.turn, s.dir)], n = take(s, q, c === 'D2' ? 2 : 4);
@@ -10075,13 +10158,13 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const gotN = s.got && s.got.p === me ? Math.min(s.got.n || 0, hand.length) : 0;
         let center, status = '';
         if (s.winner && !s.rules.pts) center = '<div class="summary"><h2>' + xWin(s, me) + '</h2>' + XG[K].score(s) + '<div class="sumfoot">' + lobbyFoot() + '</div></div>';
-        else if (s.over) center = xSum(s, s.winner ? xWin(s, me) : 'Runde ' + s.round + ': ' + xNm(s.over.win) + (s.over.win === me ? ' gewinnst' : ' gewinnt') + ' ' + s.over.got + ' Punkte', XG[K].score(s));
+        else if (s.over && !sumWait(s)) center = xSum(s, s.winner ? xWin(s, me) : 'Runde ' + s.round + ': ' + xNm(s.over.win) + (s.over.win === me ? ' gewinnst' : ' gewinnt') + ' ' + s.over.got + ' Punkte', XG[K].score(s));
         else {
           const t = s.pile[s.pile.length - 1];
           center = unoDir(s.dir) + '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="xg" data-a="draw" aria-label="Ziehen">' + backHTML(X, K) + '<span class="who">Ziehen · ' + s.draw.length + '</span></button><div class="bp drawp">' + card(t, X) + '<span class="who">Ablage</span></div></div>' +
             (myTurn && UI.x.ask !== undefined && (s.hands[me] || [])[UI.x.ask] !== undefined ? xPick('Du hast ' + esc(name(s.hands[me][UI.x.ask])) + ' zweimal auf der Hand. Beide zusammen legen?', xBtn('dbl', 'Beide legen', ' data-v="1"', 'primary') + xBtn('dbl', 'Nur eine legen', ' data-v="0"')) : '') +
             (s.pick && s.pick.p === me ? xPick(s.pick.k === 'X' ? 'Zwangstausch: Mit wem tauschst du deine Hand?' : 'Gezielte +2: Wer zieht 2 Karten?', s.order.filter(q => q !== me).map(q => xBtn('tg', esc(pname(q)) + ' (' + s.hands[q].length + ')', ' data-p="' + esc(q) + '"')).join('')) : '');
-          status = s.pick ? (s.pick.p === me ? '<b>Wähle eine Person.</b>' : xNm(s.pick.p) + ' wählt eine Person …') : gotN && myTurn ? 'Du hast ' + gotN + (gotN === 1 ? ' Karte' : ' Karten') + ' gezogen (markiert).' : esc((s.log || []).slice(-1)[0] || '');
+          status = s.pick ? (s.pick.p === me ? '<b>Wähle eine Person.</b>' : xNm(s.pick.p) + ' wählt eine Person …') : gotN && myTurn ? 'Du hast ' + gotN + (gotN === 1 ? ' Karte' : ' Karten') + ' gezogen (markiert).' : esc(logTxt((s.log || []).slice(-1)[0] || ''));
         }
         let mine;
         if (seated) {
@@ -10149,7 +10232,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       else { c = hand[src.i]; if (c === undefined || !fits(s0, c)) return null; if (isJ(c) && !(wish && (wish.t === 'c' ? COL.indexOf(wish.v) >= 0 : +wish.v >= 0 && +wish.v <= 5))) return null; hand.splice(src.i, 1); }
       s.pile.push(c); s.lm = { p: p, to: 'pile', from: src.col ? 'd:' + src.col : 'hand' };
       s.wish = isJ(c) ? { t: wish.t, v: wish.t === 'c' ? wish.v : String(wish.v) } : null;
-      xLog(s, pname(p) + ': „Passt!“ – ' + tn(c) + (src.col ? ' aus der Auslage' : '') + (isJ(c) ? ', wünscht ' + wishTxt(s.wish, tableX().D) : '') + '.');
+      xLog(s, xc(pname(p) + ': „Passt!“ – ' + tn(c) + (src.col ? ' aus der Auslage' : '') + (isJ(c) ? ', wünscht ' + wishTxt(s.wish, tableX().D) : '') + '.', c));
       if (!hand.length) { endRound(s, p); return s; }
       next(s); return s;
     }
@@ -10160,7 +10243,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const s = xClone(s0);
       s.hands[p].splice(i, 1); s.disp[p][c[0]].push(c); s.lm = { p: p, to: c[0] };
       const n = drawOne(s, p); s.got = { p: p, n: n };
-      xLog(s, pname(p) + ': „Passt nicht!“ – ' + tn(c) + ' in die Auslage' + (n ? ', zieht eine Karte.' : '.'));
+      xLog(s, xc(pname(p) + ': „Passt nicht!“ – ' + tn(c) + ' in die Auslage' + (n ? ', zieht eine Karte.' : '.'), c));
       next(s); return s;
     }
     
@@ -10263,7 +10346,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const dispRow = (p, act, big) => '<div class="pnrow" style="--cw:' + (act || big ? Math.round(cw * 0.8) : 34) + 'px">' + COL.map((c, i) => { const st = s.disp[p][c]; if (!st.length) return '<span class="pnslot s-x' + i + '"></span>'; const t = st[st.length - 1], ok = act && fits(s, t), lmv = s.lm && s.lm.p === p && s.lm.to === c; const inner = card(t, X, { cls: act || big ? '' : 'tiny' }) + (st.length > 1 ? '<span class="pncnt">' + st.length + '</span>' : ''); return act ? '<button class="pnst' + (ok ? ' ok' : '') + (lmv ? ' lastmv' : '') + '" data-act="xg" data-a="dp" data-c="' + c + '" aria-label="' + esc(name(t, D)) + ' aus der Auslage legen">' + inner + '</button>' : '<span class="pnst' + (lmv ? ' lastmv' : '') + '">' + inner + '</span>'; }).join('') + '</div>';
         const seats = aroundMe(s.order).map(p => xSeat(p, cur === p && !s.winner && !s.over, minisHTML(s.hands[p].length) + '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>', dispRow(p, false))).join('');
         let center, status = '';
-        if (s.over) center = xSum(s, s.winner ? (s.winners && s.winners.length > 1 ? 'Es gewinnen ' + s.winners.map(xNm).join(' und ') : xWin(s, me)) : 'Runde ' + s.round + ' ist vorbei – ' + xNm(s.over.by) + (s.over.by === me ? ' hast' : ' hat') + ' keine Handkarten mehr', XG[K].score(s));
+        if (s.over && !sumWait(s)) center = xSum(s, s.winner ? (s.winners && s.winners.length > 1 ? 'Es gewinnen ' + s.winners.map(xNm).join(' und ') : xWin(s, me)) : 'Runde ' + s.round + ' ist vorbei – ' + xNm(s.over.by) + (s.over.by === me ? ' hast' : ' hat') + ' keine Handkarten mehr', XG[K].score(s));
         else {
           const t = top(s), fz = myTurn && forced(s, me);
           const wishBtns = COL.map((c, i) => '<button class="pick s-x' + i + '" data-act="xg" data-a="wish" data-t="c" data-v="' + c + '">' + esc(cName(i, D)) + '</button>').join('') + [0, 1, 2, 3, 4, 5].map(v => '<button class="pick" data-act="xg" data-a="wish" data-t="n" data-v="' + v + '">' + v + '</button>').join('');
@@ -10470,7 +10553,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const bidTxt = p => bidding ? (typeof bids[p] === 'number' ? '✓' : '…') : bids[p];
         const seats = aroundMe(s.order).map(p => xSeat(p, bidding ? typeof bids[p] !== 'number' : cur === p && !s.over, minisHTML((s.hands[p] || []).length) + '<span>Ansage: <b>' + bidTxt(p) + '</b></span><span>Stiche: <b>' + s.won[p] + '</b></span><span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>' + (s.order[s.dealer] === p ? '<span class="tag gold">Geber</span>' : ''))).join('');
         let center, status = '';
-        if (s.over) center = xSum(s, s.winner ? xWin(s, me) : 'Durchgang ' + s.round + ' ist gespielt', xTable(['', 'Ansage / Stiche', 'Durchgang', 'Gesamt'], s.order.slice().sort((a, b) => s.scores[b] - s.scores[a]).map(p => ({ p: p, win: s.winner === p, cells: [esc(pname(p)), s.over.bids[p] + ' / ' + s.over.won[p], (s.over.pts[p] > 0 ? '+' : '') + s.over.pts[p], '<b>' + s.scores[p] + '</b>'] }))), 'Durchgang ' + (s.round + 1) + ' austeilen');
+        if (s.over && !sumWait(s)) center = xSum(s, s.winner ? xWin(s, me) : 'Durchgang ' + s.round + ' ist gespielt', xTable(['', 'Ansage / Stiche', 'Durchgang', 'Gesamt'], s.order.slice().sort((a, b) => s.scores[b] - s.scores[a]).map(p => ({ p: p, win: s.winner === p, cells: [esc(pname(p)), s.over.bids[p] + ' / ' + s.over.won[p], (s.over.pts[p] > 0 ? '+' : '') + s.over.pts[p], '<b>' + s.scores[p] + '</b>'] }))), 'Durchgang ' + (s.round + 1) + ' austeilen');
         else if (bidding) {
           const mineOpen = seated && typeof bids[me] !== 'number';
           let btns = '';
@@ -10644,7 +10727,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         
         const seats = aroundMe(s.order).map(p => xSeat(p, cur === p && !s.over, '<span class="dline"><span>Runde: <b>' + sum(p) + ' P</b></span><span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span></span>' + pilesHTML(s, p)).replace('</div><div class="ss">', '<span class="dmin">' + minisHTML((s.hands[p] || []).length) + '</span></div><div class="ss">')).join('');
         let center, status = '';
-        if (s.over) center = xSum(s, s.winner ? (s.winners.length > 1 ? 'Es gewinnen ' + s.winners.map(xNm).join(' und ') : xWin(s, me)) : 'Runde ' + s.round + (s.over.loser ? ': ' + xNm(s.over.loser) + (s.over.loser === me ? ' hast' : ' hat') + ' die fünfte Farbe' : ' ist gespielt'), xTable(['', 'Runde', 'Gesamt'], s.order.slice().sort((a, b) => s.scores[b] - s.scores[a]).map(p => ({ p: p, win: s.winner && s.winners.indexOf(p) >= 0, cells: [esc(pname(p)), (s.over.pts[p] > 0 ? '+' : '') + s.over.pts[p], '<b>' + s.scores[p] + '</b>'] }))), 'Nächste Runde austeilen');
+        if (s.over && !sumWait(s)) center = xSum(s, s.winner ? (s.winners.length > 1 ? 'Es gewinnen ' + s.winners.map(xNm).join(' und ') : xWin(s, me)) : 'Runde ' + s.round + (s.over.loser ? ': ' + xNm(s.over.loser) + (s.over.loser === me ? ' hast' : ' hat') + ' die fünfte Farbe' : ' ist gespielt'), xTable(['', 'Runde', 'Gesamt'], s.order.slice().sort((a, b) => s.scores[b] - s.scores[a]).map(p => ({ p: p, win: s.winner && s.winners.indexOf(p) >= 0, cells: [esc(pname(p)), (s.over.pts[p] > 0 ? '+' : '') + s.over.pts[p], '<b>' + s.scores[p] + '</b>'] }))), 'Nächste Runde austeilen');
         else {
           center = xTrick(s, c => card(c, X), P) + (L ? '<p class="xlog"><i class="dot" style="background:var(--sx' + DO.indexOf(L) + ')"></i> ' + esc(D.games[K].cols[DO.indexOf(L)].name) + ' muss bedient werden.</p>' : '') +
             (myTurn && U.gaia ? xPick('Welche Farbe nimmt Gaia in diesem Stich an?', DO.map((d, i) => '<button class="pick s-x' + i + '" data-act="xg" data-a="gaia" data-d="' + d + '">' + esc(D.games[K].cols[i].name) + '</button>').join('')) : '');
@@ -10705,7 +10788,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const s = xClone(s0);
       s.show = null; s.started = true;
       if (how === 'cabo') { if (s.cabo) return null; s.cabo = p; xLog(s, pname(p) + ' sagt Cabo an! Alle anderen sind noch einmal dran.'); endTurn(s); return s; }
-      if (how === 'pile') { if (!s.pile.length) return null; s.hold = { c: s.pile.pop(), from: 'pile' }; mv(s, [{ f: 'pile', t: 'hold:' + p, v: s.hold.c }]); xLog(s, pname(p) + ' nimmt die ' + s.hold.c + ' von der Ablage.'); return s; }
+      if (how === 'pile') { if (!s.pile.length) return null; s.hold = { c: s.pile.pop(), from: 'pile' }; mv(s, [{ f: 'pile', t: 'hold:' + p, v: s.hold.c }]); xLog(s, xc(pname(p) + ' nimmt die ' + s.hold.c + ' von der Ablage.', s.hold.c)); return s; }
       if (!s.deck.length && s.pile.length > 1) { const t = s.pile.pop(); s.deck = xShuffle(s.pile); s.pile = [t]; xLog(s, 'Der Stapel ist leer: Die Ablage wird neu gemischt.'); }
       if (!s.deck.length) { xLog(s, 'Es sind keine Karten mehr da: Die Runde endet, alle decken auf.'); endRound(s); return s; }
       s.hold = { c: s.deck.pop(), from: 'deck' }; mv(s, [{ f: 'deck', t: 'hold:' + p, v: null }]); xLog(s, pname(p) + ' zieht vom Stapel.');
@@ -10714,7 +10797,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     function discard(s0, p) {
       if (!mine(s0, p) || !s0.hold || s0.hold.from !== 'deck') return null;
       const s = xClone(s0);
-      s.pile.push(s.hold.c); mv(s, [{ f: 'hold:' + p, t: 'pile', v: s.hold.c }]); xLog(s, pname(p) + ' wirft die ' + s.hold.c + ' ab.'); endTurn(s);
+      s.pile.push(s.hold.c); mv(s, [{ f: 'hold:' + p, t: 'pile', v: s.hold.c }]); xLog(s, xc(pname(p) + ' wirft die ' + s.hold.c + ' ab.', s.hold.c)); endTurn(s);
       return s;
     }
     function replace(s0, p, ids) {
@@ -10856,7 +10939,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const othAct = myTurn && (s.act === 'spy' || s.act === 'swap') ? 'oth' : null;
         const seats = aroundMe(s.order).map(p => xSeat(p, !pk && !s.over && cur === p, (s.cabo === p ? '<span class="tag gold">Cabo</span>' : '') + (s.over ? '<span>Summe: <b>' + s.over.sums[p] + '</b></span>' : ''), '<div class="pgs">' + row(p, 'tiny', othAct) + holdHTML(p, false) + '</div>').replace('</div><div class="ss">', '<span class="pts cbpts">Gesamt: <b>' + s.scores[p] + ' P</b></span></div><div class="ss">')).join('');
         let center, status = '';
-        if (s.over) center = xSum(s, s.winner ? xWin(s, me) : 'Runde ' + s.round + ': ' + s.over.win.map(xNm).join(' und ') + (s.over.win.length > 1 || s.over.win[0] === me ? ' gewinnen' : ' gewinnt'), xTable(['', 'Auslage', 'Runde', 'Gesamt'], s.order.slice().sort((a, b) => s.scores[a] - s.scores[b]).map(p => ({ p: p, win: s.over.win.indexOf(p) >= 0, cells: [esc(pname(p)) + (s.cabo === p ? ' (Cabo)' : ''), s.hands[p].map(c => c.v).join(' + ') + ' = ' + s.over.sums[p], '+' + s.over.pts[p], '<b>' + s.scores[p] + '</b>'] }))), 'Nächste Runde austeilen');
+        if (s.over && !sumWait(s)) center = xSum(s, s.winner ? xWin(s, me) : 'Runde ' + s.round + ': ' + s.over.win.map(xNm).join(' und ') + (s.over.win.length > 1 || s.over.win[0] === me ? ' gewinnen' : ' gewinnt'), xTable(['', 'Auslage', 'Runde', 'Gesamt'], s.order.slice().sort((a, b) => s.scores[a] - s.scores[b]).map(p => ({ p: p, win: s.over.win.indexOf(p) >= 0, cells: [esc(pname(p)) + (s.cabo === p ? ' (Cabo)' : ''), s.hands[p].map(c => c.v).join(' + ') + ' = ' + s.over.sums[p], '+' + s.over.pts[p], '<b>' + s.scores[p] + '</b>'] }))), 'Nächste Runde austeilen');
         else {
           const t = s.pile[s.pile.length - 1], hold = s.hold, mineHold = myTurn && hold;
           center = '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !hold && !s.act ? ' ok' : '') + '" data-mk="deck" data-act="xg" data-a="deck">' + backHTML(X, K) + '<span class="who">Stapel · ' + s.deck.length + '</span></button><button class="bp' + (myTurn && !s.act && (!hold || hold.from === 'deck') && (hold || t !== undefined) ? ' ok' : '') + '" data-mk="pile" data-act="xg" data-a="pile">' + (t !== undefined ? card(t, X) : '<span class="card slot"></span>') + '<span class="who">' + (mineHold && hold.from === 'deck' ? 'Hier abwerfen' : 'Ablage') + '</span></button>' + (myTurn && !hold && !s.act && !s.cabo ? '<button class="btn primary cabobtn" data-act="xg" data-a="cabo">Cabo</button>' : '') + '</div>' +
