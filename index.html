@@ -1180,7 +1180,7 @@ html.noscr body { position: fixed; inset: 0; width: 100%; height: 100%; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '7b863230';
+var APP_V = 'ae318db7';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -7322,6 +7322,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (typeof c !== 'string' || !(c === 'W' || c === 'S' || SUITS.indexOf(c[0]) >= 0)) return backHTML(X, 'phase10');
     o = Object.assign({}, o || {});
     o.key = 'p_' + c; o.title = p10Name(c, X.D); o.game = 'phase10';
+    // Joker in einer ausgelegten Gruppe: wie bei Skip-Bo geteilte Karte – halb Joker, halb die ersetzte Karte
+    if (c === 'W' && o.as) {
+      const a = String(o.as), col = SUITS.indexOf(a[0]) >= 0 ? a[0] : 'Z', v = col === 'Z' ? a : a.slice(1);
+      o.key = col !== 'Z' && v ? 'p_' + col + v : 'p_W'; o.title = 'Joker als ' + (col !== 'Z' ? X.D.games.phase10.suits[SUITS.indexOf(col)].name + ' ' : '') + (v || '');
+      if (col !== 'Z') o.sym = X.D.games.phase10.suits[SUITS.indexOf(col)].sym;
+      const h = plainCard(col, v || '★\uFE0E', X, o), cut = h.indexOf('>') + 1;
+      return h.slice(0, cut) + '<span class="hw s-Z' + (X.imgs.p_W ? ' img k-p_W' : '') + '"></span>' + h.slice(cut);
+    }
     if (c === 'W') { o.label = 'Joker'; return plainCard('Z', '★\uFE0E', X, o); }
     if (c === 'S') { o.label = 'Aussetzen'; return plainCard('N', '⊘', X, o); }
     o.sym = X.D.games.phase10.suits[SUITS.indexOf(c[0])].sym;
@@ -8298,6 +8306,25 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   }
   const P10K = { set: 'gleiche Zahlen', cset: 'gleiche Karten (Zahl und Farbe)', col: 'Karten einer Farbe', evc: 'gerade Karten einer Farbe', fix: '3, 6, 9 und 12', wild: 'Joker', cr: 'Folge in einer Farbe', orun: 'Folge ungerader Zahlen', arun: 'Folge im Farbwechsel', r2c: 'Folge aus zwei Farben', r3c: 'Folge aus drei Farben', rdc: 'Folge in verschiedenen Farben', run: 'Folge' };
   const p10CompTxt = c => (c[1] ? c[1] + ' Karten: ' : '') + (P10K[c[0]] || 'Gruppe');
+  // Ausgelegte Gruppe zum Anzeigen: Folgen sortiert, jeder Joker mit der Karte, die er ersetzt
+  function p10Disp(g) {
+    const raw = g.cards.map(c => ({ c }));
+    try {
+      if (g.lo !== undefined && !g.wrap && g.t !== 'rdc') {
+        const st = g.st || 1, nat = g.cards.filter(c => c !== 'W'), out = [];
+        for (let v = g.lo, k = 0; v <= g.hi; v += st, k++) {
+          const col = g.t === 'cr' ? g.c : g.t === 'arun' ? (k % 2 ? g.cb : g.ca) : '';
+          const i = nat.findIndex(c => PT.val(c) === v && (!col || c[0] === col));
+          if (i >= 0) out.push({ c: nat.splice(i, 1)[0] }); else out.push({ c: 'W', as: col + v });
+        }
+        return out.concat(nat.map(c => ({ c })));
+      }
+      if (g.t === 'set') return raw.map(x => x.c === 'W' ? { c: 'W', as: String(g.v) } : x);
+      if (g.t === 'cset') return raw.map(x => x.c === 'W' ? { c: 'W', as: g.c + g.v } : x);
+      if (g.t === 'col') return raw.map(x => x.c === 'W' ? { c: 'W', as: g.c } : x);
+    } catch (e) { if (typeof __kw === 'function') __kw(e); }
+    return raw;
+  }
   function p10HTML(X) {
     const s = xState('phase10');
     if (!s) return WAIT_HTML;
@@ -8311,7 +8338,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const canHitNow = myTurn && s.drawn && !!s.laid[me] && sel !== null;
     const sn = c => esc(suitName(X, c, 'phase10'));
     const gLabel = g => g.t === 'set' ? g.cards.length + '× die ' + g.v : g.t === 'cset' ? g.cards.length + '× ' + sn(g.c) + ' ' + g.v : g.t === 'fix' ? '3, 6, 9, 12' : g.t === 'wild' ? g.cards.length + '× Joker' : g.t === 'col' ? g.cards.length + '× ' + sn(g.c) + (g.ev ? ', gerade' : '') : (g.st === 2 ? 'Ungerade Folge ' : 'Folge ') + (g.t === 'cr' ? sn(g.c) + ' ' : g.t === 'arun' ? sn(g.ca) + '/' + sn(g.cb) + ' ' : g.t === 'r2c' ? sn(g.cs[0]) + '/' + sn(g.cs[1]) + ' ' : '') + PT.wv(g.lo) + ' bis ' + PT.wv(g.hi);
-    const groups = p => (s.laid[p] || []).map((g, gi) => '<button class="pg' + (canHitNow && PT.canHit(g, hand0[sel]) ? ' ok' : '') + '" data-act="p10Hit" data-o="' + esc(p) + '" data-g="' + gi + '" aria-label="' + gLabel(g) + '"><span class="pgc">' + g.cards.map(c => p10CardHTML(c, X, { cls: 'tiny' })).join('') + '</span><span class="who">' + gLabel(g) + '</span></button>').join('');
+    const groups = p => (s.laid[p] || []).map((g, gi) => '<button class="pg' + (canHitNow && PT.canHit(g, hand0[sel]) ? ' ok' : '') + '" data-act="p10Hit" data-o="' + esc(p) + '" data-g="' + gi + '" aria-label="' + gLabel(g) + '"><span class="pgc">' + p10Disp(g).map(x => p10CardHTML(x.c, X, { cls: 'tiny', as: x.as })).join('') + '</span><span class="who">' + gLabel(g) + '</span></button>').join('');
     const seats = aroundMe(s.order).map(p => { const n = (s.hands[p] || []).length; return '<div class="seat p10seat' + (cur === p && !s.over ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + seatTags(p) + (s.laid[p] ? '<span class="tag gold">' + (n ? 'ausgelegt' : 'fertig') + '</span>' : '') + minisHTML(n) + '</div><div class="ss"><span>' + (s.free ? (s.done[p] || []).length + '/' + s.goal + ' · ' + (s.phase[p] ? 'Phase <b>' + s.phase[p] + '</b>: ' + esc(PT.text(s, s.phase[p])) : 'wählt …') : s.phase[p] > s.goal ? 'Phase: <b>✓</b>' : 'Phase <b>' + s.phase[p] + '</b>: ' + esc(PT.text(s, s.phase[p]))) + '</span>' + (s.nopts ? '' : '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>') + '</div><div class="pgs' + (s.laid[p] ? '' : ' pgempty') + '">' + (s.laid[p] ? groups(p) : '') + '</div></div>'; }).join('');
     const cw = cardW();
     
