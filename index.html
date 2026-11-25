@@ -1157,6 +1157,12 @@ html.noscr body { position: fixed; inset: 0; width: 100%; height: 100%; }
 /* Arschloch: offene Hand (vier Asse) im Spielerrahmen */
 .openh { display: inline-flex; flex-wrap: wrap; gap: 2px; --cw: 22px; }
 .openh .card { --cw: 22px; }
+/* Cabo: freier Platz für die gezogene Karte (gestrichelt) */
+.cbhold .cbslot { display: block; width: 30px; aspect-ratio: 57 / 89; border: 2px dashed rgba(245, 215, 126, .4); border-radius: 5px; box-sizing: border-box; }
+.cbhold.big .cbslot { width: var(--cw, 72px); border-radius: 8px; }
+.cbhold.empty .who { visibility: hidden; }
+/* gewählte Person (z. B. Amor, Love Letter) im Rahmen hervorheben */
+.seat.tgt.tgton { background: rgba(245, 215, 126, .18); outline-style: solid; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1174,7 +1180,7 @@ html.noscr body { position: fixed; inset: 0; width: 100%; height: 100%; }
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '6b1778fb';
+var APP_V = '7b863230';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -2237,6 +2243,41 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   }
   
   T.solve = function (hand, comps) { return comps ? solveRec(hand, comps, 0, []) : null; };
+  // Passt genau diese Kartengruppe auf Teil i der Phase (alle gewählten Karten werden verwendet)?
+  T.groupFit = function (cards, comp) { return groupOptions(cards, comp).filter(o => { const r = removeCards(cards, o.cards); return r && !r.length; }); };
+  function manRec(subs, comps, i, prev) {
+    if (i === comps.length) return [];
+    const x = comps.x;
+    for (const o of T.groupFit(subs[i], comps[i])) {
+      const gr = o.group;
+      if (x && gr.c !== undefined) {
+        const pc = prev.filter(q => q.group.c !== undefined);
+        if ((x === 'dcol' || x === 'same') && pc.some(q => q.group.c === gr.c)) continue;
+        if (x === 'scol' && pc.some(q => q.group.c !== gr.c)) continue;
+        if (x === 'same' && pc.some(q => q.group.lo !== gr.lo)) continue;
+      }
+      const sub = manRec(subs, comps, i + 1, prev.concat([o]));
+      if (sub) return [clone(gr)].concat(sub);
+    }
+    return null;
+  }
+  T.layMan = function (st0, p, sets) {
+    if (!tMine(st0, p) || !st0.drawn || st0.laid[p] || !Array.isArray(sets)) return null;
+    const comps = T.comps(st0, st0.phase[p]), hand = st0.hands[p] || [];
+    if (!comps || sets.length !== comps.length) return null;
+    const all = [].concat.apply([], sets);
+    if (all.some(i => typeof i !== 'number' || !(i >= 0 && i < hand.length)) || new Set(all).size !== all.length) return null;
+    const subs = sets.map(ix => ix.map(i => hand[i]));
+    const groups = manRec(subs, comps, 0, []);
+    if (!groups) return null;
+    const st = clone(st0);
+    st.hands[p] = hand.filter((c, i) => all.indexOf(i) < 0);
+    st.laid[p] = groups; st.laidNow = p;
+    if (!st.first) st.first = p;
+    st.seq = (st.seq || 0) + 1; st.log = { p: p, a: 'lay', n: st.phase[p] };
+    tCheckEnd(st, p);
+    return st;
+  };
   T.canHit = function (g, card) {
     if (!g || card === undefined || card === 'S') return false;
     const W = card === 'W';
@@ -2360,7 +2401,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     return st;
   };
   T.hitLate = (st, p, owner) => !!st.hitNext && owner !== p && st.laidNow === p;
-  T.hit = function (st0, p, i, owner, gi) {
+  // Kann ein Joker an dieser Folge links bzw. rechts angelegt werden?
+  T.wSides = g => { if (!g || g.lo === undefined || g.wrap) return null; const stp = g.st || 1; return { l: g.lo - stp >= 1, r: g.hi + stp <= 12 }; };
+  T.hit = function (st0, p, i, owner, gi, side) {
     if (!tMine(st0, p) || !st0.drawn || !st0.laid[p] || T.hitLate(st0, p, owner)) return null;
     const card = (st0.hands[p] || [])[i], g0 = st0.laid[owner] && st0.laid[owner][gi];
     if (!T.canHit(g0, card)) return null;
@@ -2368,7 +2411,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     st.hands[p].splice(i, 1);
     if (g.lo === undefined) g.cards.push(card);
     if (g.lo !== undefined) {
-      const stp = g.st || 1, up = card === 'W' ? (g.wrap || g.hi + stp <= 12) : (g.wrap ? T.val(card) === T.wv(g.hi + 1) : T.val(card) === g.hi + stp);
+      const stp = g.st || 1, ws = card === 'W' ? T.wSides(g) : null;
+      const up = card === 'W' ? (ws && side === 'l' && ws.l ? false : ws && side === 'r' && ws.r ? true : (g.wrap || g.hi + stp <= 12)) : (g.wrap ? T.val(card) === T.wv(g.hi + 1) : T.val(card) === g.hi + stp);
       // Folge: Karte an der passenden Seite einreihen, damit die Anzeige zur Beschriftung („… bis …“) passt
       if (up) { g.hi += stp; g.cards.push(card); }
       else { g.lo -= stp; g.cards.unshift(card); if (g.t === 'arun') { const sw = g.ca; g.ca = g.cb; g.cb = sw; } }
@@ -2378,16 +2422,19 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     tCheckEnd(st, p);
     return st;
   };
-  T.discard = function (st0, p, i) {
+  T.skipTargets = (st, p) => st.order.filter(q => q !== p);
+  T.discard = function (st0, p, i, tgt) {
     if (!tMine(st0, p) || !st0.drawn) return null;
     const card = (st0.hands[p] || [])[i];
     if (card === undefined) return null;
+    if (card === 'S' && tgt !== undefined && T.skipTargets(st0, p).indexOf(tgt) < 0) return null;
     const st = clone(st0);
     st.hands[p].splice(i, 1); st.pile.push(card);
     st.seq = (st.seq || 0) + 1; st.log = { p: p, a: 'discard', c: card };
     if (st.got && st.got.p === p) st.got = null;
     if (!st.hands[p].length) { tEndRound(st, p); return st; }
-    if (card === 'S') st.skipped[st.order[seatAt(st, st.turn, 1)]] = true;
+    // Aussetzen trifft den gewählten Gegner (ohne Wahl: den Nächsten)
+    if (card === 'S') { const t = tgt !== undefined ? tgt : st.order[seatAt(st, st.turn, 1)]; st.skipped[t] = true; st.log.t = t; }
     st.laidNow = null;
     tAdvance(st);
     return st;
@@ -3911,7 +3958,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const FWD = { on: false, hit: false, ops: [], rec: [], toasts: [] }, HXC = { on: false, wrote: false, toasts: [] };
   // Aktionen, die nie über den Host laufen (Menüs, Editor, Beitritt, Bestätigungsdialoge …)
   // Nur diese Aktionen sind Spielzüge: Bei Mitspielern laufen sie über die Spielleitung, und nur diese führt die Spielleitung für andere aus.
-  const FWD_YES = /^(xg|prePlay|bid|pick|card|next|unoCard|unoDbl|unoGo|unoColor|unoDraw|unoPass|p10Pick|p10Draw|p10Pile|p10Sel|p10Lay|p10Hit|p10Next|witToggle|witPass|witCard|witNext|sbSrc|sbBuild|sbDisc|sbPass)$/;
+  const FWD_YES = /^(xg|prePlay|p10LayMan|bid|pick|card|next|unoCard|unoDbl|unoGo|unoColor|unoDraw|unoPass|p10Pick|p10Draw|p10Pile|p10Sel|p10Lay|p10Hit|p10Next|witToggle|witPass|witCard|witNext|sbSrc|sbBuild|sbDisc|sbPass)$/;
   const FWD_NO = /^(modal|closeModal|confirmYes|confTog|leave|leaveReq|copy|emo|emoToggle|optInfo|viewTog|specView|rename|renameSave|zoom|create|join|watch|sit|seat|selfPlay|takeHost|giveHost|kick|assign|unwatchOther|reqOk|reqNo|setOk|setNo|turnSave|theme.*|crop.*|persp.*|ed[A-Z].*|av[A-Z].*|num.*)$/;
   const UI_S = ['sel', 'sbSel', 'unoPick', 'unoAsk', 'unoTwo', 'p10Sel', 'witSel'], UI_U = ['x', 'bidV'];
   function uiSnap() { const o = { s: {}, u: {} }; UI_S.forEach(k => { o.s[k] = S[k] === undefined ? null : clone(S[k]); }); UI_U.forEach(k => { o.u[k] = UI[k] === undefined ? null : clone(UI[k]); }); return o; }
@@ -4565,7 +4612,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (!lg || typeof lg !== 'object' || !lg.p) return '';
     const n = lg.p === S.pid ? 'Du' : pname(lg.p), du = lg.p === S.pid;
     if (g === 'uno') return n + (lg.a === 'draw' ? (du ? ' ziehst ' : ' zieht ') + (lg.n > 1 ? lg.n + ' Karten' : 'eine Karte') : lg.a === 'penalty' ? (du ? ' musst ' : ' muss ') + lg.n + ' Karten ziehen' : lg.a === 'pass' ? (du ? ' gibst' : ' gibt') + ' weiter' : lg.a === 'play' ? hc((du ? ' legst ' : ' legt ') + (lg.two ? 'zweimal ' : '') + unoName(lg.c, X.D), 'u', lg.c) : '');
-    if (g === 'phase10') return n + (lg.a === 'take' ? hc((du ? ' nimmst ' : ' nimmt ') + p10Name(lg.c, X.D) + ' von der Ablage', 'p', lg.c) : lg.a === 'draw' ? (du ? ' ziehst' : ' zieht') + ' vom Stapel' : lg.a === 'lay' ? (du ? ' legst' : ' legt') + ' Phase ' + lg.n + ' aus' : lg.a === 'hit' ? (du ? ' legst' : ' legt') + ' an' : lg.a === 'discard' ? hc((du ? ' wirfst ' : ' wirft ') + p10Name(lg.c, X.D) + ' ab', 'p', lg.c) : lg.a === 'nodraw' ? (du ? ' ziehst' : ' zieht') + ' nicht' : '');
+    if (g === 'phase10') return n + (lg.a === 'take' ? hc((du ? ' nimmst ' : ' nimmt ') + p10Name(lg.c, X.D) + ' von der Ablage', 'p', lg.c) : lg.a === 'draw' ? (du ? ' ziehst' : ' zieht') + ' vom Stapel' : lg.a === 'lay' ? (du ? ' legst' : ' legt') + ' Phase ' + lg.n + ' aus' : lg.a === 'hit' ? (du ? ' legst' : ' legt') + ' an' : lg.a === 'discard' ? hc((du ? ' wirfst ' : ' wirft ') + p10Name(lg.c, X.D) + ' ab' + (lg.t ? ' – ' + pname(lg.t) + ' setzt aus' : ''), 'p', lg.c) : lg.a === 'nodraw' ? (du ? ' ziehst' : ' zieht') + ' nicht' : '');
     if (g === 'skipbo') return n + (lg.a === 'play' ? hc((du ? ' legst ' : ' legt ') + (lg.wild ? 'ein ' + X.D.sb.wname + ' als ' + lg.v : 'eine ' + lg.v) + (lg.from === 'stock' ? ' vom eigenen Stapel' : ''), 's', lg.wild ? 0 : lg.v) : lg.a === 'discard' ? hc((du ? ' legst' : ' legt') + ' eine ' + lg.v + ' ab', 's', lg.v) : lg.a === 'pass' ? (du ? ' beendest' : ' beendet') + ' den Zug' : '');
     return '';
   }
@@ -5405,18 +5452,47 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     unoDraw() { const s = xState('uno'); if (!xTurn(s)) return; if (s.drawn) { toast('Du hast schon gezogen.'); return; } const n = UN.draw(s, S.pid, rnd); if (n) { S.unoPick = null; S.unoAsk = null; S.unoTwo = false; w(backend.set(xPath('uno'), n)); } },
     unoPass() { const s = xState('uno'); if (!xTurn(s)) return; const n = UN.pass(s, S.pid); if (n) { S.unoPick = null; S.unoAsk = null; S.unoTwo = false; w(backend.set(xPath('uno'), n)); } },
     p10Draw() { const s = xState('phase10'); if (!xTurn(s)) return; if (s.drawn) { toast('Du hast schon gezogen. Lege aus oder wirf eine Karte ab.'); return; } const n = PT.drawCard(s, S.pid, 'deck', rnd); if (n) w(backend.set(xPath('phase10'), n)); },
-    p10Pile() {
+    p10Pile(el) {
       const s = xState('phase10');
       if (!xTurn(s)) return;
       let n = null;
       if (!s.drawn) { n = PT.drawCard(s, S.pid, 'pile', rnd); if (!n) { toast('Von hier kannst du gerade nicht ziehen. Aussetzen-Karten darf man nicht aufnehmen.'); return; } }
       else {
         if (S.p10Sel === null || S.p10Sel === undefined) { toast('Wähle zuerst die Handkarte, die du abwerfen willst.'); return; }
-        n = PT.discard(s, S.pid, S.p10Sel);
+        // Aussetzen: Gegner frei wählen (bei nur einem Gegner automatisch)
+        const tg = PT.skipTargets(s, S.pid), isS = (s.hands[S.pid] || [])[S.p10Sel] === 'S';
+        if (isS && tg.length > 1 && !el.dataset.t) { UI.p10Skip = true; render(); return; }
+        n = PT.discard(s, S.pid, S.p10Sel, isS ? (el.dataset.t || tg[0]) : undefined);
+        UI.p10Skip = false;
       }
       if (n) { S.p10Sel = null; w(backend.set(xPath('phase10'), n)); }
     },
-    p10Sel(el) { const s = xState('phase10'); if (!xTurn(s)) return; const i = +el.dataset.i; S.p10Sel = S.p10Sel === i ? null : i; render(); },
+    p10Sel(el) {
+      const s = xState('phase10'); if (!xTurn(s)) return; const i = +el.dataset.i;
+      if (UI.p10Man) { const m = UI.p10Man; if (m.sets.some(x => x.indexOf(i) >= 0)) return; const k = m.cur.indexOf(i); if (k >= 0) m.cur.splice(k, 1); else m.cur.push(i); render(); return; }
+      S.p10Sel = S.p10Sel === i ? null : i; render();
+    },
+    p10ManStart() { const s = xState('phase10'); if (!xTurn(s) || !s.drawn || s.laid[S.pid]) return; UI.p10Man = { sets: [], cur: [] }; UI.p10Skip = false; UI.p10Side = null; S.p10Sel = null; render(); },
+    p10ManNo() { UI.p10Man = null; render(); },
+    p10ManOk() {
+      const s = xState('phase10'), m = UI.p10Man; if (!s || !m || !xTurn(s)) return;
+      const cps = PT.comps(s, s.phase[S.pid]) || [], k = m.sets.length, hand = s.hands[S.pid] || [];
+      if (!m.cur.length || !PT.groupFit(m.cur.map(i => hand[i]), cps[k]).length) { toast('Diese Karten passen nicht zu Teil ' + (k + 1) + ' (' + p10CompTxt(cps[k]) + ').'); return; }
+      m.sets.push(m.cur.slice()); m.cur = [];
+      if (m.sets.length < cps.length) { render(); return; }
+      const sets = m.sets; UI.p10Man = null;
+      runAction('p10LayMan', A.p10LayMan, fakeEl({ v: JSON.stringify(sets) }, ''), null);
+    },
+    p10LayMan(el) {
+      const s = xState('phase10'); if (!xTurn(s)) return;
+      let sets = null; try { sets = JSON.parse(el.dataset.v || ''); } catch (e) { sets = null; }
+      if (!Array.isArray(sets) || sets.length > 6 || sets.some(x => !Array.isArray(x) || x.length > 30)) return;
+      const n = PT.layMan(s, S.pid, sets);
+      if (!n) { toast('So lässt sich die Phase nicht auslegen.'); return; }
+      S.p10Sel = null; w(backend.set(xPath('phase10'), n));
+    },
+    p10SkipNo() { UI.p10Skip = false; render(); },
+    p10SideNo() { UI.p10Side = null; render(); },
     p10Lay() { const s = xState('phase10'); if (!xTurn(s)) return; const n = PT.lay(s, S.pid); if (!n) { toast(s.drawn ? 'Deine Karten reichen noch nicht für die Phase.' : 'Ziehe zuerst eine Karte.'); return; } S.p10Sel = null; w(backend.set(xPath('phase10'), n)); },
     p10Hit(el) {
       const s = xState('phase10');
@@ -5424,9 +5500,12 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (!s.drawn || !s.laid[S.pid]) { toast('Anlegen darfst du erst, wenn du gezogen und deine eigene Phase ausgelegt hast.'); return; }
       if (PT.hitLate(s, S.pid, el.dataset.o)) { toast('Bei anderen anlegen darfst du erst ab deinem nächsten Zug nach dem Auslegen.'); return; }
       if (S.p10Sel === null || S.p10Sel === undefined) { toast('Wähle zuerst eine Handkarte.'); return; }
-      const n = PT.hit(s, S.pid, S.p10Sel, el.dataset.o, +el.dataset.g);
+      // Joker an eine Folge, die nach beiden Seiten weitergeht: erst fragen, ob links oder rechts
+      const g0 = (s.laid[el.dataset.o] || [])[+el.dataset.g], ws = (s.hands[S.pid] || [])[S.p10Sel] === 'W' ? PT.wSides(g0) : null;
+      if (ws && ws.l && ws.r && !el.dataset.side) { UI.p10Side = { o: el.dataset.o, g: +el.dataset.g }; render(); return; }
+      const n = PT.hit(s, S.pid, S.p10Sel, el.dataset.o, +el.dataset.g, el.dataset.side === 'l' || el.dataset.side === 'r' ? el.dataset.side : undefined);
       if (!n) { toast('Diese Karte passt dort nicht.'); return; }
-      S.p10Sel = null; w(backend.set(xPath('phase10'), n));
+      S.p10Sel = null; UI.p10Side = null; w(backend.set(xPath('phase10'), n));
     },
     p10Next() { const s = xState('phase10'); if (!s || !canDeal('p' + s.round)) return; const n = PT.next(s, rnd); if (n) w(backend.set(xPath('phase10'), n)); },
     witToggle(el) {
@@ -5789,6 +5868,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     } else if (act === 'cropStep') { const kk = btn.dataset.k; if (CR.on) { cropSet(kk, kk === 'zoom' ? v / 100 : v); cropSync(); } }
   }
   document.addEventListener('click', ev => {
+    const ps = ev.target.closest && ev.target.closest('main.game .seat[data-pickp]');
+    if (ps && !ev.target.closest('[data-act]')) { const main = ps.closest('main.game'), b = pickBtns(main).find(x => x.dataset.p === ps.dataset.pickp); if (b) { ev.preventDefault(); b.click(); return; } }
     const no = ev.target.closest && ev.target.closest('.steps output, .crrow output');
     if (no && !(ev.target.tagName === 'INPUT')) { numEdit(no); return; }
     const el = ev.target.closest('[data-act]');
@@ -6778,6 +6859,18 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (!UI.sumW[k]) { UI.sumW[k] = Date.now() + 3000; setTimeout(() => requestRender(), 3060); }
     return Date.now() < UI.sumW[k];
   }
+  // Wann immer eine Person gewählt werden kann (Knopf mit data-p in der Mitte), ist auch ihr Spielerfenster antippbar
+  const pickBtns = main => [...main.querySelectorAll('.center [data-act][data-p], .status [data-act][data-p], .pickbox [data-act][data-p]')].filter(b => !b.closest('.seat') && !b.closest('section.mine') && !b.disabled);
+  function autoPickSeats() {
+    const main = document.querySelector('main.game'); if (!main) return;
+    const map = {}; pickBtns(main).forEach(b => { if (!map[b.dataset.p]) map[b.dataset.p] = b; });
+    main.querySelectorAll('.seats > .seat').forEach(se => {
+      if (se.dataset.act) return;
+      const b = se.dataset.p && map[se.dataset.p];
+      se.classList.toggle('tgt', !!b); se.classList.toggle('tgton', !!(b && /\b(on|sel|primary)\b/.test(b.className)));
+      if (b) { se.setAttribute('data-pickp', se.dataset.p); se.setAttribute('role', 'button'); } else { se.removeAttribute('data-pickp'); if (se.getAttribute('role') === 'button') se.removeAttribute('role'); }
+    });
+  }
   function render() {
     if (HXC.on) return;
     const root = $('#app'), X = tableX();
@@ -6811,6 +6904,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     optInfo(root);
     document.body.classList.toggle('ingame', !!root.querySelector('main.game .topbar .emotb'));
     try { if (pcNoScroll() && (window.scrollX || window.scrollY)) window.scrollTo(0, 0); } catch (e) { if (typeof __kw === 'function') __kw(e); }
+    try { autoPickSeats(); } catch (e) { if (typeof __kw === 'function') __kw(e); }
     fitNames(root);
     alignTags(root);
     const eb = $('#emobar');
@@ -7290,7 +7384,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       else if (k === 'wizard') { const c = ctx(); if (c && c.d) won = c.d.won; }
       else if (k === 'skipbo') { const s = sbState(); if (s) { tot = {}; (m.order || []).forEach(p => { const dc = s.disc && s.disc[p] || {}; tot[p] = (s.hands[p] || []).length + (s.stock[p] || []).length + Object.keys(dc).reduce((a, i) => a + (dc[i] || []).length, 0); }); } }
       const xo = XG[k] ? xState(k) : null;
-      return hands ? { hands: hands, order: (xo && Array.isArray(xo.order) ? xo.order : m.order) || [], key: k + ':' + m.g, fx: fx, won: won ? Object.assign({}, won) : null, tot: tot } : null;
+      let rr = '';
+      if (xo && xo.round != null) rr = xo.round; else if (k === 'uno' || k === 'phase10') { const s2 = xState(k); rr = s2 && s2.round != null ? s2.round : ''; } else if (k === 'skipbo') { const s2 = sbState(); rr = s2 && s2.round != null ? s2.round : ''; }
+      return hands ? { hands: hands, order: (xo && Array.isArray(xo.order) ? xo.order : m.order) || [], key: k + ':' + m.g + ':' + rr, fx: fx, won: won ? Object.assign({}, won) : null, tot: tot } : null;
     } catch (e) { return null; }
   }
   
@@ -7305,7 +7401,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const used = new Set();
     const oc = ownCards(), ocr = oc.slice().reverse();
     oc.forEach(el => el.classList.remove('arriving'));
-    UI.hideMine.forEach(x => { const l = ocr.filter(e => !used.has(e) && cardKey(e) === x.k), el = l.find(e => e.classList.contains('got')) || l[0]; if (el) { used.add(el); el.classList.add('arriving'); } });
+    // genau die Karte verstecken, auf die der Flug zielt (bei gleichen Karten sonst evtl. die falsche)
+    UI.hideMine.slice().sort((a, b) => (b.el ? 1 : 0) - (a.el ? 1 : 0)).forEach(x => { const l = ocr.filter(e => !used.has(e) && cardKey(e) === x.k), el = (x.el && l.indexOf(x.el) >= 0 ? x.el : null) || l.find(e => e.classList.contains('got')) || l[0]; if (el) { used.add(el); el.classList.add('arriving'); } });
     const hs = UI.hideSeat || {}, main = $('main.game');
     if (!main || !S.meta || !S.meta.order) return;
     const seatEls = main.querySelectorAll('.seats > .seat'), around = aroundMe(S.meta.order);
@@ -7346,7 +7443,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     // Lage der eigenen Karten merken; verschwundene Karten liefern den Startpunkt fürs Ausspielen
     { const prevR = UI.ownR || [], left = own.slice(); UI.ownGone = prevR.filter(x => { const i = left.indexOf(x.k); if (i >= 0) { left.splice(i, 1); return false; } return true; }).map(x => x.r); UI.ownR = ownEls.map((e, i) => { const r = e.getBoundingClientRect(); return { k: own[i], r: { left: r.left, top: r.top, width: r.width, height: r.height } }; }); }
     UI.ownPrev = own;
-    const pool = ownPrev.slice(), ownNew = own.filter(k => { const i = pool.indexOf(k); if (i >= 0) { pool.splice(i, 1); return false; } return true; });
+    const pool = ownPrev.slice(); let ownNew = own.filter(k => { const i = pool.indexOf(k); if (i >= 0) { pool.splice(i, 1); return false; } return true; });
     applyHide();
     const h = allHands(), st = settings();
     
@@ -7365,6 +7462,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     h.order.forEach(p => { cnt[p] = (h.hands[p] || []).length; });
     const prev = UI.anPrev;
     UI.anPrev = { key: h.key, cnt: cnt, won: h.won, tot: h.tot };
+    // Neue Runde: alle eigenen Karten werden neu ausgeteilt
+    if (prev && prev.key !== h.key) ownNew = own.slice();
     
     const cen = centerCards(), snapPrev = UI.cenSnap;
     UI.cenSnap = cen.map(x => { const r = x.el.getBoundingClientRect(), tc = x.el.closest && x.el.closest('.trick.pile > .tc'), rot = tc ? parseFloat(tc.style.getPropertyValue('--pr')) || 0 : 0, w0 = tc && x.el.offsetWidth ? x.el.offsetWidth : r.width, h0 = tc && x.el.offsetHeight ? x.el.offsetHeight : r.height, mx = r.left + r.width / 2, my = r.top + r.height / 2; return { k: x.k, html: x.el.outerHTML, rot, r: { left: mx - w0 / 2, top: my - h0 / 2, width: w0, height: h0 } }; });
@@ -7418,7 +7517,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   }
   function centerCards() {
     const main = $('main.game'); if (!main) return [];
-    return Array.from(main.querySelectorAll('.center .card:not(.back):not(.slot)')).map(el => ({ el, k: (el.getAttribute('title') || '') + '|' + el.className.replace(/\b(new|win|sel|ok|no|arriving|flown)\b/g, '').replace(/\s+/g, ' ').trim() + '|' + el.textContent }));
+    return Array.from(main.querySelectorAll('.center .card:not(.back):not(.slot)')).map(el => ({ el, k: (el.getAttribute('title') || '') + '|' + el.className.replace(/\b(new|win|sel|ok|no|arriving|flown)\b/g, '').replace(/\s+/g, ' ').trim() + '|' + el.textContent + '#' + (((el.closest && el.closest('[data-seq]')) || { dataset: {} }).dataset.seq || '') }));
   }
   function mkSnap() {
     const m = {};
@@ -7445,7 +7544,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (ob && ob.html && e.t === 'pile') {
         const ub = document.createElement('div'); ub.className = 'flyp flyu gm-' + k; ub.style.width = b.w + 'px'; ub.style.left = (b.x - b.w / 2) + 'px'; ub.style.top = (b.y - b.w * carH(k) / 2) + 'px';
         ub.innerHTML = ob.html; const uc = ub.firstChild; if (uc && uc.style) { uc.style.setProperty('--cw', b.w + 'px'); uc.style.visibility = ''; uc.style.margin = '0'; uc.style.outline = 'none'; }
-        layer.insertBefore(ub, layer.firstChild); setTimeout(() => ub.remove(), delay + per + 120);
+        layer.insertBefore(ub, layer.firstChild); setTimeout(() => requestAnimationFrame(() => ub.remove()), delay + per + 2);
       }
       (UI.hideMk = UI.hideMk || []).push({ mk: e.t, t: land });
       const mkf = (bx, by) => [{ transform: 'translate(' + (a.x - bx) + 'px,' + (a.y - by) + 'px) scale(' + sc + ')' }, { transform: 'translate(0,0) scale(1)' }];
@@ -7456,7 +7555,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         flyNudge(box.firstChild, r.left + r.width / 2 - b.x, r.top + r.height / 2 - b.y, delay + per - (Date.now() - t0f)); };
       setTimeout(refit, delay + 30); setTimeout(refit, delay + per * 0.6);
       // Landung: echte Karte zeigen und die fliegende Kopie im nächsten Bild entfernen (vorher lagen beide kurz übereinander – das sah wie ein Schatten aus)
-      setTimeout(() => { applyHide(); requestAnimationFrame(() => requestAnimationFrame(() => { box.remove(); if (typeof ub !== 'undefined' && ub) ub.remove(); })); }, delay + per + 2); setTimeout(() => box.remove(), delay + per + 500);
+      setTimeout(() => { applyHide(); requestAnimationFrame(() => requestAnimationFrame(() => { box.remove(); })); }, delay + per + 2); setTimeout(() => box.remove(), delay + per + 500);
     });
     applyHide();
   }
@@ -7568,7 +7667,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const ub = document.createElement('div'); ub.className = 'flyp flyu gm-' + g; ub.style.left = under.r.left + 'px'; ub.style.top = under.r.top + 'px'; ub.style.width = under.r.width + 'px';
         ub.innerHTML = under.html; const uc = ub.firstChild; if (uc && uc.style) { uc.style.setProperty('--cw', under.r.width + 'px'); uc.style.visibility = ''; uc.style.margin = '0'; }
         layer.insertBefore(ub, layer.firstChild);
-        setTimeout(() => ub.remove(), delay + per + 120);
+        // Alte Karte darunter genau bei der Landung weg (sonst blitzte sie kurz über der neuen auf)
+        setTimeout(() => requestAnimationFrame(() => ub.remove()), delay + per + 2);
       }
       (UI.hideCen = UI.hideCen || []).push({ k: it.k, t: land });
       // Landung: echte Karte zeigen und die fliegende Kopie im nächsten Bild entfernen (vorher lagen beide kurz übereinander – das sah wie ein Schatten aus)
@@ -7583,7 +7683,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         flyNudge(cl, ox * Math.cos(a) - oy * Math.sin(a), ox * Math.sin(a) + oy * Math.cos(a), left); };
       setTimeout(refit, delay + per * 0.35); setTimeout(refit, delay + per * 0.75);
       
-      setTimeout(() => { applyHide(); requestAnimationFrame(() => requestAnimationFrame(() => { box.remove(); if (typeof ub !== 'undefined' && ub) ub.remove(); })); }, delay + per + 2); setTimeout(() => box.remove(), delay + per + 500);
+      setTimeout(() => { applyHide(); requestAnimationFrame(() => requestAnimationFrame(() => { box.remove(); })); }, delay + per + 2); setTimeout(() => box.remove(), delay + per + 500);
     });
     applyHide();
   }
@@ -7646,8 +7746,11 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const main = $('main.game');
     if (!main) return;
     
+    // Austeilen: Tischmitte schon jetzt ausblenden – sonst verschiebt sich der Stapel erst nach dem Messen und die Karten kämen unter ihm hervor
+    if (S.joined && Object.keys(add).filter(p => add[p] > 0).length >= 2) document.body.classList.add('dealing');
     const pile = [...main.querySelectorAll('.center .card.back')].find(e => !e.closest('.dealdeck')) || null;
     if (!pile && Object.keys(add).filter(p => add[p] > 0).length >= 2) dealDeck(true);
+    { const dk0 = main.querySelector('.center .dealdeck'); if (dk0) placeDeck(main, main.querySelector('.center'), dk0); }
     
     const src = pile || main.querySelector('.center .dealdeck') || main.querySelector('.center'), sr = src && src.getBoundingClientRect();
     if (!sr) return;
@@ -7691,10 +7794,13 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const usedOwn = new Set(), ownList = ownCards().reverse();
     // Doppelte Karten: zuerst die neu bekommene (markierte) nehmen – sonst landet der Flug auf der alten gleichen Karte und springt
     const gotFirst = l => l.filter(e => e.classList.contains('got')).concat(l.filter(e => !e.classList.contains('got')));
-    const occ = {}, ownSpot = k => { const el = gotFirst(ownList.filter(e => !usedOwn.has(e) && cardKey(e) === k))[0]; if (!el) return null; usedOwn.add(el); const r = el.getBoundingClientRect(); if (!r.width) return null; const o = occ[k] = (occ[k] || 0) + 1; return { left: r.left, top: r.top, width: r.width, height: r.height, k, o: o - 1, el }; };
+    // Gleiche Karten: Sind alle davon neu (z. B. beim Austeilen), von links nach rechts belegen; sonst die neu gezogene (markierte bzw. rechte)
+    const newLeft = {}; ownNew.forEach(k => { newLeft[k] = (newLeft[k] || 0) + 1; });
+    const occ = {}, ownSpot = k => { const cand = ownList.filter(e => !usedOwn.has(e) && cardKey(e) === k), allNew = cand.length <= (newLeft[k] || 0); if (newLeft[k]) newLeft[k]--; const el = allNew ? cand[cand.length - 1] : gotFirst(cand)[0]; if (!el) return null; usedOwn.add(el); const r = el.getBoundingClientRect(); if (!r.width) return null; const o = occ[k] = (occ[k] || 0) + 1; return { left: r.left, top: r.top, width: r.width, height: r.height, k, o: o - 1, el }; };
     // Zielplatz erst beim Losfliegen noch einmal messen: Am Spielanfang verschiebt sich die Hand oft noch (Stapel, Hinweise, Bilder)
     const ownAnySpot = () => { const el = ownList.find(e => !usedOwn.has(e)); if (!el) return null; return ownSpot(cardKey(el)); };
-    const spotNow = sp => { const l = gotFirst(ownCards().reverse().filter(e => cardKey(e) === sp.k)), el = l[sp.o]; if (!el) return null; const r = el.getBoundingClientRect(); return r.width ? r : null; };
+    // Gleiche Karten mehrfach: dasselbe Element weiterverfolgen (nicht per Reihenfolge suchen), sonst tauschen die Flüge ihre Ziele und springen
+    const spotNow = sp => { let el = sp.el && sp.el.isConnected && cardKey(sp.el) === sp.k ? sp.el : null; if (!el) { const l = gotFirst(ownCards().reverse().filter(e => cardKey(e) === sp.k)); el = l[sp.o]; } if (!el) return null; const r = el.getBoundingClientRect(); return r.width ? r : null; };
     jobs.forEach((j, n) => {
       const tr = target(j.p);
       if (!tr) return;
@@ -7704,6 +7810,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       j.sc = spot ? spot.width / bw : tr.mini ? tr.width / bw : null; j.spot = spot; j.mini = !!tr.mini;
       const box = document.createElement('div');
       box.className = 'flyc gm-' + g;
+      // Wer zuerst losfliegt, liegt oben – sonst kommen die Karten unter den noch wartenden hervor
+      box.style.zIndex = String(jobs.length - n);
       // Eigene Karten fliegen verdeckt an und drehen sich in der Hand um
       let front = null;
       if (j.p === S.pid && spot && spot.el && flipOk()) { const fe = spot.el.querySelector('.card') || spot.el; if (fe && !fe.classList.contains('back')) { front = fe.cloneNode(true); front.classList.remove('arriving', 'sel', 'ok'); front.removeAttribute('style'); } }
@@ -7715,11 +7823,21 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       layer.appendChild(box);
       if (front) box.querySelectorAll('.card').forEach(c => { c.style.setProperty('--cw', (pl ? bw : 96) + 'px'); c.style.boxShadow = 'none'; });
       const FD = front ? 280 : 0, delay = seq ? n * gap : j.k * gap, land = Date.now() + delay + per + FD;
-      if (j.p === S.pid) { const k = ownNew[j.k]; if (k !== undefined) (UI.hideMine = UI.hideMine || []).push({ k: k, t: land }); }
+      if (j.p === S.pid) { const k = ownNew[j.k]; if (k !== undefined) (UI.hideMine = UI.hideMine || []).push({ k: k, t: land, el: spot && spot.el }); }
       else { UI.hideSeat = UI.hideSeat || {}; (UI.hideSeat[j.p] = UI.hideSeat[j.p] || []).push(land); }
       setTimeout(applyHide, delay + per + FD + 5);
-      const kf = (x, y, sc) => [{ transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 }, { transform: 'translate(' + (x - sx) + 'px,' + (y - sy) + 'px) rotate(' + (j.p === S.pid || j.mini ? 0 : 12) + 'deg) scale(' + sc + ')', opacity: .95 }];
-      const an = box.animate(kf(tx, ty, j.sc ? j.sc.toFixed(3) : j.p === S.pid ? Math.max(.5 * 96 / bw, cardW() / bw) : .32 * 96 / bw), { duration: per, delay: delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' });
+      const o = { x: sx, y: sy }, sc0 = j.sc ? j.sc.toFixed(3) : j.p === S.pid ? Math.max(.5 * 96 / bw, cardW() / bw) : .32 * 96 / bw;
+      let last = [tx, ty, sc0];
+      const kf = (x, y, sc) => { last = [x, y, sc]; return [{ transform: 'translate(0,0) rotate(0deg) scale(1)', opacity: 1 }, { transform: 'translate(' + (x - o.x) + 'px,' + (y - o.y) + 'px) rotate(' + (j.p === S.pid || j.mini ? 0 : 12) + 'deg) scale(' + sc + ')', opacity: .95 }]; };
+      const an = box.animate(kf(tx, ty, sc0), { duration: per, delay: delay, easing: 'cubic-bezier(.3,.7,.3,1)', fill: 'both' });
+      // Startpunkt kurz vor dem Losfliegen nachmessen: Der Stapel wird beim Austeilen oft noch verschoben – sonst kämen die Karten unter ihm hervor
+      if (pl && an.effect && an.effect.setKeyframes) setTimeout(() => {
+        const s2 = (main.querySelector('.center .dealdeck .card') || (pl.isConnected ? pl : null) || main.querySelector('.center .card.back'));
+        const r2 = s2 && s2.getBoundingClientRect(); if (!r2 || !r2.width) return;
+        const nx = r2.left + r2.width / 2, ny = r2.top + r2.height / 2; if (Math.abs(nx - o.x) < 1 && Math.abs(ny - o.y) < 1) return;
+        box.style.left = (parseFloat(box.style.left) + nx - o.x) + 'px'; box.style.top = (parseFloat(box.style.top) + ny - o.y) + 'px'; o.x = nx; o.y = ny;
+        an.effect.setKeyframes(kf(last[0], last[1], last[2]));
+      }, Math.max(0, delay - 15));
       if (!j.spot && j.mini && an.effect && an.effect.setKeyframes) {
         const t0f = Date.now(), scE = +(j.sc || 1) || 1;
         const refit = () => { const r = target(j.p); if (!r || !r.mini) return; const nx = r.left + r.width / 2, ny = r.top + r.height / 2; flyNudge(front ? box.querySelector('.flipc') && null : box.firstChild, (nx - tx) / scE, (ny - ty) / scE, delay + per - (Date.now() - t0f)); };
@@ -7817,6 +7935,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const jobs = [];
     root.querySelectorAll('.seat.minss').forEach(seat => {
       const tags = seat.querySelectorAll(':scope > .st > .tag'), mi = seat.querySelector(':scope > .ss > .minis');
+      // Uno-Varianten: Kartenrücken stehen rechts neben dem Namen – dann Schilder nicht darunter schieben
+      if (mi && getComputedStyle(mi.parentNode).position === 'absolute') { tags.forEach(t => { t.style.marginRight = ''; }); return; }
       if (tags.length && mi) { const t = tags[tags.length - 1]; t.style.marginRight = ''; jobs.push([t, mi]); }
     });
     const ds = jobs.map(([t, mi]) => mi.getBoundingClientRect().right - t.getBoundingClientRect().right);
@@ -8131,7 +8251,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (!s) return WAIT_HTML;
     const me = S.pid, seated = s.order.indexOf(me) >= 0, cur = s.order[s.turn], myTurn = seated && xTurn(s), pend = s.pend || 0;
     const nm = p => p === me ? 'Du' : esc(pname(p));
-    const seats = aroundMe(s.order).map(p => { const n = (s.hands[p] || []).length; return '<div class="seat' + (cur === p && !s.winner ? ' turn' : '') + (offline(p) ? ' off' : '') + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + (n === 1 ? '<span class="tag gold">Uno</span>' : '') + seatTags(p) + minisHTML(n) + '</div></div>'; }).join('');
+    const seats = aroundMe(s.order).map(p => { const n = (s.hands[p] || []).length; return '<div class="seat' + (cur === p && !s.winner ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + (n === 1 ? '<span class="tag gold">Uno</span>' : '') + seatTags(p) + minisHTML(n) + '</div></div>'; }).join('');
     
     if (s.uno && UI.unoSeq !== s.uno.seq) { UI.unoSeq = s.uno.seq; UI.unoUntil = Date.now() + 2800; setTimeout(requestRender, 2900); }
     const flash = !s.winner && s.uno && Date.now() < (UI.unoUntil || 0) ? '<div class="unoflash" role="alert"><b>UNO!</b><span>' + (s.uno.p === me ? 'Du hast' : esc(pname(s.uno.p)) + ' hat') + ' nur noch eine Karte</span></div>' : '';
@@ -8145,7 +8265,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       center = '<div class="summary"><h2>' + (s.winner === me ? 'Du gewinnst' : esc(pname(s.winner)) + ' gewinnt') + '</h2><div class="tablewrap"><table><thead><tr><th scope="col">Platz</th><th scope="col">Handkarten</th></tr></thead><tbody>' + rank.map((p, i) => '<tr class="' + (p === me ? 'me' : '') + (i === 0 ? ' win' : '') + '"><th scope="row">' + (i + 1) + '. ' + esc(pname(p)) + '</th><td><b>' + s.hands[p].length + '</b></td></tr>').join('') + '</tbody></table></div><div class="sumfoot">' + lobbyFoot() + '</div></div>';
     } else {
       const t = s.pile[s.pile.length - 1];
-      center = unoDir(s.dir) + '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="unoDraw" aria-label="' + (pend ? pend + ' Karten ziehen' : 'Karte ziehen') + '">' + backHTML(X, 'uno') + '<span class="who">' + (pend ? '<b>' + pend + ' ziehen</b>' : 'Ziehen · ' + s.draw.length) + '</span></button><div class="bp drawp">' + unoCardHTML(t, X) + '<span class="who"><i class="dot" style="background:var(--s' + s.color + ')"></i> ' + esc(suitName(X, s.color, 'uno')) + ' gilt</span></div></div>' +
+      center = unoDir(s.dir) + '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="unoDraw" aria-label="' + (pend ? pend + ' Karten ziehen' : 'Karte ziehen') + '">' + backHTML(X, 'uno') + '<span class="who">' + (pend ? '<b>' + pend + ' ziehen</b>' : 'Ziehen · ' + s.draw.length) + '</span></button><div class="bp drawp" data-seq="' + s.pile.length + '">' + unoCardHTML(t, X) + '<span class="who"><i class="dot" style="background:var(--s' + s.color + ')"></i> ' + esc(suitName(X, s.color, 'uno')) + ' gilt</span></div></div>' +
         (pend ? '<p class="pendnote">Es liegen <b>+' + pend + '</b> an.</p>' : '') +
         (myTurn && S.unoPick !== null && S.unoPick !== undefined ? '<div class="pickbox"><p>Welche Farbe soll gelten?</p><div class="picks">' + SUITS.map(c => '<button class="pick s-' + c + '" data-act="unoColor" data-c="' + c + '">' + esc(suitName(X, c, 'uno')) + '</button>').join('') + '</div></div>' : '') +
         (ask !== null ? '<div class="pickbox"><p>Du hast ' + esc(unoName(myHand[ask], X.D)) + ' zweimal auf der Hand. Beide zusammen legen?</p><div class="picks"><button class="btn primary" data-act="unoDbl" data-v="1">Beide legen</button><button class="btn" data-act="unoDbl" data-v="0">Nur eine legen</button></div></div>' : '');
@@ -8176,13 +8296,15 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       return '<tr class="' + (p === S.pid ? 'me' : '') + (s.winner === p ? ' win' : '') + '"><th scope="row">' + (i + 1) + '. ' + esc(pname(p)) + '</th>' + (s.over ? '<td class="' + (r && r.done ? 'pos' : 'neg') + '">' + (r ? (r.done ? 'Phase ' + r.phase + ' geschafft' : 'Phase ' + r.phase + ' offen') + (s.nopts ? (s.over.first === p ? ', zuerst' : '') : ', +' + r.pts) : '') + '</td>' : '') + '<td><b>' + (s.nopts ? (s.firsts[p] || 0) + '×' : s.scores[p]) + '</b></td><td>' + (prog(p) >= s.goal ? 'fertig' : s.free ? prog(p) + ' von ' + s.goal + ' geschafft' : s.phase[p] + ' von ' + s.goal) + '</td></tr>';
     }).join('') + '</tbody></table></div>';
   }
+  const P10K = { set: 'gleiche Zahlen', cset: 'gleiche Karten (Zahl und Farbe)', col: 'Karten einer Farbe', evc: 'gerade Karten einer Farbe', fix: '3, 6, 9 und 12', wild: 'Joker', cr: 'Folge in einer Farbe', orun: 'Folge ungerader Zahlen', arun: 'Folge im Farbwechsel', r2c: 'Folge aus zwei Farben', r3c: 'Folge aus drei Farben', rdc: 'Folge in verschiedenen Farben', run: 'Folge' };
+  const p10CompTxt = c => (c[1] ? c[1] + ' Karten: ' : '') + (P10K[c[0]] || 'Gruppe');
   function p10HTML(X) {
     const s = xState('phase10');
     if (!s) return WAIT_HTML;
     UI.dz = typeof s.dealer === 'number' ? { d: s.order[s.dealer], st: s.order[(s.dealer + 1) % s.order.length], ng: s.round > 1 } : null;
     const choosing = PT.choosing(s);
     // Auswahl gilt nur für den laufenden Zug – sonst wirkte eine alte Auswahl wie eine vorgewählte Karte
-    const tk = S.code + ':' + s.g + ':' + s.round + ':' + s.turn; if (UI.p10TK !== tk) { UI.p10TK = tk; S.p10Sel = null; }
+    const tk = S.code + ':' + s.g + ':' + s.round + ':' + s.turn; if (UI.p10TK !== tk) { UI.p10TK = tk; S.p10Sel = null; UI.p10Skip = false; UI.p10Man = null; UI.p10Side = null; }
     const me = S.pid, seated = s.order.indexOf(me) >= 0, cur = s.order[s.turn], myTurn = seated && xTurn(s) && !choosing;
     const nm = p => p === me ? 'Du' : esc(pname(p));
     const hand0 = s.hands[me] || [], sel = myTurn && S.p10Sel !== null && S.p10Sel !== undefined && S.p10Sel < hand0.length ? S.p10Sel : null;
@@ -8190,7 +8312,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const sn = c => esc(suitName(X, c, 'phase10'));
     const gLabel = g => g.t === 'set' ? g.cards.length + '× die ' + g.v : g.t === 'cset' ? g.cards.length + '× ' + sn(g.c) + ' ' + g.v : g.t === 'fix' ? '3, 6, 9, 12' : g.t === 'wild' ? g.cards.length + '× Joker' : g.t === 'col' ? g.cards.length + '× ' + sn(g.c) + (g.ev ? ', gerade' : '') : (g.st === 2 ? 'Ungerade Folge ' : 'Folge ') + (g.t === 'cr' ? sn(g.c) + ' ' : g.t === 'arun' ? sn(g.ca) + '/' + sn(g.cb) + ' ' : g.t === 'r2c' ? sn(g.cs[0]) + '/' + sn(g.cs[1]) + ' ' : '') + PT.wv(g.lo) + ' bis ' + PT.wv(g.hi);
     const groups = p => (s.laid[p] || []).map((g, gi) => '<button class="pg' + (canHitNow && PT.canHit(g, hand0[sel]) ? ' ok' : '') + '" data-act="p10Hit" data-o="' + esc(p) + '" data-g="' + gi + '" aria-label="' + gLabel(g) + '"><span class="pgc">' + g.cards.map(c => p10CardHTML(c, X, { cls: 'tiny' })).join('') + '</span><span class="who">' + gLabel(g) + '</span></button>').join('');
-    const seats = aroundMe(s.order).map(p => { const n = (s.hands[p] || []).length; return '<div class="seat p10seat' + (cur === p && !s.over ? ' turn' : '') + (offline(p) ? ' off' : '') + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + seatTags(p) + (s.laid[p] ? '<span class="tag gold">' + (n ? 'ausgelegt' : 'fertig') + '</span>' : '') + minisHTML(n) + '</div><div class="ss"><span>' + (s.free ? (s.done[p] || []).length + '/' + s.goal + ' · ' + (s.phase[p] ? 'Phase <b>' + s.phase[p] + '</b>: ' + esc(PT.text(s, s.phase[p])) : 'wählt …') : s.phase[p] > s.goal ? 'Phase: <b>✓</b>' : 'Phase <b>' + s.phase[p] + '</b>: ' + esc(PT.text(s, s.phase[p]))) + '</span>' + (s.nopts ? '' : '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>') + '</div><div class="pgs' + (s.laid[p] ? '' : ' pgempty') + '">' + (s.laid[p] ? groups(p) : '') + '</div></div>'; }).join('');
+    const seats = aroundMe(s.order).map(p => { const n = (s.hands[p] || []).length; return '<div class="seat p10seat' + (cur === p && !s.over ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' + seatTags(p) + (s.laid[p] ? '<span class="tag gold">' + (n ? 'ausgelegt' : 'fertig') + '</span>' : '') + minisHTML(n) + '</div><div class="ss"><span>' + (s.free ? (s.done[p] || []).length + '/' + s.goal + ' · ' + (s.phase[p] ? 'Phase <b>' + s.phase[p] + '</b>: ' + esc(PT.text(s, s.phase[p])) : 'wählt …') : s.phase[p] > s.goal ? 'Phase: <b>✓</b>' : 'Phase <b>' + s.phase[p] + '</b>: ' + esc(PT.text(s, s.phase[p]))) + '</span>' + (s.nopts ? '' : '<span class="pts">Gesamt: <b>' + s.scores[p] + ' P</b></span>') + '</div><div class="pgs' + (s.laid[p] ? '' : ' pgempty') + '">' + (s.laid[p] ? groups(p) : '') + '</div></div>'; }).join('');
     const cw = cardW();
     
     const gotMine = s.got && s.got.p === me ? s.got : null, gotI = gotMine ? hand0.lastIndexOf(gotMine.c) : -1;
@@ -8205,8 +8327,11 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       status = (mineOpen ? '<b>Wähle deine Phase.</b> ' : '') + 'Es wählen noch: ' + s.order.filter(q => !s.phase[q]).map(nm).join(', ');
     } else {
       const t = s.pile[s.pile.length - 1];
-      center = '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="p10Draw" aria-label="Vom Stapel ziehen">' + backHTML(X, 'phase10') + '<span class="who">Stapel · ' + s.draw.length + '</span></button><button class="bp' + (myTurn && (s.drawn ? sel !== null : t !== undefined && t !== 'S') ? ' ok' : '') + '" data-act="p10Pile" aria-label="Ablage">' + (t !== undefined ? p10CardHTML(t, X) : '<span class="card slot"></span>') + '<span class="who">' + (myTurn && s.drawn ? 'Hier abwerfen' : 'Ablage') + '</span></button></div>';
-      const lg = s.log, last = lg && lg.p !== me ? esc(pname(lg.p)) + (lg.a === 'take' ? ' nimmt ' + esc(p10Name(lg.c, X.D)) + ' von der Ablage.' : lg.a === 'draw' ? ' zieht vom Stapel.' : lg.a === 'lay' ? ' legt Phase ' + lg.n + ' aus.' : lg.a === 'hit' ? ' legt an.' : lg.a === 'discard' ? ' wirft ' + esc(p10Name(lg.c, X.D)) + ' ab.' : '') : '';
+      center = '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="p10Draw" aria-label="Vom Stapel ziehen">' + backHTML(X, 'phase10') + '<span class="who">Stapel · ' + s.draw.length + '</span></button><button class="bp' + (myTurn && (s.drawn ? sel !== null : t !== undefined && t !== 'S') ? ' ok' : '') + '" data-act="p10Pile" data-seq="' + s.pile.length + '" aria-label="Ablage">' + (t !== undefined ? p10CardHTML(t, X) : '<span class="card slot"></span>') + '<span class="who">' + (myTurn && s.drawn ? 'Hier abwerfen' : 'Ablage') + '</span></button></div>';
+      if (myTurn && UI.p10Skip) center += '<div class="pickbox"><p>Wen lässt du aussetzen?</p><div class="picks">' + PT.skipTargets(s, me).map(q => '<button class="btn" data-act="p10Pile" data-t="' + esc(q) + '" data-p="' + esc(q) + '">' + esc(pname(q)) + (s.skipped && s.skipped[q] ? ' (setzt schon aus)' : '') + '</button>').join('') + '<button class="btn" data-act="p10SkipNo">Abbrechen</button></div></div>';
+      if (myTurn && UI.p10Man) { const cps = PT.comps(s, s.phase[me]) || [], k = UI.p10Man.sets.length; if (k < cps.length) center += '<div class="pickbox"><p><b>Selbst auslegen – Teil ' + (k + 1) + ' von ' + cps.length + ':</b> ' + p10CompTxt(cps[k]) + '. Tippe die Karten dafür in deiner Hand an (' + UI.p10Man.cur.length + ' gewählt).</p><div class="picks"><button class="btn primary" data-act="p10ManOk"' + (UI.p10Man.cur.length ? '' : ' disabled') + '>' + (k + 1 === cps.length ? 'Phase auslegen' : 'Weiter zu Teil ' + (k + 2)) + '</button><button class="btn" data-act="p10ManNo">Abbrechen</button></div></div>'; }
+      if (myTurn && UI.p10Side) center += '<div class="pickbox"><p>Wo soll der Joker an die Folge?</p><div class="picks"><button class="btn" data-act="p10Hit" data-o="' + esc(UI.p10Side.o) + '" data-g="' + UI.p10Side.g + '" data-side="l">Links (vorne)</button><button class="btn" data-act="p10Hit" data-o="' + esc(UI.p10Side.o) + '" data-g="' + UI.p10Side.g + '" data-side="r">Rechts (hinten)</button><button class="btn" data-act="p10SideNo">Abbrechen</button></div></div>';
+      const lg = s.log, last = lg && lg.p !== me ? esc(pname(lg.p)) + (lg.a === 'take' ? ' nimmt ' + esc(p10Name(lg.c, X.D)) + ' von der Ablage.' : lg.a === 'draw' ? ' zieht vom Stapel.' : lg.a === 'lay' ? ' legt Phase ' + lg.n + ' aus.' : lg.a === 'hit' ? ' legt an.' : lg.a === 'discard' ? ' wirft ' + esc(p10Name(lg.c, X.D)) + ' ab.' + (lg.t ? ' ' + (lg.t === me ? 'Du setzt' : esc(pname(lg.t)) + ' setzt') + ' aus.' : '') : '') : '';
       const gotTxt = gotMine && gotI >= 0 ? (gotMine.from === 'pile' ? 'Von der Ablage genommen: ' : 'Gezogen: ') + '<b>' + esc(p10Name(gotMine.c, X.D)) + '</b>. ' : '';
       status = (myTurn ? '<b>Du bist am Zug.</b> ' + (!s.drawn ? 'Ziehe vom Stapel oder nimm die oberste Karte der Ablage.' : gotTxt + (sel === null ? 'Lege aus oder wähle eine Karte zum Abwerfen.' : s.laid[me] ? 'Tippe eine Gruppe zum Anlegen an oder die Ablage zum Abwerfen.' : 'Tippe die Ablage an, um diese Karte abzuwerfen.')) : nm(cur) + ' ist am Zug …') + (last ? ' <small>' + last + '</small>' : '');
     }
@@ -8215,10 +8340,11 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const hand = hand0.map((c, i) => ({ c, i })), rank = c => c === 'W' ? 500 : c === 'S' ? 600 : PT.val(c) * 10 + SUITS.indexOf(c[0]);
       handSort(hand, (a, b) => rank(a.c) - rank(b.c), c => c === 'W' ? [1, 0, 0] : c === 'S' ? [2, 0, 0] : [0, SUITS.indexOf(c[0]), PT.val(c)], x => x.c);
       const ph = s.phase[me], canLay = myTurn && s.drawn && !s.laid[me] && ph >= 1 && !!PT.solve(hand0, PT.comps(s, ph));
-      mine = '<div class="mebar' + (myTurn ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + '<span class="nm">' + esc(pname(me)) + '</span>' + dzTags(me) + '<span class="p10ph">' + (s.free ? (s.done[me] || []).length + ' von ' + s.goal + ' geschafft' + (ph ? ' · Phase: <b>' + PT.text(s, ph) + '</b>' : '') : ph > s.goal ? 'Alle Phasen geschafft' : 'Phase: <b>' + PT.text(s, ph) + '</b>') + '</span>' + (s.nopts ? '' : '<span class="ss"><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span></span>') +
-        (!s.over && !s.laid[me] && ph >= 1 && ph <= s.goal ? '<button class="btn small' + (canLay ? ' primary' : '') + '" data-act="p10Lay"' + (canLay ? '' : ' disabled') + '>Phase auslegen</button>' : '') +  autoNote(me) + '</div>' +
+      mine = '<div class="mebar' + (myTurn ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + '<span class="nm">' + esc(pname(me)) + '</span>' + dzTags(me) + '<span class="p10ph">' + (s.free ? '<b>' + (s.done[me] || []).length + '/' + s.goal + '</b> geschafft' + (ph ? ' · Phase <b>' + ph + '</b>: ' + PT.text(s, ph) : '') : ph > s.goal ? 'Alle Phasen geschafft' : 'Phase <b>' + ph + '</b>: ' + PT.text(s, ph)) + '</span>' + (s.nopts ? '' : '<span class="ss"><span class="pts">Gesamt: <b>' + s.scores[me] + ' P</b></span></span>') +
+        (!s.over && !s.laid[me] && ph >= 1 && ph <= s.goal ? '<button class="btn small' + (canLay ? ' primary' : '') + '" data-act="p10Lay"' + (canLay ? '' : ' disabled') + '>Phase auslegen</button>' + (canLay ? '<button class="btn small" data-act="p10ManStart">Selbst auslegen</button>' : '') : '') +  autoNote(me) + '</div>' +
         (s.laid[me] ? '<div class="pgs mineg">' + groups(me) + '</div>' : '') +
-        (hand.length ? fanHTML(hand.length, cw, (k, ml) => { const h = hand[k]; return '<button class="hc' + (myTurn && s.drawn ? ' ok' : '') + (sel === h.i ? ' sel' : '') + (h.i === gotI ? ' got' : '') + '" style="margin-left:' + ml + 'px" data-act="p10Sel" data-i="' + h.i + '"' + (myTurn ? '' : ' tabindex="-1"') + '>' + p10CardHTML(h.c, X) + '</button>'; }) : emptyHand());
+        (hand.length ? fanHTML(hand.length, cw, (k, ml) => { const h = hand[k]; const man = myTurn && UI.p10Man, used = man && UI.p10Man.sets.some(x => x.indexOf(h.i) >= 0), cur = man && UI.p10Man.cur.indexOf(h.i) >= 0;
+          return '<button class="hc' + (myTurn && s.drawn ? (used ? ' no' : ' ok') : '') + ((man ? cur : sel === h.i) ? ' sel' : '') + (h.i === gotI ? ' got' : '') + '" style="margin-left:' + ml + 'px" data-act="p10Sel" data-i="' + h.i + '"' + (myTurn ? '' : ' tabindex="-1"') + '>' + p10CardHTML(h.c, X) + '</button>'; }) : emptyHand());
     } else mine = specBar(s.order);
     return '<main class="game gm-phase10">' + banner() + topbarHTML('Phase 10', '<span class="chip">Runde ' + s.round + '</span><span class="chip">' + s.goal + (s.goal === 1 ? ' Phase' : ' Phasen') + '</span>' + (s.nopts ? '<span class="chip">ohne Punkte</span>' : '') + (s.free ? '<span class="chip">freie Reihenfolge</span>' : '')) + '<section class="seats">' + seats + '</section><section class="center">' + center + (status ? '<p class="status" aria-live="polite">' + status + '</p>' : '') + '</section><section class="mine">' + mine + '</section></main>';
   }
@@ -8359,7 +8485,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const tinyTop = a => a && a.length ? sbCardHTML(a[a.length - 1], X, { cls: 'tiny' }) : '<span class="card tiny slot"></span>';
     const seats = others.map(p => {
       const hand = s.hands[p] || [], stock = s.stock[p] || [];
-      return '<div class="seat sbseat' + (cur === p && !s.winner ? ' turn' : '') + (offline(p) ? ' off' : '') + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' +
+      return '<div class="seat sbseat' + (cur === p && !s.winner ? ' turn' : '') + (offline(p) ? ' off' : '') + '" data-p="' + esc(p) + '"><div class="st">' + ordNum(p) + avatar(p) + '<span class="nm">' + esc(pname(p)) + '</span>' +
         (S.meta.players[p] && S.meta.players[p].auto ? '<span class="tag dim">PC spielt</span>' : offline(p) ? '<span class="tag dim">offline</span>' : '') +
         minisHTML(hand.length) + '</div>' +
         '<div class="sbrow"><span class="sbstock" title="Spielerstapel">' + tinyTop(stock) + '<b>' + stock.length + '</b></span><span class="sbdiscs" title="Ablagestapel">' + K.PILES.map(i => tinyTop(s.disc[p][i])).join('') + '</span></div></div>';
@@ -9753,7 +9879,11 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     }
     const tooMany = (s, p) => !s.out[p] && s.hands[p].length >= s.rules.mercy;
     
-    function mercy(s, p, was) { if (s.rules.late) { if (was && tooMany(s, p)) kick(s, p); } else s.order.forEach(q => { if (tooMany(s, q)) kick(s, q); }); }
+    // Sofort-Regel: wer die Grenze erreicht, scheidet gleich aus
+    function mercy(s, p, was) { if (!s.rules.late) s.order.forEach(q => { if (tooMany(s, q)) kick(s, q); }); }
+    // „Gnade erst nach eigenem Zug“: geprüft wird, wenn der eigene Zug vorbei ist (auch nach dem Ziehen) –
+    // ist man durch den eigenen Zug gleich wieder dran, erst wenn danach jemand anderes am Zug ist
+    function late(s, p) { if (s.rules.late && !s.winner && s.order[s.turn] !== p && tooMany(s, p)) kick(s, p); }
     const wasOver = (s, p) => s.hands[p].length - (s.drawn && s.got && s.got.p === p ? s.got.n : 0) >= s.rules.mercy;
     function can(s, c) {
       if (c === undefined) return false;
@@ -9794,7 +9924,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       else if (k === '0' && s.rules.trade !== false) { const al = s.order.filter(q => !s.out[q]), old = {}; s.fx = { id: 'rot' + s.seq + p, moves: al.map((q, n) => [q, al[((n + s.dir) % al.length + al.length) % al.length], s.hands[q].length]) }; al.forEach(q => { old[q] = s.hands[q]; }); al.forEach((q, n) => { s.hands[al[((n + s.dir) % al.length + al.length) % al.length]] = old[q]; }); }
       else if (k === '7' && s.rules.trade !== false) { s.swap = p; s.swapWas = was; return s; }
       mercy(s, p, was);
-      s.turn = seat(s, s.turn, s.dir * step);
+      s.turn = seat(s, s.turn, s.dir * step); late(s, p);
       if (k === 'WC') s.roul = s.order[s.turn];
       fix(s);
       return s;
@@ -9807,7 +9937,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         s.got = { p: p, n: n, forced: true }; s.pend = 0; s.pendMin = 0;
         if (s.fin) { if (s.fin !== p) { xLog(s, pname(p) + ' zieht ' + n + ' Karten. ' + pname(s.fin) + ' ist fertig.'); s.winner = s.fin; s.fin = null; return s; } s.fin = null; }
         xLog(s, pname(p) + ' zieht ' + n + ' Karten' + (s.rules.stay ? ' und spielt weiter.' : ' und setzt aus.'));
-        mercy(s, p, false); if (!s.rules.stay || s.out[p]) s.turn = seat(s, s.turn, s.dir); fix(s);
+        mercy(s, p, false); if (!s.rules.stay || s.out[p]) s.turn = seat(s, s.turn, s.dir); late(s, p); fix(s);
         return s;
       }
       let got = 0, fits = false;
@@ -9817,14 +9947,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       if (!s.rules.late) mercy(s, p, false);
       if (!s.out[p] && got && fits) { s.drawn = true; return s; }
       if (!s.out[p]) mercy(s, p, was);
-      s.turn = seat(s, s.turn, s.dir); fix(s);
+      s.turn = seat(s, s.turn, s.dir); late(s, p); fix(s);
       return s;
     }
     function pass(s0, p) {
       if (s0.winner || s0.order[s0.turn] !== p || !s0.drawn) return null;
       const s = xClone(s0), was = wasOver(s0, p);
       s.drawn = false; xLog(s, pname(p) + ' gibt weiter.');
-      mercy(s, p, was); s.turn = seat(s, s.turn, s.dir); fix(s);
+      mercy(s, p, was); s.turn = seat(s, s.turn, s.dir); late(s, p); fix(s);
       return s;
     }
     function swap(s0, p, t) {
@@ -9835,7 +9965,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       xLog(s, pname(p) + ' tauscht die Hand mit ' + pname(t) + '.');
       
       if (s.rules.late && s.rules.swapSave === false && s.swapWas && preToo) kick(s, p); else mercy(s, p, s.swapWas);
-      s.turn = seat(s, s.turn, s.dir); fix(s);
+      s.turn = seat(s, s.turn, s.dir); if (!s.out[p]) late(s, p); fix(s);
       return s;
     }
     function roulette(s0, p, col) {
@@ -9845,7 +9975,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       while (!hit && got < 150 && take(s, p, 1)) { got++; const c = s.hands[p][s.hands[p].length - 1]; hit = !isW(c) && c[0] === col; }
       s.roul = null; s.color = col; s.got = { p: p, n: got, forced: true };
       xLog(s, pname(p) + ' wählt beim Farbroulette ' + tableX().D.games[K].cols[COL.indexOf(col)].name + ' und zieht ' + got + (got === 1 ? ' Karte.' : ' Karten.'));
-      mercy(s, p, false); if (!s.rules.stay || s.out[p]) s.turn = seat(s, s.turn, s.dir); fix(s);
+      mercy(s, p, false); if (!s.rules.stay || s.out[p]) s.turn = seat(s, s.turn, s.dir); late(s, p); fix(s);
       return s;
     }
     function botMove(s, p, L) {
@@ -9887,7 +10017,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       colOf: id => isW(id) ? 4 : COL.indexOf(id[0]), label: name, card: card,
       def: Object.assign({ nmHand: 7, nmMercy: 25, nmTill: false, nmDbl: true, nmLate: false, nmSwap: true, nmStay: true, nmAny: false, nmTrade: true }, CNT), nums: ['nmHand', 'nmMercy'].concat(Object.keys(CNT)), togs: ['nmTill', 'nmDbl', 'nmLate', 'nmSwap', 'nmStay', 'nmAny', 'nmTrade'],
       lobby: (st, h) => '<h3>Karten auf der Hand</h3>' + h.stepper('Startkarten je Person', 'nmHand', Math.max(3, Math.min(15, st.nmHand || 7)), 1, 3, 15) +
-        '<h3>Gnade</h3>' + h.stepper('Ausscheiden ab', 'nmMercy', Math.max(10, Math.min(60, st.nmMercy || 25)) + ' Handkarten', 1, 10, 60) + h.toggle('Gnade erst nach eigenem Zug', 'Wer die Grenze erreicht, scheidet nicht sofort aus, sondern erst, wenn er nach seinem nächsten eigenen Zug mit Legemöglichkeit immer noch zu viele Karten hat.', 'nmLate', st.nmLate) +
+        '<h3>Gnade</h3>' + h.stepper('Ausscheiden ab', 'nmMercy', Math.max(10, Math.min(60, st.nmMercy || 25)) + ' Handkarten', 1, 10, 60) + h.toggle('Gnade erst nach eigenem Zug', 'Wer die Grenze erreicht, scheidet nicht sofort aus: Geprüft wird erst, wenn der eigene Zug vorbei ist – auch nach dem Ziehen. Ist man durch den eigenen Zug gleich wieder dran, wird erst geprüft, wenn danach jemand anderes am Zug ist. Wer dann noch zu viele Karten hat, scheidet aus.', 'nmLate', st.nmLate) +
           (st.nmLate && st.nmTrade !== false ? h.toggle('Tausch mit der 7 rettet', 'An: Wer durch einen Handtausch nach seinem Zug unter der Grenze liegt, bleibt im Spiel. Aus: Es zählt, wie viele Karten man vor dem Tausch hatte.', 'nmSwap', st.nmSwap !== false) : '') +
         '<h3>Regeln</h3>' + h.toggle('Kartentausch mit 7 und 0', st.nmTrade !== false ? 'An: Mit einer 7 tauscht man die Hand mit jemandem, mit einer 0 geben alle ihre Hand in Spielrichtung weiter.' : 'Aus: 7 und 0 sind normale Zahlenkarten, niemand tauscht Karten.', 'nmTrade', st.nmTrade !== false) + h.toggle('Nach dem Ziehen weiterspielen', 'Wer wegen einer Ziehkarte oder des Farbroulettes ziehen muss, darf danach trotzdem spielen. Aus (offizielle Regel): Wer zieht, setzt aus.', 'nmStay', st.nmStay !== false) + h.toggle('Doppeln', 'Wer genau dieselbe Zahlenkarte oder Retour-Karte zweimal auf der Hand hat, darf beide zusammen ablegen. Beenden darf man damit nicht.', 'nmDbl', st.nmDbl) + h.toggle('Nach dem Ziehen alles spielbar', 'Wer eine Karte gezogen hat, darf danach jede passende Karte der Hand legen, nicht nur die gezogene.', 'nmAny', !!st.nmAny) + h.toggle('Ziehen, bis es passt', 'Offizielle Regel: Wer nicht legen kann, zieht so lange, bis eine Karte passt.', 'nmTill', st.nmTill) +
         '<h3>Sonderkarten im Stapel</h3><div class="step2">' + STEPS.map(x => h.stepper(x[1], x[0], cntOf(st, x[0]), 1, 0, x[0][2] === 'W' ? 16 : 6)).join('') + '</div>' + '<p class="fine">Im Stapel sind damit ' + deck(st).length + ' Karten. Üblich sind je Farbe 3 Aussetzen, 3 Retour, 3 × +2, 2 × +4, 3 Alle ablegen, 2 Alle aussetzen sowie 8, 4, 4 und 8 Joker.</p>',
@@ -9935,7 +10065,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         if (s.winner) center = '<div class="summary"><h2>' + xWin(s, me) + '</h2>' + XG[K].score(s) + '<div class="sumfoot">' + lobbyFoot() + '</div></div>';
         else {
           const t = s.pile[s.pile.length - 1], colBtns = a => COL.map(c => '<button class="pick s-x' + COL.indexOf(c) + '" data-act="xg" data-a="' + a + '" data-c="' + c + '">' + cn(c) + '</button>').join('');
-          center = unoDir(s.dir) + '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="xg" data-a="draw" aria-label="Ziehen">' + backHTML(X, K) + '<span class="who">' + (pend ? '<b>' + pend + ' ziehen</b>' : 'Ziehen · ' + s.draw.length) + '</span></button><div class="bp drawp">' + card(t, X) + '<span class="who"><i class="dot" style="background:var(--sx' + COL.indexOf(s.color) + ')"></i> ' + cn(s.color) + ' gilt</span></div></div>' +
+          center = unoDir(s.dir) + '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="xg" data-a="draw" aria-label="Ziehen">' + backHTML(X, K) + '<span class="who">' + (pend ? '<b>' + pend + ' ziehen</b>' : 'Ziehen · ' + s.draw.length) + '</span></button><div class="bp drawp" data-seq="' + s.pile.length + '">' + card(t, X) + '<span class="who"><i class="dot" style="background:var(--sx' + COL.indexOf(s.color) + ')"></i> ' + cn(s.color) + ' gilt</span></div></div>' +
             (pend ? '<p class="pendnote">Es liegen <b>+' + pend + '</b> an. Erhöhen geht ab +' + s.pendMin + '.</p>' : '') +
             (myTurn && U.pick !== undefined ? xPick('Welche Farbe soll gelten?', colBtns('col')) : '') +
             (myTurn && U.ask !== undefined && hand[U.ask] !== undefined ? xPick('Du hast ' + esc(name(hand[U.ask], D)) + ' zweimal auf der Hand. Beide zusammen legen?', xBtn('dbl', 'Beide legen', ' data-v="1"', 'primary') + xBtn('dbl', 'Nur eine legen', ' data-v="0"')) : '') +
@@ -10166,7 +10296,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         else if (s.over && !sumWait(s)) center = xSum(s, s.winner ? xWin(s, me) : 'Runde ' + s.round + ': ' + xNm(s.over.win) + (s.over.win === me ? ' gewinnst' : ' gewinnt') + ' ' + s.over.got + ' Punkte', XG[K].score(s));
         else {
           const t = s.pile[s.pile.length - 1];
-          center = unoDir(s.dir) + '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="xg" data-a="draw" aria-label="Ziehen">' + backHTML(X, K) + '<span class="who">Ziehen · ' + s.draw.length + '</span></button><div class="bp drawp">' + card(t, X) + '<span class="who">Ablage</span></div></div>' +
+          center = unoDir(s.dir) + '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="xg" data-a="draw" aria-label="Ziehen">' + backHTML(X, K) + '<span class="who">Ziehen · ' + s.draw.length + '</span></button><div class="bp drawp" data-seq="' + s.pile.length + '">' + card(t, X) + '<span class="who">Ablage</span></div></div>' +
             (myTurn && UI.x.ask !== undefined && (s.hands[me] || [])[UI.x.ask] !== undefined ? xPick('Du hast ' + esc(name(s.hands[me][UI.x.ask])) + ' zweimal auf der Hand. Beide zusammen legen?', xBtn('dbl', 'Beide legen', ' data-v="1"', 'primary') + xBtn('dbl', 'Nur eine legen', ' data-v="0"')) : '') +
             (s.pick && s.pick.p === me ? xPick(s.pick.k === 'X' ? 'Zwangstausch: Mit wem tauschst du deine Hand?' : 'Gezielte +2: Wer zieht 2 Karten?', s.order.filter(q => q !== me).map(q => xBtn('tg', esc(pname(q)) + ' (' + s.hands[q].length + ')', ' data-p="' + esc(q) + '"')).join('')) : '');
           status = s.pick ? (s.pick.p === me ? '<b>Wähle eine Person.</b>' : xNm(s.pick.p) + ' wählt eine Person …') : gotN && myTurn ? 'Du hast ' + gotN + (gotN === 1 ? ' Karte' : ' Karten') + ' gezogen (markiert).' : esc(logTxt((s.log || []).slice(-1)[0] || ''));
@@ -10355,7 +10485,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         else {
           const t = top(s), fz = myTurn && forced(s, me);
           const wishBtns = COL.map((c, i) => '<button class="pick s-x' + i + '" data-act="xg" data-a="wish" data-t="c" data-v="' + c + '">' + esc(cName(i, D)) + '</button>').join('') + [0, 1, 2, 3, 4, 5].map(v => '<button class="pick" data-act="xg" data-a="wish" data-t="n" data-v="' + v + '">' + v + '</button>').join('');
-          center = '<div class="sbcenter" style="--cw:' + cw + 'px"><div class="bp">' + backHTML(X, K) + '<span class="who">Nachziehen · ' + s.draw.length + '</span></div><div class="bp drawp' + (s.lm && s.lm.to === 'pile' ? ' lastmv' : '') + '">' + card(t, X) + '<span class="who">' + (isJ(t) && s.wish ? 'Wunsch: <b>' + esc(wishTxt(s.wish, D)) + '</b>' : 'Ablage') + '</span></div></div>' +
+          center = '<div class="sbcenter" style="--cw:' + cw + 'px"><div class="bp">' + backHTML(X, K) + '<span class="who">Nachziehen · ' + s.draw.length + '</span></div><div class="bp drawp' + (s.lm && s.lm.to === 'pile' ? ' lastmv' : '') + '" data-seq="' + (s.seq || 0) + '">' + card(t, X) + '<span class="who">' + (isJ(t) && s.wish ? 'Wunsch: <b>' + esc(wishTxt(s.wish, D)) + '</b>' : 'Ablage') + '</span></div></div>' +
             (myTurn && U.j !== undefined ? xPick('Joker: Was wünschst du dir von ' + xNm(s.order[(s.turn + 1) % s.order.length]) + '? Eine Farbe oder eine Zahl.', wishBtns + xBtn('nowish', 'Abbrechen', '', 'ghost')) : '');
         }
         let mine;
@@ -10939,7 +11069,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const vis = c => !!s.over || (s.show && (s.show.to === '*' || s.show.to === me) && s.show.ids.indexOf(c.id) >= 0) || (seated && (pk || !s.started || s.help) && !!(s.seen[me] || {})[c.id]);
         const marked = c => s.mark && s.mark.ids.indexOf(c.id) >= 0;
         const face = (c, cls) => vis(c) ? card(c.v, X, { cls: (cls || '') + (marked(c) ? ' cbnew' : '') }) : backHTML(X, K, { cls: (cls || '') + (marked(c) ? ' cbnew' : '') });
-        const holdHTML = (p, big) => s.hold && !s.over && s.order[s.turn] === p ? '<span class="cbhold' + (big ? ' big' : '') + '" data-mk="hold:' + esc(p) + '">' + (s.hold.from === 'pile' || (big && p === me) ? card(s.hold.c, X) : backHTML(X, K)) + '<span class="who">' + (p === me ? 'Gezogene Karte' : s.hold.from === 'pile' ? 'von der Ablage' : 'gezogen') + '</span></span>' : '';
+        const holdHTML = (p, big) => s.hold && !s.over && s.order[s.turn] === p ? '<span class="cbhold' + (big ? ' big' : '') + '" data-mk="hold:' + esc(p) + '">' + (s.hold.from === 'pile' || (big && p === me) ? card(s.hold.c, X) : backHTML(X, K)) + '<span class="who">' + (p === me ? 'Gezogene Karte' : s.hold.from === 'pile' ? 'von der Ablage' : 'gezogen') + '</span></span>' :
+          // Platz für die gezogene Karte immer freihalten (gestrichelt), damit sich die Fenster nicht bei jedem Zug verändern
+          '<span class="cbhold empty' + (big ? ' big' : '') + '" aria-hidden="true"><span class="cbslot"></span><span class="who">' + (big ? 'Gezogene Karte' : 'gezogen') + '</span></span>';
         const row = (p, cls, act) => '<span class="cbrow">' + s.hands[p].map(c => act ? '<button class="cbc' + ((U.sel || []).indexOf(c.id) >= 0 || U.own === c.id ? ' sel' : '') + '" data-mk="cid:' + c.id + '" data-act="xg" data-a="' + act + '" data-p="' + esc(p) + '" data-id="' + c.id + '">' + face(c, cls) + '</button>' : '<span class="cbw" data-mk="cid:' + c.id + '">' + face(c, cls) + '</span>').join('') + '</span>';
         const othAct = myTurn && (s.act === 'spy' || s.act === 'swap') ? 'oth' : null;
         const seats = aroundMe(s.order).map(p => xSeat(p, !pk && !s.over && cur === p, (s.cabo === p ? '<span class="tag gold">Cabo</span>' : '') + (s.over ? '<span>Summe: <b>' + s.over.sums[p] + '</b></span>' : ''), '<div class="pgs">' + row(p, 'tiny', othAct) + holdHTML(p, false) + '</div>').replace('</div><div class="ss">', '<span class="pts cbpts">Gesamt: <b>' + s.scores[p] + ' P</b></span></div><div class="ss">')).join('');
