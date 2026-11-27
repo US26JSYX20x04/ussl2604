@@ -1266,6 +1266,10 @@ main.game section.mine .hand:has(.fanrow){padding-top:0;padding-bottom:4px}
 /* Alegreya Sans hat standardmäßig „Mediävalziffern“ (unterschiedlich hoch, teils unter die Zeile) – überall gleich hohe Ziffern */
 html,body,button,input,select,textarea{font-variant-numeric:lining-nums;font-feature-settings:"lnum" 1}
 table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tabular-nums;font-feature-settings:"lnum" 1,"tnum" 1}
+/* Zuschauer-Nachrichten oben rechts */
+#emospec{position:fixed;top:64px;right:10px;z-index:17;display:flex;flex-direction:column;align-items:flex-end;gap:6px;pointer-events:none;max-width:min(80vw,340px)}
+#emospec .emobub{position:static}
+.emobub.bare span{display:block}
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1283,7 +1287,7 @@ table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tab
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '959c8587';
+var APP_V = 'd8801a4e';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -4281,7 +4285,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   // Aktionen, die nie über den Host laufen (Menüs, Editor, Beitritt, Bestätigungsdialoge …)
   // Nur diese Aktionen sind Spielzüge: Bei Mitspielern laufen sie über die Spielleitung, und nur diese führt die Spielleitung für andere aus.
   const FWD_YES = /^(xg|prePlay|p10LayMan|cardAs|wolfPick|cloudSet|hexeGive|jugGive|bid|pick|card|next|unoCard|unoDbl|unoGo|unoColor|unoDraw|unoPass|unoCall|unoCatch|unoChal|p10Pick|p10Draw|p10Pile|p10Sel|p10Lay|p10Hit|p10Next|witToggle|witPass|witCard|witNext|sbSrc|sbBuild|sbDisc|sbPass)$/;
-  const FWD_NO = /^(modal|closeModal|confirmYes|confTog|leave|leaveReq|copy|emo|qmsg|emoTab|emoMuteSet|offRetry|install|hsShow|addLocal|fsTog|fanTog|edgeTog|cmpSet|hsortCycle|histMsg|emoToggle|optInfo|viewTog|specView|rename|renameSave|zoom|create|join|watch|sit|seat|selfPlay|takeHost|giveHost|kick|assign|unwatchOther|reqOk|reqNo|setOk|setNo|turnSave|theme.*|crop.*|persp.*|ed[A-Z].*|av[A-Z].*|num.*)$/;
+  const FWD_NO = /^(modal|closeModal|confirmYes|confTog|leave|leaveReq|copy|emo|qmsg|emoTab|specMsgTog|emoMuteSet|offRetry|install|hsShow|addLocal|fsTog|fanTog|edgeTog|cmpSet|hsortCycle|histMsg|emoToggle|optInfo|viewTog|specView|rename|renameSave|zoom|create|join|watch|sit|seat|selfPlay|takeHost|giveHost|kick|assign|unwatchOther|reqOk|reqNo|setOk|setNo|turnSave|theme.*|crop.*|persp.*|ed[A-Z].*|av[A-Z].*|num.*)$/;
   const UI_S = ['sel', 'sbSel', 'unoPick', 'unoAsk', 'unoTwo', 'p10Sel', 'witSel'], UI_U = ['x', 'bidV'];
   function uiSnap() { const o = { s: {}, u: {} }; UI_S.forEach(k => { o.s[k] = S[k] === undefined ? null : clone(S[k]); }); UI_U.forEach(k => { o.u[k] = UI[k] === undefined ? null : clone(UI[k]); }); return o; }
   // Von Mitspielern mitgeschickte Auswahl nur in erwarteter Form übernehmen (Typ und Größe begrenzt).
@@ -4921,10 +4925,24 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     UI.qmLog.push({ n: n, t: line }); if (UI.qmLog.length > 80) UI.qmLog.shift();
   }
   // Sprechblase am Spielerfenster der Person (eigene: über der eigenen Leiste); sonst in der Mitte
-  function emoBubble(p, html, isQm) {
+  // Nachrichten von Zuschauern: eigene Einstellung (Standard an)
+  const specMsgOn = () => LS.get('wiz.emospec') !== '0';
+  function emoBubble(p, html, isQm, isSpec, bare) {
     const box = $('#emofly'), b = document.createElement('div');
     b.className = 'emobub' + (isQm ? ' qm' : ''); b.innerHTML = html;
+    // Zuschauer: oben rechts mit Namen, untereinander
+    const seat0 = !isSpec && (document.querySelector('main.game .seats [data-p="' + (window.CSS && CSS.escape ? CSS.escape(p) : p) + '"]') || (p === S.pid ? document.querySelector('main.game .mebar') : null));
+    // Zuschauer und alle ohne sichtbares Spielerfenster: oben rechts mit Namen
+    if (isSpec || !seat0) {
+      let sb = $('#emospec'); if (!sb) { sb = document.createElement('div'); sb.id = 'emospec'; document.body.appendChild(sb); }
+      b.classList.add('spec'); sb.appendChild(b); while (sb.children.length > 3) sb.firstChild.remove();
+      const ms0 = isQm ? Math.min(7000, 2600 + html.replace(/<[^>]*>/g, '').length * 45) : 3400;
+      if (isSpec && !specMsgOn() && p !== S.pid) { b.remove(); return; }
+      b.style.setProperty('--ms', ms0 + 'ms'); setTimeout(() => b.remove(), ms0); return;
+    }
     const seat = document.querySelector('main.game .seats [data-p="' + (window.CSS && CSS.escape ? CSS.escape(p) : p) + '"]') || (p === S.pid ? document.querySelector('main.game .mebar') : null);
+    // Am Spielerfenster: Absender ist durch den Ort klar, also ohne Namen
+    if (seat && bare) { b.innerHTML = bare; b.classList.add('bare'); }
     const ms = isQm ? Math.min(7000, 2600 + html.replace(/<[^>]*>/g, '').length * 45) : 3400;
     b.style.setProperty('--ms', ms + 'ms');
     if (seat) {
@@ -4950,8 +4968,10 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const mu = p === S.pid ? '' : emoMute();
       if (mu === 'all' || (mu === 'qm' && txt)) return;
       const sp = !(meta.players && meta.players[p]), nm = pname(p) + (sp ? ' (Zuschauer)' : '');
+      if (sp && p !== S.pid && !specMsgOn()) return;
       emoLogAdd(meta, '\u0002' + (txt ? q[1] + ' ' + nm + ': ' + txt : x.e + ' ' + nm));
-      emoBubble(p, txt ? '<b>' + q[1] + '</b><span><i>' + emoName(p) + '</i>' + esc(txt) + '</span>' : '<b>' + x.e + '</b><span>' + emoName(p) + '</span>', !!txt);
+      emoBubble(p, txt ? '<b>' + q[1] + '</b><span><i>' + emoName(p) + '</i>' + esc(txt) + '</span>' : '<b>' + x.e + '</b><span>' + emoName(p) + '</span>', !!txt, sp,
+        txt ? '<b>' + q[1] + '</b><span>' + esc(txt) + '</span>' : '<b>' + x.e + '</b>');
     });
   }
   
@@ -6247,6 +6267,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       emoPanel(); b.classList.add('open'); emoPlace();
     },
     emoTab(el) { LS.set('wiz.emotab', el.dataset.t === 'qm' ? 'qm' : 'emo'); emoPanel(); emoPlace(); },
+    specMsgTog() { LS.set('wiz.emospec', specMsgOn() ? '0' : '1'); renderModal(true); },
     emoMuteSet(el) { const v = el.dataset.v; LS.set('wiz.emomute', v === 'qm' || v === 'all' ? v : ''); renderModal(true); },
     fsTog() { fsToggle(); },
     fanTog() { LS.set('wiz.fan', fanOn() ? '0' : '1'); renderModal(true); requestRender(); },
@@ -9397,6 +9418,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     u += '<div class="animctl"><b>Meine Kartenreihenfolge</b>' + Object.keys(HAND_MODES).map(k => '<button class="btn small' + (handMode() === k ? ' on' : '') + '" data-act="hsortSet" data-v="' + k + '">' + HAND_MODES[k] + '</button>').join('') + '<button class="btn small' + (LS.get('wiz.hrev') === '1' ? ' on' : '') + '" data-act="hrevTog">⇄ umgedreht</button></div>';
     u += '<button class="btn" data-act="modal" data-m="keys">Tastenkürzel anzeigen</button>';
     if (!isApp()) u += '<button class="btn" data-act="modal" data-m="install">📲 Zum Home-Bildschirm hinzufügen</button>';
+    u += '<button class="btn" data-act="specMsgTog">Nachrichten von Zuschauern: ' + (specMsgOn() ? 'an (ausblenden)' : 'aus (einblenden)') + '</button>';
     u += '<div class="animctl"><b>Nachrichten von anderen</b>' + [['', 'Alles'], ['qm', 'Nur Emojis'], ['all', 'Nichts']].map(x => '<button class="btn small' + (emoMute() === x[0] ? ' on' : '') + '" data-act="emoMuteSet" data-v="' + x[0] + '">' + x[1] + '</button>').join('') + '</div>';
     if (game === 'witches') u += '<button class="btn" data-act="witSpTog">Sonderkarten neben dem Namen: ' + (witSpOn() ? 'an (ausschalten)' : 'aus (einschalten)') + '</button>';
     if (playing) u += '<button class="btn" data-act="viewTog">Ansicht: ' + (viewRound() ? 'um den Tisch' : 'alle oben') + ' (wechseln)</button>';
