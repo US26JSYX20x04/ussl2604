@@ -1283,7 +1283,7 @@ table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tab
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '5a6f3b5a';
+var APP_V = '959c8587';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -4943,7 +4943,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     UI.emoSeen = UI.emoSeen || {};
     Object.keys(em).forEach(p => {
       const x = em[p];
-      const q = x && x.q ? qmFind(x.q) : null, txt = q && Number.isInteger(x.i) ? q[3][x.i] : null;
+      const q = x && x.q && EMOS.indexOf(x.e) < 0 ? qmFind(x.q) : null, txt = q && Number.isInteger(x.i) ? q[3][x.i] : null;
       if (!x || (EMOS.indexOf(x.e) < 0 && !txt) || !(x.t > (UI.emoSeen[p] || 0))) return;
       UI.emoSeen[p] = x.t;
       if (quiet || (meta.settings && meta.settings.emoOff)) return;
@@ -6257,7 +6257,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const e = el.dataset.e, now = Date.now();
       emoClose();
       if (!emoMay() || emoOff() || EMOS.indexOf(e) < 0 || now - (UI.emoAt || 0) < 1200) return;
-      UI.emoAt = now; emoCool(); w(backend.update(gamePath(), { emo: { [S.pid]: { e: e, t: now } } }));
+      UI.emoAt = now; emoCool(); w(backend.update(gamePath(), { emo: { [S.pid]: { e: e, q: null, i: null, t: now } } }));
     },
     // Kurznachricht: zufälliger Text aus der gewählten Vorauswahl (nicht zweimal hintereinander derselbe)
     qmsg(el) {
@@ -6268,7 +6268,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       let i = Math.floor(Math.random() * q[3].length);
       if (q[3].length > 1 && i === UI.qmLast[q[0]]) i = (i + 1 + Math.floor(Math.random() * (q[3].length - 1))) % q[3].length;
       UI.qmLast[q[0]] = i; UI.emoAt = now; emoCool();
-      w(backend.update(gamePath(), { emo: { [S.pid]: { q: q[0], i: i, t: now } } }));
+      w(backend.update(gamePath(), { emo: { [S.pid]: { e: null, q: q[0], i: i, t: now } } }));
     },
     takeHost() { confirmBox('Spielleitung übernehmen? Du teilst dann die Karten aus und änderst die Einstellungen.', 'Übernehmen', () => w(backend.update(gamePath(), { host: S.pid }))); },
     bid(el) {
