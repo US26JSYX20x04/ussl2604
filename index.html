@@ -1292,7 +1292,7 @@ table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tab
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '28aa09bb';
+var APP_V = '55390542';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -7350,7 +7350,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (ob) { const on = v => e => { if (e) e.preventDefault(); CR.orig = v; cropDraw(); }; ob.addEventListener('pointerdown', on(true)); ['pointerup', 'pointerleave', 'pointercancel'].forEach(t => ob.addEventListener(t, on(false))); }
   }
 
-  const IMG_RE = /^(back|c_[abcd](1[0-3]|[1-9])|c_[ZN][1-4]|sb_(1[0-2]|[1-9]|w|back)|u_([abcd]([0-9]|[SRD])|W|F|back)|p_([abcd](1[0-2]|[1-9])|W|S|back)|w_([abcd](1[0-4]|[1-9])|Z[1-4]|back))$/;
+  const IMG_RE = /^(back|c_[abcd](1[0-3]|[1-9])|c_[ZN][1-4]|c_X[BDFGJWVAH]|sb_(1[0-2]|[1-9]|w|back)|u_([abcd]([0-9]|[SRD])|W|F|back)|p_([abcd](1[0-2]|[1-9])|W|S|back)|w_([abcd](1[0-4]|[1-9])|Z[1-4]|back))$/;
   async function saveFile(filename, data, okMsg) {
     if (S.mode === 'claude') {
       const dl = DLP ? await DLP : null;
