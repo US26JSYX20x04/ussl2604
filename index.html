@@ -1271,9 +1271,7 @@ table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tab
 #emospec .emobub{position:static}
 .emobub.bare span{display:block}
 /* Farb-Erinnerung nach einem Joker: Ring in der gewählten Farbe des Kartensets */
-.bp.drawp.wring > .card{box-shadow:0 0 0 4px var(--wc),0 0 22px 4px var(--wc);animation:wringp 1.8s ease-in-out infinite alternate}
-@keyframes wringp{from{box-shadow:0 0 0 3px var(--wc),0 0 12px 2px var(--wc)}to{box-shadow:0 0 0 5px var(--wc),0 0 26px 6px var(--wc)}}
-@media (prefers-reduced-motion: reduce){.bp.drawp.wring > .card{animation:none}}
+.bp.drawp.wring > .card{box-shadow:0 0 0 4px var(--wc),0 0 18px 3px var(--wc)}
 .meanbox{margin-top:12px}
 .meanbox h3{margin:0 0 6px;font-size:1rem}
 .meanbox .meant{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
@@ -1294,7 +1292,7 @@ table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tab
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '69272f37';
+var APP_V = '28aa09bb';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3895,7 +3893,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       f('Ziffern Gotisch', 'grenze-gotisch-v20-latin-500', 500, 123) + f('Ziffern Gotisch', 'grenze-gotisch-v20-latin-700', 700, 123);
     document.head.appendChild(st);
   })();
-  const CARD_RE = /^(c_([abcd](1[0-3]|[1-9])|[ZN][1-4])|sb_(1[0-2]|[1-9]|w)|u_([abcd]([0-9]|[SRD])|W|F)|p_([abcd](1[0-2]|[1-9])|W|S)|w_([abcd](1[0-4]|[1-9])|Z[1-4]))$/;
+  const CARD_RE = /^(c_([abcd](1[0-3]|[1-9])|[ZN][1-4]|X[BDFGJWVAH])|sb_(1[0-2]|[1-9]|w)|u_([abcd]([0-9]|[SRD])|W|F)|p_([abcd](1[0-2]|[1-9])|W|S)|w_([abcd](1[0-4]|[1-9])|Z[1-4]))$/;
   const SB_DEF = { c1: '#2f6fc4', c2: '#2f8f5b', c3: '#c8402f', wcolor: '#e08a1e', wname: 'Skip-Bo', wsym: '★' };
   const LEVELS = { 1: 'Leicht', 2: 'Mittel', 3: 'Stark' };
   const clampInt = (v, lo, hi, d) => { v = Math.round(Number(v)); return isFinite(v) && v >= lo && v <= hi ? v : d; };
@@ -4055,7 +4053,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       extra = '<span class="cm">' + w[0] + '</span>' + (wt ? '<span class="cn' + (wt.length > 8 ? ' lg' : '') + '">' + esc(wt) + '</span>' : '');
       key = X.imgs['c_' + c] ? 'c_' + c : null;
       cls.push(ef ? 'wspe' : 's-X', 'wsp');
-      if (key) cls.push('img', 'k-' + key);
+      // Eigenes Bild im Kartenset: nur das Bild mit kleinen Ecken, ohne großes Symbol
+      if (key) { cls.push('img', 'k-' + key); extra = (wt && o.lbl ? '<span class="cn">' + esc(wt) + '</span>' : ''); }
       cls.push('m1', 'o1');
       return '<span class="' + cls.join(' ') + '" title="' + esc(w[1]) + '"><span class="ci tl">' + idx + '</span>' + extra + '<span class="ci br">' + idx + '</span></span>';
     }
@@ -7523,6 +7522,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (/rueck|back/.test(n)) return /skip/.test(n) ? 'sb_back' : 'back';
     if (/skip/.test(n)) { const m = n.match(/(\d{1,2})\s*$/); return m && +m[1] >= 1 && +m[1] <= 12 ? 'sb_' + (+m[1]) : 'sb_w'; }
     const num = (n.match(/(\d{1,2})\s*$/) || [])[1];
+    const spn = { bombe: 'XB', drache: 'XD', fee: 'XF', gestaltenwandler: 'XG', jongleur: 'XJ', wolke: 'XW', werwolf: 'XV', vampir: 'XA', hexe: 'XH' };
+    for (const w in spn) if (n.indexOf(w) >= 0 && !/witch|hexen/.test(n)) return 'c_' + spn[w];
     if (n.indexOf(norm(D.wiz.name)) >= 0 || /zauber|wizard/.test(n)) return num && +num >= 1 && +num <= 4 ? 'c_Z' + (+num) : null;
     if (n.indexOf(norm(D.jes.name)) >= 0 || /narr|jester/.test(n)) return num && +num >= 1 && +num <= 4 ? 'c_N' + (+num) : null;
     const defs = ['rot', 'gelb', 'gruen', 'blau'];
@@ -9563,7 +9564,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (tab === 'witches') return [].concat.apply([], SUITS.map((c, i) => Array.from({ length: 14 }, (_, k) => 'w_' + c + (14 - k)).concat(['w_Z' + (i + 1)])));
     if (tab === 'skipbo') return [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 'w'].map(v => 'sb_' + v);
     
-    return [].concat.apply([], SUITS.map((c, i) => ['c_Z' + (i + 1), 'c_N' + (i + 1)].concat(Array.from({ length: 13 }, (_, k) => 'c_' + c + (13 - k)))));
+    return [].concat.apply([], SUITS.map((c, i) => ['c_Z' + (i + 1), 'c_N' + (i + 1)].concat(Array.from({ length: 13 }, (_, k) => 'c_' + c + (13 - k))))).concat(WSPEC.map(x => 'c_' + x[0]));
   }
   
   const ED_FLAT = { wizard: 1, witches: 1, cabo: 1, skipbo: 1, dalmuti: 1, arschloch: 1, werwolf: 1, allwild: 1 };
@@ -9588,6 +9589,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   
   function edGrid(tab, cell) {
     const rows = edRows(tab), base = 'grid60 gm-' + tab;
+    // Wizard: Sonderkarten der Jubiläumsausgabe in eigener Reihe
+    if (!rows && tab === 'wizard') { const all = edCards(tab), sp = all.filter(k => /^c_X/.test(k)); return '<div class="' + base + ' rows15">' + all.filter(k => !/^c_X/.test(k)).map(cell).join('') + '</div><p class="fine edsp">Sonderkarten (wahlweise im Spiel)</p><div class="' + base + ' rows15">' + sp.map(cell).join('') + '</div>'; }
     if (!rows) return '<div class="' + base + (tab === 'wizard' || tab === 'witches' ? ' rows15' : '') + '">' + edCards(tab).map(cell).join('') + '</div>';
     const n = Math.max.apply(null, rows.map(r => r.length));
     return '<div class="' + base + ' rowsN" style="grid-template-columns:repeat(' + n + ',minmax(0,1fr));--cw:min(52px,calc((100vw - 120px) / ' + n + '))">' +
