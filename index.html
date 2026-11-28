@@ -1292,7 +1292,7 @@ table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tab
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '55390542';
+var APP_V = '71dabc0b';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -6812,6 +6812,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const c = k.slice(2);
     if (c[0] === 'Z' || c === 'W' || c === 'F') return G.wiz.color;
     if (c[0] === 'N' || c === 'S') return G.jes.color;
+    if (c[0] === 'X' || SUITS.indexOf(c[0]) < 0) return G.wiz.color;
     return G.suits[SUITS.indexOf(c[0])].color;
   }
   
