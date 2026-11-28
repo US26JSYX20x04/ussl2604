@@ -1292,6 +1292,8 @@ table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tab
 .card.back.pt-deck .bs { z-index: 1; }
 /* Skip-Bo: eigener Stapel deutlich von den Ablagestapeln abgesetzt */
 .sbmine > .sbcol:first-child { margin-right: clamp(18px, 6vw, 64px); }
+/* UNO!-Knopf: ausgegraut, solange man mehr als 2 Karten hat (Drücken = 1 Strafkarte) */
+.btn.unocall.early { background: color-mix(in srgb, var(--ink, #ccc) 18%, transparent) !important; color: color-mix(in srgb, currentColor 55%, transparent) !important; border-color: transparent !important; box-shadow: none !important; filter: grayscale(1); opacity: .6; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1309,7 +1311,7 @@ table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tab
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '14b0672c';
+var APP_V = 'f1528d3a';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -2327,12 +2329,14 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   };
   // Uno-Ruf
   // UNO-Knopf ist immer da: mit 2 Karten (oder nach dem Vergessen mit 1) richtig, mit mehr Karten falsch → 1 Strafkarte
-  U.callOk = (st, p) => { const n = (st.hands[p] || []).length; return !!(st.rules && st.rules.call) && !st.winner && !st.vote && !(st.done && st.done[p]) && st.order.indexOf(p) >= 0 && n > 0 && !(st.called && st.called[p]) && (n >= 2 || (st.forgot && st.forgot.p === p)); };
+  U.fuKey = st => st.turn + '|' + (st.pile || []).length;
+  // Falsch gerufen (mehr als 2 Karten) geht nur einmal pro Zug
+  U.callOk = (st, p) => { const n = (st.hands[p] || []).length; return !!(st.rules && st.rules.call) && !st.winner && !st.vote && !(st.done && st.done[p]) && st.order.indexOf(p) >= 0 && n > 0 && !(st.called && st.called[p]) && (n >= 2 || (st.forgot && st.forgot.p === p)) && !(n > 2 && st.fu && st.fu[p] === U.fuKey(st)); };
   U.call = function (st0, p, rnd) {
     if (!U.callOk(st0, p)) return null;
     const st = clone(st0);
     st.seq = (st.seq || 0) + 1;
-    if ((st.hands[p] || []).length > 2) { const n = uTake(st, p, 1, rnd || Math.random); st.log = { p: p, a: 'falseUno', n: n }; st.got = { p: p, n: n, forced: true }; return st; }
+    if ((st.hands[p] || []).length > 2) { st.fu = Object.assign({}, st.fu, { [p]: U.fuKey(st0) }); const n = uTake(st, p, 1, rnd || Math.random); st.log = { p: p, a: 'falseUno', n: n }; st.got = { p: p, n: n, forced: true }; return st; }
     if (st.forgot && st.forgot.p === p) { st.forgot = null; st.uno = { p: p, seq: st.seq }; }
     else { st.called = st.called || {}; st.called[p] = true; st.uno = { p: p, seq: st.seq, pre: true }; }
     return st;
@@ -5130,20 +5134,22 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   }
   // ---- Punkteverlauf als Diagramm (Ende von Wizard, Skull King, Phase 10, Cabo) ----
   const CH_COL = ['#f2c14e', '#5fb3f5', '#ef6f6c', '#7bd389', '#c792ea', '#ff9f43', '#4dd0c8', '#f78fb3', '#a3a3ff', '#d4e157'];
-  function ptChart(order, rows, title) {
+  function ptChart(order, rows, title, nz) {
     rows = (rows || []).filter(r => r && r.tot);
     if (rows.length < 2 || !order.length) return '';
+    // nz: Verlauf beginnt bei der ersten Zeile statt bei 0 (z. B. Kartenanzahl)
+    const off = nz ? 1 : 0;
     const W = 560, H = 230, L = 40, R = 12, T = 12, B = 26, all = [0];
     rows.forEach(r => order.forEach(p => all.push(+r.tot[p] || 0)));
     let lo = Math.min.apply(null, all), hi = Math.max.apply(null, all); if (hi === lo) hi = lo + 1;
-    const xs = i => L + (W - L - R) * i / rows.length, ys = v => T + (H - T - B) * (hi - v) / (hi - lo);
+    const xs = i => L + (W - L - R) * (i - off) / (rows.length - off), ys = v => T + (H - T - B) * (hi - v) / (hi - lo);
     const step = Math.pow(10, Math.floor(Math.log10((hi - lo) / 4 || 1))), nice = [1, 2, 5, 10].map(k => k * step).find(k => (hi - lo) / k <= 5) || step * 10;
     let grid = '';
     for (let v = Math.ceil(lo / nice) * nice; v <= hi + 1e-9; v += nice) grid += '<line x1="' + L + '" x2="' + (W - R) + '" y1="' + ys(v).toFixed(1) + '" y2="' + ys(v).toFixed(1) + '" class="' + (v === 0 ? 'z' : 'g') + '"/><text x="' + (L - 6) + '" y="' + (ys(v) + 4).toFixed(1) + '" text-anchor="end">' + Math.round(v * 100) / 100 + '</text>';
     const every = Math.ceil(rows.length / 12);
     rows.forEach((r, i) => { if ((i + 1) % every === 0 || i === rows.length - 1) grid += '<text x="' + xs(i + 1).toFixed(1) + '" y="' + (H - 8) + '" text-anchor="middle">' + (r.n || i + 1) + '</text>'; });
     const lines = order.map((p, k) => {
-      const pts = [[xs(0), ys(0)]].concat(rows.map((r, i) => [xs(i + 1), ys(+r.tot[p] || 0)]));
+      const pts = (nz ? [] : [[xs(0), ys(0)]]).concat(rows.map((r, i) => [xs(i + 1), ys(+r.tot[p] || 0)]));
       return '<polyline points="' + pts.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' ') + '" style="stroke:' + CH_COL[k % CH_COL.length] + '"' + (p === S.pid ? ' class="me"' : '') + '/>' +
         '<circle cx="' + pts[pts.length - 1][0].toFixed(1) + '" cy="' + pts[pts.length - 1][1].toFixed(1) + '" r="3.5" style="fill:' + CH_COL[k % CH_COL.length] + '"/>';
     }).join('');
@@ -5367,9 +5373,22 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     clearTimeout(UI.twT);
     UI.twT = setTimeout(() => { UI.twT = null; try { turnWatch(); } catch (e) { console.error(e); } try { lbCheck(); } catch (e) { console.error(e); } }, FAST ? 30 : 120);
   }
+  // Kartenanzahl-Verlauf bei den Uno-Spielen: die Spielleitung merkt sich jede Änderung und legt den Verlauf am Ende in die Partie
+  function hcTrack(m) {
+    const k = m.game; if (m.status !== 'playing' || ['uno', 'nomercy', 'allwild'].indexOf(k) < 0) return;
+    const s = xState(k); if (!s || !s.hands || !s.order) return;
+    const id = k + '|' + m.g; if (!UI.hc || UI.hc.id !== id) UI.hc = { id, rows: [], last: '' };
+    if (UI.hc.sent) return;
+    const tot = {}; s.order.forEach(p => { tot[p] = (s.hands[p] || []).length; });
+    const key = JSON.stringify(tot);
+    if (key !== UI.hc.last) { UI.hc.last = key; UI.hc.rows.push({ tot }); if (UI.hc.rows.length > 600) UI.hc.rows = UI.hc.rows.filter((r, i) => i % 2 === 0 || i === UI.hc.rows.length - 1); }
+    if (s.winner && !(m.hcs && m.hcs.id === id)) { UI.hc.sent = true; w(backend.update(gamePath(), { hcs: { id, rows: UI.hc.rows.map((r, i) => ({ tot: r.tot, n: i })) } })); }
+  }
+  const hcChart = (k, s) => { const h = S.meta && S.meta.hcs; return h && h.id === k + '|' + S.meta.g ? ptChart(s.order || [], h.rows, 'Kartenanzahl im Verlauf', true) : ''; };
   function turnWatch() {
     const m = S.meta;
     if (!m || !S.code || !runsGame()) return;
+    try { hcTrack(m); } catch (e) { }
     const ps = m.status === 'playing' ? waitingOn() : [];
     const prev = UI.twPs || [], grew = ps.some(p => prev.indexOf(p) < 0), mv = !!UI.mover && ps.indexOf(UI.mover) >= 0;
     UI.mover = null;
@@ -9130,7 +9149,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     let center, status = '';
     if (s.winner && !sumWait(s)) {
       const rank = s.ranks && s.ranks.length === s.order.length ? s.ranks : s.order.slice().sort((a, b) => s.hands[a].length - s.hands[b].length);
-      center = '<div class="summary"><h2>' + (s.winner === me ? 'Du gewinnst' : esc(pname(s.winner)) + ' gewinnt') + '</h2><div class="tablewrap"><table><thead><tr><th scope="col">Platz</th><th scope="col">Handkarten</th></tr></thead><tbody>' + rank.map((p, i) => '<tr class="' + (p === me ? 'me' : '') + (i === 0 ? ' win' : '') + '"><th scope="row">' + (i + 1) + '. ' + esc(pname(p)) + '</th><td><b>' + (s.done && s.done[p] ? 'fertig' : s.hands[p].length) + '</b></td></tr>').join('') + '</tbody></table></div>' + meanHTML(s.order, s.stat) + '<div class="sumfoot">' + lobbyFoot() + '</div></div>';
+      center = '<div class="summary"><h2>' + (s.winner === me ? 'Du gewinnst' : esc(pname(s.winner)) + ' gewinnt') + '</h2><div class="tablewrap"><table><thead><tr><th scope="col">Platz</th><th scope="col">Handkarten</th></tr></thead><tbody>' + rank.map((p, i) => '<tr class="' + (p === me ? 'me' : '') + (i === 0 ? ' win' : '') + '"><th scope="row">' + (i + 1) + '. ' + esc(pname(p)) + '</th><td><b>' + (s.done && s.done[p] ? 'fertig' : s.hands[p].length) + '</b></td></tr>').join('') + '</tbody></table></div>' + meanHTML(s.order, s.stat) + hcChart('uno', s) + '<div class="sumfoot">' + lobbyFoot() + '</div></div>';
     } else {
       const t = s.pile[s.pile.length - 1];
       center = unoDir(s.dir) + '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="unoDraw" aria-label="' + (pend ? pend + ' Karten ziehen' : 'Karte ziehen') + '">' + backHTML(X, 'uno') + '<span class="who">' + (pend ? '<b>' + pend + ' ziehen</b>' : 'Ziehen · ' + s.draw.length) + '</span></button><div class="bp drawp' + (t === 'W' || t === 'F' ? ' wring' : '') + '" style="--wc:var(--s' + s.color + ')" data-seq="' + s.pile.length + '">' + unoCardHTML(t, X) + '<span class="who"><i class="dot" style="background:var(--s' + s.color + ')"></i> ' + esc(suitName(X, s.color, 'uno')) + ' gilt</span></div></div>' +
@@ -9158,7 +9177,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       const hand = myHand.map((c, i) => ({ c, i })), lastI = hand.length - 1, firstNew = myHand.length - gotN;
       const rank = c => UN.isWild(c) ? 900 : SUITS.indexOf(c[0]) * 20 + (isNaN(+c.slice(1)) ? 12 : +c.slice(1));
       handSort(hand, (a, b) => rank(a.c) - rank(b.c), c => UN.isWild(c) ? [1, 0, c === 'F' ? 1 : 0] : [0, SUITS.indexOf(c[0]), isNaN(+c.slice(1)) ? 12 + 'SRD'.indexOf(c.slice(1)) : +c.slice(1)], x => x.c);
-      mine = '<div class="mebar' + (myTurn ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + '<span class="nm">' + esc(pname(me)) + '</span>' + (s.done && s.done[me] ? '<span class="tag gold">Fertig: ' + s.done[me] + '. Platz</span>' : '') + '<span class="ss"><span>Karten: <b>' + hand.length + '</b></span></span>' + (myTurn && s.drawn ? '<button class="btn small" data-act="unoPass">Weitergeben</button>' : '') + (UN.callOk(s, me) && !s.winner ? '<button class="btn small primary unocall" data-act="unoCall">UNO!</button>' : '') + autoNote(me) + '</div>' +
+      mine = '<div class="mebar' + (myTurn ? ' turn' : '') + '">' + ordNum(me) + avatar(me) + '<span class="nm">' + esc(pname(me)) + '</span>' + (s.done && s.done[me] ? '<span class="tag gold">Fertig: ' + s.done[me] + '. Platz</span>' : '') + '<span class="ss"><span>Karten: <b>' + hand.length + '</b></span></span>' + (myTurn && s.drawn ? '<button class="btn small" data-act="unoPass">Weitergeben</button>' : '') + (UN.callOk(s, me) && !s.winner ? '<button class="btn small primary unocall' + (hand.length > 2 ? ' early' : '') + '" data-act="unoCall">UNO!</button>' : '') + autoNote(me) + '</div>' +
         (hand.length ? fanHTML(hand.length, cw, (k, ml) => { const h = hand[k], jmp = !myTurn && UN.jumpOk(s, me, h.i), ok = jmp || myTurn && UN.can(s, h.c) && (!s.drawn || h.i === lastI || (s.rules && s.rules.any)) && !(hand.length === 1 && h.c.slice(1) === 'S'); return '<button class="hc' + (myTurn ? (ok ? ' ok' : ' no') : jmp ? ' ok jmp' : '') + (S.unoPick === h.i || ask === h.i ? ' sel' : '') + (gotN && h.i >= firstNew ? ' got' : '') + '" style="margin-left:' + ml + 'px" data-act="unoCard" data-i="' + h.i + '"' + (myTurn || jmp ? '' : ' tabindex="-1"') + '>' + unoCardHTML(h.c, X) + '</button>'; }) : emptyHand());
     } else mine = specBar(s.order);
     return '<main class="game gm-uno">' + banner() + topbarHTML('Uno', '<span class="chip">' + s.handSize + ' Startkarten</span>' + (s.rules && s.rules.till ? '<span class="chip">Ziehen, bis es passt</span>' : '') + (s.rules && s.rules.dbl ? '<span class="chip">Doppeln</span>' : '') + (s.rules && s.rules.jump ? '<span class="chip">Reinwerfen</span>' : '')) + flash + '<section class="seats">' + seats + '</section><section class="center">' + center + (status ? '<p class="status" aria-live="polite">' + status + '</p>' : '') + '</section><section class="mine">' + mine + '</section></main>';
@@ -9834,12 +9853,13 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (!s.rules.call || (s.hands[p] || []).length !== 2 || (s.called && s.called[p]) || s.order[s.turn] !== p || (L <= 1 && rnd() < 0.3)) return s;
     const n = xClone(s); n.called = Object.assign({}, n.called, { [p]: true }); return n;
   }
-  const xUnoCallOk = (s, p) => { const n = (s.hands[p] || []).length; return !!s.rules.call && !s.winner && !s.over && !(s.out && s.out[p]) && s.order.indexOf(p) >= 0 && n > 0 && (n >= 2 ? !(s.called && s.called[p]) : !!s.forgot && s.forgot.p === p); };
+  const xFuKey = s => s.turn + '|' + (s.pile || []).length;
+  const xUnoCallOk = (s, p) => { const n = (s.hands[p] || []).length; return !!s.rules.call && !s.winner && !s.over && !(s.out && s.out[p]) && s.order.indexOf(p) >= 0 && n > 0 && (n >= 2 ? !(s.called && s.called[p]) : !!s.forgot && s.forgot.p === p) && !(n > 2 && s.fu && s.fu[p] === xFuKey(s)); };
   function xUnoCall(s0, p, take, after) {
     if (!xUnoCallOk(s0, p)) return null;
     const s = xClone(s0); s.seq = (s.seq || 0) + 1;
     // Zu früh gerufen (mehr als 2 Karten): 1 Strafkarte
-    if ((s.hands[p] || []).length > 2 && take) { const n = take(s, p, 1); s.got = { p: p, n: n, forced: true }; xLog(s, pname(p) + ' hat zu früh UNO gerufen und zieht 1 Strafkarte.'); if (after) after(s, p); return s; }
+    if ((s.hands[p] || []).length > 2 && take) { s.fu = Object.assign({}, s.fu, { [p]: xFuKey(s0) }); const n = take(s, p, 1); s.got = { p: p, n: n, forced: true }; xLog(s, pname(p) + ' hat zu früh UNO gerufen und zieht 1 Strafkarte.'); if (after) after(s, p); return s; }
     if (s.forgot && s.forgot.p === p) { s.forgot = null; s.uno = { p: p, seq: s.seq }; } else { s.called = Object.assign({}, s.called, { [p]: true }); s.uno = { p: p, seq: s.seq, pre: true }; }
     return s;
   }
@@ -9852,7 +9872,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     if (after) after(s, p);
     return s;
   }
-  const xUnoBtns = (s, me, seated) => seated ? (xUnoCallOk(s, me) ? xBtn('ucall', 'UNO!', '', 'small primary unocall') : '') : '';
+  const xUnoBtns = (s, me, seated) => seated ? (xUnoCallOk(s, me) ? xBtn('ucall', 'UNO!', '', 'small primary unocall' + ((s.hands[me] || []).length > 2 ? ' early' : '')) : '') : '';
   const xUnoCatchBtn = (s, me, seated) => seated && xUnoCatchOk(s, me) ? '<div class="picks unox">' + xBtn('ucatch', 'Erwischt! ' + esc(pname(s.forgot.p)) + ' hat nicht UNO gerufen', '', 'primary unocatch') + '</div>' : '';
   
   const xClone = o => JSON.parse(JSON.stringify(o));
@@ -11061,7 +11081,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const flash = !s.winner && s.uno && Date.now() < (UI.unoUntil || 0) ? '<div class="unoflash" role="alert"><b>UNO!</b><span>' + (s.uno.pre ? (s.uno.p === me ? 'Du rufst UNO' : esc(pname(s.uno.p)) + ' ruft UNO') : (s.uno.p === me ? 'Du hast' : esc(pname(s.uno.p)) + ' hat') + ' nur noch eine Karte') + '</span></div>' : '';
         const gotN = s.got && s.got.p === me ? Math.min(s.got.n || 0, hand.length) : 0;
         let center, status = '';
-        if (s.winner) center = '<div class="summary"><h2>' + xWin(s, me) + '</h2>' + XG[K].score(s) + meanHTML(s.order, s.stat) + '<div class="sumfoot">' + lobbyFoot() + '</div></div>';
+        if (s.winner) center = '<div class="summary"><h2>' + xWin(s, me) + '</h2>' + XG[K].score(s) + meanHTML(s.order, s.stat) + hcChart(K, s) + '<div class="sumfoot">' + lobbyFoot() + '</div></div>';
         else {
           const t = s.pile[s.pile.length - 1], colBtns = a => COL.map(c => '<button class="pick s-x' + COL.indexOf(c) + '" data-act="xg" data-a="' + a + '" data-c="' + c + '">' + cn(c) + '</button>').join('');
           center = xVoteBox(s, me, seated) + xUnoCatchBtn(s, me, seated) + unoDir(s.dir) + '<div class="sbcenter" style="--cw:' + cw + 'px"><button class="bp' + (myTurn && !s.drawn ? ' ok' : '') + '" data-act="xg" data-a="draw" aria-label="Ziehen">' + backHTML(X, K) + '<span class="who">' + (pend ? '<b>' + pend + ' ziehen</b>' : 'Ziehen · ' + s.draw.length) + '</span></button><div class="bp drawp' + (isW(t) ? ' wring' : '') + '" style="--wc:var(--sx' + COL.indexOf(s.color) + ')" data-seq="' + s.pile.length + '">' + card(t, X) + '<span class="who"><i class="dot" style="background:var(--sx' + COL.indexOf(s.color) + ')"></i> ' + cn(s.color) + ' gilt</span></div></div>' +
@@ -11306,7 +11326,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         const flash = !s.winner && !s.over && s.uno && Date.now() < (UI.unoUntil || 0) ? '<div class="unoflash" role="alert"><b>UNO!</b><span>' + (s.uno.pre ? (s.uno.p === me ? 'Du rufst UNO' : esc(pname(s.uno.p)) + ' ruft UNO') : (s.uno.p === me ? 'Du hast' : esc(pname(s.uno.p)) + ' hat') + ' nur noch eine Karte') + '</span></div>' : '';
         const gotN = s.got && s.got.p === me ? Math.min(s.got.n || 0, hand.length) : 0;
         let center, status = '';
-        if (s.winner && !s.rules.pts) center = '<div class="summary"><h2>' + xWin(s, me) + '</h2>' + XG[K].score(s) + meanHTML(s.order, s.stat) + '<div class="sumfoot">' + lobbyFoot() + '</div></div>';
+        if (s.winner && !s.rules.pts) center = '<div class="summary"><h2>' + xWin(s, me) + '</h2>' + XG[K].score(s) + meanHTML(s.order, s.stat) + hcChart(K, s) + '<div class="sumfoot">' + lobbyFoot() + '</div></div>';
         else if (s.over && !sumWait(s)) center = xSum(s, s.winner ? xWin(s, me) : 'Runde ' + s.round + ': ' + xNm(s.over.win) + (s.over.win === me ? ' gewinnst' : ' gewinnt') + ' ' + s.over.got + ' Punkte', XG[K].score(s));
         else {
           const t = s.pile[s.pile.length - 1];
