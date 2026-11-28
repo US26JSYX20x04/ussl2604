@@ -1292,7 +1292,7 @@ table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tab
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '71dabc0b';
+var APP_V = 'b2f25acf';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3952,9 +3952,9 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     ['suits', 'wiz', 'jes', 'back', 'font', 'sizeMid', 'sizeIdx', 'ink', 'overlay', 'chips', 'mid', 'rim'].forEach(k => { D[k] = D.games.wizard[k]; });
     D.sb = D.games.skipbo.sb;
     D.txt = {};
-    if (x.txt && typeof x.txt === 'object') Object.keys(x.txt).slice(0, 600).forEach(k => { if (CARD_KEY.test(k) && typeof x.txt[k] === 'string') D.txt[k] = x.txt[k].slice(0, 24); });
+    if (x.txt && typeof x.txt === 'object') Object.keys(x.txt).slice(0, 900).forEach(k => { if (CARD_KEY.test(k) && typeof x.txt[k] === 'string') D.txt[k] = x.txt[k].slice(0, 24); });
     D.per = {};
-    if (x.per && typeof x.per === 'object') Object.keys(x.per).slice(0, 300).forEach(k => {
+    if (x.per && typeof x.per === 'object') Object.keys(x.per).slice(0, 900).forEach(k => {
       const v = x.per[k];
       if (CARD_KEY.test(k) && v && typeof v === 'object') D.per[k] = { mid: v.mid !== false, ov: v.ov !== false, chips: !!v.chips, rim: v.rim === true };
     });
@@ -4055,7 +4055,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       cls.push(ef ? 'wspe' : 's-X', 'wsp');
       // Eigenes Bild im Kartenset: nur das Bild mit kleinen Ecken, ohne großes Symbol
       if (key) { cls.push('img', 'k-' + key); extra = (wt && o.lbl ? '<span class="cn">' + esc(wt) + '</span>' : ''); }
-      cls.push('m1', 'o1');
+      if (key) { const fl = cardFlags(c, X); cls.push(fl.mid ? 'm1' : 'm0', fl.ov ? 'o1' : 'o0'); if (fl.chips) cls.push('h1'); if (fl.rim) cls.push('r1'); } else cls.push('m1', 'o1');
       return '<span class="' + cls.join(' ') + '" title="' + esc(w[1]) + '"><span class="ci tl">' + idx + '</span>' + extra + '<span class="ci br">' + idx + '</span></span>';
     }
     if (E.isWiz(c) || E.isJes(c)) {
