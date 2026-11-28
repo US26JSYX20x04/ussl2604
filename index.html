@@ -1279,6 +1279,11 @@ table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tab
 .card.gm-arschloch:not(.img) { --cbg: #fbfaf6; --halo: transparent; background: #fbfaf6; box-shadow: inset 0 0 0 1px #cfcac0, 0 1px 3px rgba(0,0,0,.25); }
 .card.gm-arschloch.s-x0:not(.img), .card.gm-arschloch.s-x1:not(.img) { --cfg: #1d1b22; color: #1d1b22; }
 .card.gm-arschloch.s-x2:not(.img), .card.gm-arschloch.s-x3:not(.img) { --cfg: #c41c28; color: #c41c28; }
+/* Arschloch Standard-Rückseite wie ein normales Kartendeck: weißer Rand, rotes Gittermuster */
+.card.back.cback { background: #fbfaf6 !important; box-shadow: inset 0 0 0 1px #cfcac0, 0 1px 3px rgba(0,0,0,.25); }
+.card.back.cback::before { content: ""; position: absolute; inset: 7%; border-radius: 6%; border: 1px solid #fff; outline: 1.5px solid #b3202c;
+  background: repeating-linear-gradient(45deg, rgba(255,255,255,.55) 0 1px, transparent 1px 7px), repeating-linear-gradient(-45deg, rgba(255,255,255,.55) 0 1px, transparent 1px 7px), radial-gradient(circle at 50% 50%, #c42a35, #9e1b26); }
+.card.back.cback::after { display: none; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1296,7 +1301,7 @@ table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tab
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = 'b2f25acf';
+var APP_V = '05c5cd30';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3993,7 +3998,8 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const G = X.D.games[game] || X.D.games.wizard, key = BACK_KEY[game] || 'back', cls = ['card', 'back', 'pt-' + G.back.pattern], im = !!X.imgs[key];
     if (o && o.cls) cls.push(o.cls);
     if (im) cls.push('img', 'k-' + key);
-    return '<span class="' + cls.join(' ') + '"><span class="bs">' + (im ? '' : sym(G.back.sym)) + '</span></span>';
+    const cb = !im && game === 'arschloch' && (!X.id || X.id === 'default'); if (cb) cls.push('cback');
+    return '<span class="' + cls.join(' ') + '"><span class="bs">' + (im || cb ? '' : sym(G.back.sym)) + '</span></span>';
   }
   const WSP_C = { XB: ['💣', 'Bombe'], XD: ['🐉', 'Drache'], XF: ['🧚', 'Fee'], XG: ['🎭', 'Gestaltenwandler'], ZG: ['🎭', 'als Zauberer'], NG: ['🎭', 'als Narr'], XJ: ['🤹', 'Jongleur'], XW: ['☁️', 'Wolke'], XV: ['🐺', 'Werwolf'], XA: ['🧛', 'Vampir'], XH: ['🧙‍♀️', 'Hexe'], NA: ['🧛', 'als Narr'] };
   const wspEff = c => /^[abcd]7\.5$/.test(c) ? ['🤹', 'Jongleur', '7½'] : /^[abcd]9\.75$/.test(c) ? ['☁️', 'Wolke', '9¾'] : null;
@@ -10543,12 +10549,12 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const rtx = r => r === 1 ? 'J' : RT[r] || String(r), rnm = r => r === 1 ? 'Joker' : RW[r] || String(r);
     const colOf = id => Math.max(0, SU.indexOf(su(id)));
     // Arschloch: in der Kartenmitte das Farbsymbol (dick) statt der Zahl; die Zahl steht in den Ecken
-    const card = (id, X, o) => isJ(id) ? xCard(K, 'j1', 0, '★', X, Object.assign({ label: 'Joker' }, o || {})) : xCard(K, String(id), colOf(id), rtx(rk(id)), X, Object.assign({ midSym: true }, o || {}));
+    const card = (id, X, o) => isJ(id) ? xCard(K, 'j1', 0, '★', X, Object.assign({ label: 'Joker', sym: '' }, o || {})) : xCard(K, String(id), colOf(id), rtx(rk(id)), X, Object.assign({ midSym: true }, o || {}));
     const ALL = []; SU.forEach(s => { for (let r = 2; r <= 14; r++) ALL.push(s + r); });
-    const deckOf = s => { const d = ALL.filter(c => !s.skat || rk(c) >= 7).concat(s.joker ? ['j1', 'j2'] : []); return s.dbl ? d.concat(d) : d; };
+    const deckOf = s => { const d = ALL.filter(c => !s.skat || rk(c) >= 7).concat(s.joker ? Array.from({ length: s.jn || 2 }, (_, i) => 'j' + (i + 1)) : []); return s.dbl ? d.concat(d) : d; };
     const RANKS = s => s.skat ? [7, 8, 9, 10, 11, 12, 13, 14] : [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
     // a schlägt b? Nach einer Revolution ist die Reihenfolge umgedreht
-    const better = (s, a, b) => s.revo ? a < b : a > b;
+    const better = (s, a, b) => a === 1 ? false : b === 1 ? true : s.revo ? a < b : a > b; // reine Joker (Wert 1) sind immer am schwächsten
     const sortH = h => h.sort((x, y) => rk(x) - rk(y) || SU.indexOf(su(x)) - SU.indexOf(su(y)));
     const title = (s, p) => { if (!s.ranked) return 'Runde 1'; const i = s.order.indexOf(p), P = s.order.length; if (i === 0) return 'König'; if (i === P - 1) return 'Arschloch'; if (P >= 4 && i === 1) return 'Vizekönig'; if (P >= 4 && i === P - 2) return 'Vize-Arschloch'; if (s.viceB && P >= 6 && i === 2) return 'Bauer'; if (s.viceB && P >= 6 && i === P - 3) return 'Vize-Bauer'; return 'Bürger'; };
     const live = s => s.order.filter(p => s.hands[p].length);
@@ -10715,12 +10721,12 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
       name: 'Arschloch', text: 'Für 3 bis 8: Karten loswerden, König werden – und bloß nicht das Arschloch.', min: 3, max: 16, rec: '3 bis 8, mit doppeltem Blatt bis 16', pre: 'ar',
       cols: [['Kreuz', '#22202e', '♣'], ['Pik', '#3a3f4f', '♠'], ['Herz', '#c8402f', '♥'], ['Karo', '#d9682b', '♦']],
       cards: ALL.concat(['j1']), sample: ['c14', 'b13', 'a10', 'd7', 'c2'], colOf: colOf, label: (id, D) => isJ(id) ? 'Joker' : ((D && D.games && D.games[K] && D.games[K].cols[colOf(id)] || {}).name || '') + ' ' + rnm(rk(id)), card: card,
-      def: { arRounds: 10, arSkat: false, arRevo: false, arDbl: false, arGuess: false, arJoker: false, arKeepAce: false, arStart: true, arBomb: false, arBombAce: false, arAceLast: true, arAces: false, arMore: false, arViceB: false }, nums: ['arRounds'], togs: ['arSkat', 'arRevo', 'arDbl', 'arGuess', 'arJoker', 'arKeepAce', 'arStart', 'arBomb', 'arBombAce', 'arAceLast', 'arAces', 'arMore', 'arViceB'],
+      def: { arRounds: 10, arSkat: false, arRevo: false, arDbl: false, arGuess: false, arJoker: false, arJN: 2, arKeepAce: false, arStart: true, arBomb: false, arBombAce: false, arAceLast: true, arAces: false, arMore: false, arViceB: false }, nums: ['arRounds', 'arJN'], togs: ['arSkat', 'arRevo', 'arDbl', 'arGuess', 'arJoker', 'arKeepAce', 'arStart', 'arBomb', 'arBombAce', 'arAceLast', 'arAces', 'arMore', 'arViceB'],
       delay: s => s.phase === 'tax' && (s.tax || []).every(t => (s.taxSub || {})[s.order[t.from]]) ? 2000 : 900,
       lobby: (st, h) => '<h3>Rundenzahl</h3>' + h.stepper('Runden', 'arRounds', Math.max(1, Math.min(30, st.arRounds || 10)), 1, 1, 30) +
         '<h3>Karten</h3>' + h.toggle('Skatblatt (32 Karten)', st.arSkat ? 'An: nur 7 bis Ass – kürzere Runden.' : 'Aus: Pokerblatt mit 52 Karten (2 bis Ass).', 'arSkat', !!st.arSkat) +
         h.toggle('Doppeltes Blatt', 'Jede Karte gibt es zweimal – für mehr Personen. Ab 9 Personen wird automatisch doppelt gespielt (bis 16).', 'arDbl', !!st.arDbl) +
-        h.toggle('Joker', 'Zwei Joker je Blatt: allein die niedrigste Karte, zusammen mit anderen Karten nehmen sie deren Wert an.', 'arJoker', !!st.arJoker) +
+        h.toggle('Joker', 'Allein ist ein Joker schlechter als jede andere Karte; zusammen mit anderen Karten nimmt er deren Wert an.', 'arJoker', !!st.arJoker) + (st.arJoker ? h.stepper('Joker je Blatt', 'arJN', Math.max(1, Math.min(6, st.arJN || 2)), 1, 1, 6) : '') +
         '<h3>Beginn</h3>' + h.toggle('Arschloch beginnt', st.arStart !== false ? 'An: Der letzte Platz (ab Runde 2 das Arschloch) spielt den ersten Stich aus.' : 'Aus: Der erste Platz (ab Runde 2 der König) spielt den ersten Stich aus.', 'arStart', st.arStart !== false) +
         '<h3>Drücken</h3>' + h.toggle('Karten erraten', 'Der König bekommt die Karten des Arschlochs nicht automatisch, sondern rät Werte: Hat das Arschloch den Wert, bekommt er eine solche Karte. Der König darf bis zu dreimal raten (höchstens 2 Karten), der Vizekönig bis zu zweimal (höchstens 1 Karte). Zurückgegeben werden so viele Karten, wie man bekommen hat.', 'arGuess', !!st.arGuess) +
         h.toggle('Arschloch behält Asse', 'Das Arschloch muss keine Asse an den König abgeben (es gibt dann die höchsten Karten ohne Asse).', 'arKeepAce', !!st.arKeepAce) +
@@ -10731,7 +10737,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
         h.toggle('Ass zuletzt = Arschloch', st.arAceLast !== false ? 'An: Wer als letzte Karte ein Ass ablegt, wird automatisch zum Arschloch.' : 'Aus: Mit einem Ass fertig zu werden ist erlaubt.', 'arAceLast', st.arAceLast !== false) +
         h.toggle('Drei Asse ansagen, vier offen', 'Wer mit drei Assen startet, muss es ansagen (steht im Verlauf); wer mit vier Assen startet, spielt mit offenen Karten.', 'arAces', !!st.arAces) +
         h.toggle('Revolution bei vier Gleichen', 'Wer vier Karten mit demselben Wert legt, dreht die Reihenfolge bis zum Rundenende um: Dann ist die niedrigste Karte die höchste.', 'arRevo', !!st.arRevo),
-      create(seats, st) { const s = { order: xShuffle(seats), round: 1, rounds: Math.max(1, Math.min(30, st.arRounds || 10)), skat: !!st.arSkat, dbl: !!st.arDbl || seats.length > 8, guess: !!st.arGuess, revoOn: !!st.arRevo, joker: !!st.arJoker, keepAce: !!st.arKeepAce, arsStart: st.arStart !== false, bomb: !!st.arBomb, bombAce: !!st.arBombAce, aceLast: st.arAceLast !== false, aceRule: !!st.arAces, more: !!st.arMore, viceB: !!st.arViceB, ranked: false, scores: {}, winner: null, log: [], seq: 0 }; seats.forEach(p => { s.scores[p] = 0; }); deal(s); return s; },
+      create(seats, st) { const s = { order: xShuffle(seats), round: 1, rounds: Math.max(1, Math.min(30, st.arRounds || 10)), skat: !!st.arSkat, dbl: !!st.arDbl || seats.length > 8, guess: !!st.arGuess, revoOn: !!st.arRevo, joker: !!st.arJoker, jn: Math.max(1, Math.min(6, st.arJN || 2)), keepAce: !!st.arKeepAce, arsStart: st.arStart !== false, bomb: !!st.arBomb, bombAce: !!st.arBombAce, aceLast: st.arAceLast !== false, aceRule: !!st.arAces, more: !!st.arMore, viceB: !!st.arViceB, ranked: false, scores: {}, winner: null, log: [], seq: 0 }; seats.forEach(p => { s.scores[p] = 0; }); deal(s); return s; },
       act(a, d, s, me) {
         const U = UI.x, hand = s.hands[me] || [], sel = (U.sel || []).filter(i => Number.isInteger(i) && i >= 0 && i < hand.length);
         if (a === 'next') { if (!canDeal('x' + s.round) || !s.over || s.winner) return; const n = xClone(s); n.order = s.over.order.slice(); n.round++; n.ranked = true; deal(n); n.seq++; return n; }
