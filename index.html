@@ -1284,6 +1284,12 @@ table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tab
 .card.back.cback::before { content: ""; position: absolute; inset: 7%; border-radius: 6%; border: 1px solid #fff; outline: 1.5px solid #b3202c;
   background: repeating-linear-gradient(45deg, rgba(255,255,255,.55) 0 1px, transparent 1px 7px), repeating-linear-gradient(-45deg, rgba(255,255,255,.55) 0 1px, transparent 1px 7px), radial-gradient(circle at 50% 50%, #c42a35, #9e1b26); }
 .card.back.cback::after { display: none; }
+/* Rückseiten-Art „Kartendeck“: weißer Rand, innen Grundfarbe mit Gitter in der Musterfarbe */
+.card.back.pt-deck:not(.img) { background: #fbfaf6 !important; box-shadow: inset 0 0 0 1px #cfcac0, 0 1px 3px rgba(0,0,0,.25); }
+.card.back.pt-deck:not(.img)::before { content: ""; position: absolute; inset: 7%; border-radius: 6%; border: 1px solid #fff; outline: 1.5px solid var(--bk1);
+  background: repeating-linear-gradient(45deg, color-mix(in srgb, var(--bk2) 60%, transparent) 0 1px, transparent 1px 7px), repeating-linear-gradient(-45deg, color-mix(in srgb, var(--bk2) 60%, transparent) 0 1px, transparent 1px 7px), var(--bk1); }
+.card.back.pt-deck:not(.img)::after { display: none; }
+.card.back.pt-deck .bs { z-index: 1; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
@@ -1301,7 +1307,7 @@ table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tab
 <input id="th-import" type="file" accept=".json,application/json" hidden>
 <script>
 // Version dieses Builds (setzt build.py); Spielleitung und Mitspieler vergleichen sie, damit veraltete Seiten auffallen
-var APP_V = '05c5cd30';
+var APP_V = '654bd373';
 // Abgefangene Fehler nicht still verschlucken: einmal je Fehlertext in der Browser-Konsole melden
 var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var m = String((e && e.message) || e); if (seen[m] || n > 200) return; seen[m] = 1; n++; console.warn('[Kartenrunde] Abgefangener Fehler:', e); } catch (x) { return; } }; })();
 
@@ -3906,7 +3912,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
   const SB_DEF = { c1: '#2f6fc4', c2: '#2f8f5b', c3: '#c8402f', wcolor: '#e08a1e', wname: 'Skip-Bo', wsym: '★' };
   const LEVELS = { 1: 'Leicht', 2: 'Mittel', 3: 'Stark' };
   const clampInt = (v, lo, hi, d) => { v = Math.round(Number(v)); return isFinite(v) && v >= lo && v <= hi ? v : d; };
-  const PATTERNS = { rauten: 'Rauten', streifen: 'Streifen', punkte: 'Punkte', uni: 'Einfarbig' };
+  const PATTERNS = { rauten: 'Rauten', streifen: 'Streifen', punkte: 'Punkte', uni: 'Einfarbig', deck: 'Kartendeck (weißer Rand)' };
   const HEX = /^#[0-9a-f]{6}$/i;
   const DATA_RE = /^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/;
   const col = (c, d) => HEX.test(c || '') ? c : d;
@@ -3998,7 +4004,7 @@ var __kw = (function () { var seen = {}, n = 0; return function (e) { try { var 
     const G = X.D.games[game] || X.D.games.wizard, key = BACK_KEY[game] || 'back', cls = ['card', 'back', 'pt-' + G.back.pattern], im = !!X.imgs[key];
     if (o && o.cls) cls.push(o.cls);
     if (im) cls.push('img', 'k-' + key);
-    const cb = !im && game === 'arschloch' && (!X.id || X.id === 'default'); if (cb) cls.push('cback');
+    const cb = !im && game === 'arschloch' && G.back.pattern !== 'deck'; if (cb) cls.push('cback'); // Arschloch ohne eigenes Rückseitenbild: klassische rote Kartendeck-Rückseite
     return '<span class="' + cls.join(' ') + '"><span class="bs">' + (im || cb ? '' : sym(G.back.sym)) + '</span></span>';
   }
   const WSP_C = { XB: ['💣', 'Bombe'], XD: ['🐉', 'Drache'], XF: ['🧚', 'Fee'], XG: ['🎭', 'Gestaltenwandler'], ZG: ['🎭', 'als Zauberer'], NG: ['🎭', 'als Narr'], XJ: ['🤹', 'Jongleur'], XW: ['☁️', 'Wolke'], XV: ['🐺', 'Werwolf'], XA: ['🧛', 'Vampir'], XH: ['🧙‍♀️', 'Hexe'], NA: ['🧛', 'als Narr'] };
