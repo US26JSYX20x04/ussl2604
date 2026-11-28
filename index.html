@@ -1275,6 +1275,10 @@ table,.pts,.ss,.chip,.tag,.ptfly,.score,.lb{font-variant-numeric:lining-nums tab
 .meanbox{margin-top:12px}
 .meanbox h3{margin:0 0 6px;font-size:1rem}
 .meanbox .meant{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 8px}
+/* Arschloch Standard: weiße Karten, Symbole und Zahlen rot oder schwarz */
+.card.gm-arschloch:not(.img) { --cbg: #fbfaf6; --halo: transparent; background: #fbfaf6; box-shadow: inset 0 0 0 1px #cfcac0, 0 1px 3px rgba(0,0,0,.25); }
+.card.gm-arschloch.s-x0:not(.img), .card.gm-arschloch.s-x1:not(.img) { --cfg: #1d1b22; color: #1d1b22; }
+.card.gm-arschloch.s-x2:not(.img), .card.gm-arschloch.s-x3:not(.img) { --cfg: #c41c28; color: #c41c28; }
 </style>
 <style id="dynT"></style>
 <style id="dynE"></style>
